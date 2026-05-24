@@ -66,6 +66,8 @@ Implemented today:
 - Policy simulation command with structured policy input/output.
 - Structured verifier output artifacts imported into findings and policy input.
 - Release decisions: `block`, `human_escalation`, `canary`, `auto_merge`.
+- Manifest-backed shadow-mode GitHub Actions reference workflow with gate summary
+  and artifact upload conventions.
 - Demo repo with blocked and passing manifests.
 - Unit tests for the current pipeline.
 
@@ -96,11 +98,11 @@ roadmap by themselves.
 
 Near-term execution order:
 
-1. Shadow-mode pull-request pilot package.
+1. Run the shadow-mode pull-request pilot package against real repositories.
 2. Evidence connector wedge: SARIF/Semgrep import and coverage import.
 3. Reproducible case study where tests pass but Vouch blocks or routes because
    release obligations are missing, invalid, or out of scope.
-4. Artifact upload conventions and auditable gate output for PR workflows.
+4. GitHub Checks/status integration over the auditable gate result.
 5. Trust hardening that supports evidence workflows: required high-risk hashes,
    commit/runner provenance, scoped signers, and signed specs or manifests.
 6. JSON schemas and compatibility tests for public artifacts.
@@ -248,7 +250,7 @@ The next useful contributions are:
 
 - Static-analysis/SARIF importer for security and quality evidence.
 - Coverage XML importer for required-test and behavior evidence.
-- Shadow-mode GitHub PR workflow with artifact upload conventions.
+- Shadow-mode GitHub PR pilot results from real repositories.
 - Real-world case study showing a plausible bad agent change blocked by an obligation.
 - Reference workflow for `try -> write -> manifest -> attach evidence -> gate`.
 - Test-map discovery to reduce manual required-test mapping.

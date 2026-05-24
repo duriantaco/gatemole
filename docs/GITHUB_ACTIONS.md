@@ -65,8 +65,10 @@ The relevant code paths are:
 
 ### Shadow Mode
 
-Use this first. It shows Vouch's decision in the job summary but does not block
-the pull request.
+Use this first. It creates a manifest for the pull request diff, attaches
+evidence artifacts, writes the gate result to the job summary, and uploads the
+manifest/build/evidence bundle for audit. The job is advisory because
+`continue-on-error: true` is set at the job level.
 
 ```yaml
 name: Vouch
@@ -74,11 +76,22 @@ name: Vouch
 on:
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  VOUCH_MANIFEST: .vouch/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
+  VOUCH_GATE_RESULT: .vouch/build/gate-result.json
+  VOUCH_JUNIT: .vouch/artifacts/pytest.xml
+
 jobs:
   vouch:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -90,37 +103,82 @@ jobs:
       - name: Compile Vouch contracts
         run: vouch compile
 
-      - name: Run tests
-        run: pytest --junitxml .vouch/artifacts/pytest.xml
+      - name: Create PR manifest
+        env:
+          VOUCH_TASK_ID: pr-${{ github.event.pull_request.number }}
+          VOUCH_TASK_SUMMARY: ${{ github.event.pull_request.title }}
+          VOUCH_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+          VOUCH_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
+        run: |
+          vouch manifest create \
+            --task-id "$VOUCH_TASK_ID" \
+            --summary "$VOUCH_TASK_SUMMARY" \
+            --agent github-actions \
+            --run-id "$VOUCH_RUN_ID" \
+            --runner-identity "$VOUCH_RUNNER_IDENTITY" \
+            --runner-oidc-issuer https://token.actions.githubusercontent.com \
+            --base "origin/${{ github.base_ref }}" \
+            --head HEAD \
+            --out "$VOUCH_MANIFEST"
 
-      - name: Import JUnit evidence
-        run: vouch evidence import junit .vouch/artifacts/pytest.xml
+      - name: Run tests for evidence
+        id: tests
+        run: |
+          mkdir -p .vouch/artifacts
+          set +e
+          pytest --junitxml "$VOUCH_JUNIT"
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Attach JUnit evidence
+        if: steps.tests.outputs.exit_code == '0'
+        run: |
+          vouch manifest attach-artifact \
+            --manifest "$VOUCH_MANIFEST" \
+            --id pytest \
+            --kind test_coverage \
+            --path "$VOUCH_JUNIT" \
+            --producer github-actions \
+            --command "pytest --junitxml $VOUCH_JUNIT" \
+            --exit-code "${{ steps.tests.outputs.exit_code }}" \
+            --out "$VOUCH_MANIFEST"
 
       - name: Gate PR
-        continue-on-error: true
-        run: vouch gate --github-summary --out .vouch/build/gate-result.json
+        run: vouch --manifest "$VOUCH_MANIFEST" gate --github-summary --out "$VOUCH_GATE_RESULT"
 
-      - name: Upload Vouch result
+      - name: Upload Vouch artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vouch-gate-result
-          path: .vouch/build/gate-result.json
+          name: vouch-shadow-pr-${{ github.event.pull_request.number }}
+          path: |
+            .vouch/manifests/
+            .vouch/build/
+            .vouch/artifacts/
+          if-no-files-found: ignore
 ```
 
 Use shadow mode until reviewers agree that Vouch is catching real
-release-readiness gaps and the false-block rate is acceptable.
+release-readiness gaps and the false-block rate is acceptable. Keep normal CI
+test jobs in place during this phase; this job is measuring the release
+contract workflow.
 
 ### Enforced Mode
 
-After a shadow-mode pilot, remove `continue-on-error: true` from the gate step:
+After a shadow-mode pilot, remove job-level `continue-on-error: true`:
 
 ```yaml
-      - name: Gate PR
-        run: vouch gate --github-summary --out .vouch/build/gate-result.json
+jobs:
+  vouch:
+    runs-on: ubuntu-latest
 ```
 
 `vouch gate` exits non-zero only when the release decision is `block`.
 `human_escalation`, `canary`, and `auto_merge` are non-blocking process exits.
+If the test evidence step records a non-zero exit, the workflow does not attach
+the JUnit artifact, so the gate reports missing required-test evidence instead
+of treating failed tests as passing evidence.
 
 ### What The Summary Shows
 
@@ -132,10 +190,23 @@ The report includes:
 - obligation coverage
 - policy path
 - reasons
+- invalid evidence artifacts
 - component-level covered and missing obligations
 - verifier findings and required fixes
 
 The renderer is [`RenderGitHubSummary`](../internal/vouch/render.go).
+
+### Artifact Convention
+
+Upload the whole Vouch bundle for each shadow run:
+
+- `.vouch/manifests/`: PR manifest and attached artifact references.
+- `.vouch/build/`: compiler outputs and `gate-result.json`.
+- `.vouch/artifacts/`: raw evidence such as JUnit XML or SARIF.
+
+The compact gate result should be written to `.vouch/build/gate-result.json`.
+That file uses `vouch.gate_result.v0` and is the stable input for future status
+checks or GitHub Checks integrations.
 
 ### Contracts In CI
 
