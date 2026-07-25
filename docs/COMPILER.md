@@ -63,20 +63,20 @@ The parser accepts only the intent keys implemented in
 
 | Stage | Command | Main code | Output |
 | --- | --- | --- | --- |
-| Parse intent | `vouch intent parse` | [`ParseIntentASTFile`](../internal/vouch/intent.go) | `vouch.ast.v0` with source spans and diagnostics |
+| Parse intent | `vouch contracts intent parse` | [`ParseIntentASTFile`](../internal/vouch/intent.go) | `vouch.ast.v0` with source spans and diagnostics |
 | Analyze intent | repo compile path | [`AnalyzeIntentAST`](../internal/vouch/intent.go) | typed intent values |
-| Compile spec | `vouch intent compile` | [`SpecFromIntent`](../internal/vouch/intent.go) | `vouch.spec.v0` JSON |
-| Build IR | `vouch ir build` | [`IRFromSpec`](../internal/vouch/ir.go) | `vouch.ir.v0` obligations |
-| Build plan | `vouch plan build` | [`VerificationPlanFromIR`](../internal/vouch/plan.go) | `vouch.plan.v0` verification plan |
-| Build artifacts | `vouch artifacts build` | [`BuildArtifacts`](../internal/vouch/artifacts.go) | verifier packets, test obligations, release policy artifact |
-| Compile repo | `vouch compile` | [`CompileRepo`](../internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
+| Compile spec | `vouch contracts intent compile` | [`SpecFromIntent`](../internal/vouch/intent.go) | `vouch.spec.v0` JSON |
+| Build IR | `vouch contracts ir build` | [`IRFromSpec`](../internal/vouch/ir.go) | `vouch.ir.v0` obligations |
+| Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](../internal/vouch/plan.go) | `vouch.plan.v0` verification plan |
+| Build artifacts | `vouch contracts artifacts build` | [`BuildArtifacts`](../internal/vouch/artifacts.go) | verifier packets, test obligations, release policy artifact |
+| Compile repo | `vouch contracts compile` | [`CompileRepo`](../internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
 
 The CLI dispatcher for these commands is
 [`Main`](../internal/vouch/cli.go).
 
 ## Repo Compile Output
 
-`vouch compile` reads `.vouch/intents/*.yaml` and writes:
+`vouch contracts compile` reads `.vouch/intents/*.yaml` and writes:
 
 - `.vouch/build/ast/*.ast.json`
 - `.vouch/specs/*.spec.json`
@@ -146,7 +146,7 @@ path.
 Manifest-backed artifacts are attached with:
 
 ```sh
-vouch --repo DIR manifest attach-artifact \
+vouch --repo DIR contracts manifest attach-artifact \
   --manifest .vouch/manifests/run-123.json \
   --id pytest \
   --kind test_coverage \
@@ -158,8 +158,8 @@ vouch --repo DIR manifest attach-artifact \
 The simpler JUnit path is:
 
 ```sh
-vouch --repo DIR evidence import junit .vouch/artifacts/pytest.xml
-vouch --repo DIR gate
+vouch --repo DIR contracts evidence import junit .vouch/artifacts/pytest.xml
+vouch --repo DIR contracts gate
 ```
 
 JUnit covers `required_test` obligations only. Missing behavior, security,

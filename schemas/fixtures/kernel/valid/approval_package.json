@@ -1,0 +1,24 @@
+{
+  "version": "vouch.approval_package.v0",
+  "id": "approval-package:demo-001",
+  "transaction_id": "tx:demo-001",
+  "intent_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "effect_set_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "staged_state_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "policy_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+  "commit_plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verification_result_ids": ["verification:demo-001:tests"],
+  "risk_findings": [
+    {
+      "code": "control-and-test-changed",
+      "severity": "high",
+      "summary": "Authentication control and its tests changed in the same transaction.",
+      "effect_ids": ["effect:demo-001:1"]
+    }
+  ],
+  "required_approval_classes": ["security-reviewer"],
+  "summary": "Authentication implementation changed; independent behavior checks passed.",
+  "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "created_at": "2026-07-23T08:05:00Z",
+  "expires_at": "2026-07-23T09:05:00Z"
+}

@@ -1,0 +1,26 @@
+{
+  "version": "vouch.capability_grant.v0",
+  "id": "cap:demo-workspace",
+  "subject_run_id": "run:demo-001",
+  "issuer": {
+    "id": "service:vouchd",
+    "kind": "service",
+    "issuer": "vouchd"
+  },
+  "resource": {
+    "kind": "filesystem",
+    "pattern": "workspace/**"
+  },
+  "operations": ["filesystem.read", "filesystem.write"],
+  "conditions": {
+    "workspace_root": "workspace",
+    "environment_allowlist": ["PATH"],
+    "max_output_bytes": 1048576
+  },
+  "delegable": false,
+  "issued_at": "2026-07-23T00:00:01Z",
+  "expires_at": "2026-07-23T01:00:01Z",
+  "max_uses": 500,
+  "uses": 0,
+  "policy_decision_id": "decision:admit-demo-001"
+}

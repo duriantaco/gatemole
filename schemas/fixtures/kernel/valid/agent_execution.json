@@ -1,0 +1,18 @@
+{
+  "version": "vouch.agent_execution.v0",
+  "id": "execution:demo-001",
+  "transaction_id": "tx:demo-001",
+  "run_id": "run:demo-001",
+  "stage_binding_id": "stage:git-demo-001",
+  "program": "codex",
+  "command_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "runtime_class": "oci",
+  "runtime_config_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "image_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "status": "succeeded",
+  "exit_code": 0,
+  "stdout_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "stderr_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "started_at": "2026-07-23T01:00:00Z",
+  "completed_at": "2026-07-23T01:05:00Z"
+}

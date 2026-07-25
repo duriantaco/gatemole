@@ -1,0 +1,20 @@
+{
+  "version": "vouch.action_request.v0",
+  "id": "action:demo-write-001",
+  "run_id": "run:demo-001",
+  "operation": "filesystem.write",
+  "resource": {
+    "kind": "filesystem",
+    "pattern": "workspace/hello.txt"
+  },
+  "arguments": {
+    "path": "workspace/hello.txt",
+    "content_ref": "artifact://action-input/hello.txt"
+  },
+  "arguments_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "idempotency_key": "idem:demo-write-001",
+  "intent": "Write the fixture output inside the granted workspace.",
+  "capability_hint": "cap:demo-workspace",
+  "requested_at": "2026-07-23T00:00:02Z",
+  "attempt": 1
+}

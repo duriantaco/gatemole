@@ -1,0 +1,78 @@
+{
+  "version": "vouch.execution_contract.v0",
+  "id": "contract.demo-change",
+  "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "owner": {
+    "id": "human:fixture-owner",
+    "kind": "human",
+    "issuer": "https://example.invalid"
+  },
+  "goal": "Modify the fixture only inside its workspace and produce release evidence.",
+  "non_goals": [
+    "Do not write outside the fixture workspace.",
+    "Do not release without satisfying the existing Vouch gate."
+  ],
+  "risk": "high",
+  "resources": [
+    {
+      "id": "workspace-files",
+      "selector": {
+        "kind": "filesystem",
+        "pattern": "workspace/**"
+      },
+      "operations": ["filesystem.read", "filesystem.write"],
+      "conditions": {
+        "workspace_root": "workspace",
+        "environment_allowlist": ["PATH"],
+        "max_output_bytes": 1048576
+      }
+    },
+    {
+      "id": "protected-push",
+      "selector": {
+        "kind": "git",
+        "pattern": "fixture-origin"
+      },
+      "operations": ["git.push"],
+      "conditions": {
+        "approval_required": true
+      }
+    }
+  ],
+  "budgets": {
+    "max_input_tokens": 100000,
+    "max_output_tokens": 50000,
+    "max_model_calls": 100,
+    "max_tool_calls": 500,
+    "max_cost_micros": 5000000,
+    "max_wall_time_seconds": 3600
+  },
+  "deadline": "2026-07-24T00:00:00Z",
+  "max_child_depth": 1,
+  "max_children": 2,
+  "checkpoints": [
+    {
+      "id": "before-protected-effect",
+      "trigger": "before:git.push",
+      "approval_required": true,
+      "required_evidence": ["test_coverage"]
+    }
+  ],
+  "obligations": [
+    {
+      "id": "demo.required_test.fixture_passes",
+      "kind": "required_test",
+      "required_evidence": "test_coverage"
+    }
+  ],
+  "escalation": {
+    "owner": {
+      "id": "operator:fixture",
+      "kind": "operator",
+      "issuer": "https://example.invalid"
+    },
+    "timeout_seconds": 900,
+    "on_timeout": "block"
+  },
+  "release_contract_ref": "demo.fixture-release"
+}

@@ -1,0 +1,17 @@
+{
+  "version": "vouch.policy_decision.v0",
+  "id": "decision:demo-write-001",
+  "run_id": "run:demo-001",
+  "subject_type": "action",
+  "subject_id": "action:demo-write-001",
+  "decision": "allow",
+  "policy_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "facts_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "rules_fired": ["allow.workspace-write"],
+  "reasons": ["The requested path and operation are inside the active capability."],
+  "constraints": {
+    "max_output_bytes": 1048576,
+    "approval_required": false
+  },
+  "evaluated_at": "2026-07-23T00:00:02Z"
+}

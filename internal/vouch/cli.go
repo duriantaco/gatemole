@@ -37,6 +37,28 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 		}
 	}
 	switch rest[0] {
+	case "daemon":
+		return daemonCommand(absRepo, rest[1:], stdout, stderr)
+	case "run":
+		return runtimeRunCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "status":
+		return transactionStatusCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "approve":
+		return transactionApproveCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "release":
+		return transactionReleaseCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "kernel":
+		return kernelCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "tx":
+		return transactionCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "contracts":
+		return contractsCommand(absRepo, common.manifest, common.json, rest[1:], stdout, stderr)
+	case "approval":
+		return approvalCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "identity":
+		return identityCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "action":
+		return actionCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "try":
 		return tryCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "init":
@@ -845,27 +867,19 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--manifest FILE] [--json] <command>")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "commands:")
-	fmt.Fprintln(out, "  try [--junit FILE] [--test-command CMD] [--write] [--keep]")
-	fmt.Fprintln(out, "  init [--profile auto|python|node|go|rust|generic] [--force]")
-	fmt.Fprintln(out, "  bootstrap [--dry-run] [--check] [--aggressive] [--review [--limit N|--all]]")
-	fmt.Fprintln(out, "  compile [--emit ast|spec|ir|plan]")
-	fmt.Fprintln(out, "  intent parse --intent FILE --out FILE")
-	fmt.Fprintln(out, "  intent compile --intent FILE --out FILE")
-	fmt.Fprintln(out, "  ir build --spec FILE --out FILE")
-	fmt.Fprintln(out, "  plan build --spec FILE --manifest FILE --out FILE")
-	fmt.Fprintln(out, "  artifacts build --spec FILE --out DIR")
-	fmt.Fprintln(out, "  contract suggest")
-	fmt.Fprintln(out, "  contract create --name ID --owner OWNER --risk RISK --paths GLOB --behavior TEXT --required-test TEXT")
-	fmt.Fprintln(out, "  spec lint")
-	fmt.Fprintln(out, "  manifest check")
-	fmt.Fprintln(out, "  manifest create --task-id ID --summary TEXT --agent NAME --run-id ID [--runner-identity ID --runner-oidc-issuer URL] --out FILE")
-	fmt.Fprintln(out, "  manifest attach-artifact --manifest FILE --id ID --kind KIND --path FILE --exit-code N [--evidence-bundle FILE --signature-bundle FILE --signer-identity ID --signer-oidc-issuer URL] --out FILE")
-	fmt.Fprintln(out, "  junit map --manifest FILE --junit FILE --test-map FILE --out FILE")
-	fmt.Fprintln(out, "  policy simulate [--manifest FILE] [--policy FILE] [--require-signed]")
-	fmt.Fprintln(out, "  evidence import junit [--out FILE] FILE")
-	fmt.Fprintln(out, "  verify [--policy FILE]")
-	fmt.Fprintln(out, "  gate [--policy FILE] [--out FILE] [--github-summary] [--require-signed] [--verbose] [--explain]")
-	fmt.Fprintln(out, "  evidence [--policy FILE]")
+	fmt.Fprintln(out, "  daemon [--db FILE] [--socket FILE]")
+	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) (--agent NAME [-- AGENT_ARG...] | --image IMAGE -- COMMAND [ARG...])")
+	fmt.Fprintln(out, "  status ID [--namespace NS]")
+	fmt.Fprintln(out, "  approve ID [--namespace NS] --key FILE --key-id ID --approver ID --class CLASS")
+	fmt.Fprintln(out, "  release ID [--namespace NS]")
+	fmt.Fprintln(out, "  tx create|start|worktree|stage|validate|verify|prepare|get|list|effects|events|abort (advanced transaction lifecycle)")
+	fmt.Fprintln(out, "  kernel run create|get|list|events|transition|pause|resume|cancel|grant (low-level run lifecycle)")
+	fmt.Fprintln(out, "  contracts <command> (optional release-contract verification module)")
+	fmt.Fprintln(out, "  approval keygen --key-id ID --principal ID --class CLASS --private-key FILE --trust-file FILE")
+	fmt.Fprintln(out, "  identity keygen|issue (local OIDC bootstrap and acceptance testing)")
+	fmt.Fprintln(out, "  action fs-write|fs-read (use 'vouch action' for details)")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Legacy top-level Contracts commands remain accepted for compatibility.")
 }
 
 func appendGitHubSummary(evidence Evidence) error {

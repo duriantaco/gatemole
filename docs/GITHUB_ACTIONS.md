@@ -101,7 +101,7 @@ jobs:
         run: go install github.com/duriantaco/vouch/cmd/vouch@latest
 
       - name: Compile Vouch contracts
-        run: vouch compile
+        run: vouch contracts compile
 
       - name: Create PR manifest
         env:
@@ -110,7 +110,7 @@ jobs:
           VOUCH_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
           VOUCH_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
         run: |
-          vouch manifest create \
+          vouch contracts manifest create \
             --task-id "$VOUCH_TASK_ID" \
             --summary "$VOUCH_TASK_SUMMARY" \
             --agent github-actions \
@@ -134,7 +134,7 @@ jobs:
       - name: Attach JUnit evidence
         if: steps.tests.outputs.exit_code == '0'
         run: |
-          vouch manifest attach-artifact \
+          vouch contracts manifest attach-artifact \
             --manifest "$VOUCH_MANIFEST" \
             --id pytest \
             --kind test_coverage \
@@ -174,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
 ```
 
-`vouch gate` exits non-zero only when the release decision is `block`.
+`vouch contracts gate` exits non-zero only when the release decision is `block`.
 `human_escalation`, `canary`, and `auto_merge` are non-blocking process exits.
 If the test evidence step records a non-zero exit, the workflow does not attach
 the JUnit artifact, so the gate reports missing required-test evidence instead
@@ -217,7 +217,7 @@ Do not silently generate new contracts in an enforced workflow. Commit reviewed
 For pilots, it is acceptable to run:
 
 ```sh
-vouch bootstrap --review
+vouch contracts bootstrap --review
 ```
 
 Use generated contracts as scaffolding only. A human should edit owners, paths,
@@ -229,7 +229,7 @@ Vouch becomes an enforced gate.
 For stricter runs, use:
 
 ```sh
-vouch gate --require-signed --github-summary
+vouch contracts gate --require-signed --github-summary
 ```
 
 The signed-evidence checks are wired through `CollectEvidenceWithOptions` and

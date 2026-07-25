@@ -1,0 +1,30 @@
+{
+  "version": "vouch.commit_plan.v0",
+  "id": "commit-plan:demo-001",
+  "transaction_id": "tx:demo-001",
+  "intent_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "effect_set_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "staged_state_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "policy_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+  "connector": "git",
+  "target": {
+    "kind": "git_ref",
+    "pattern": "refs/heads/main"
+  },
+  "expected_resource_version": "1111111111111111111111111111111111111111",
+  "steps": [
+    {
+      "sequence": 1,
+      "effect_id": "effect:demo-001:1",
+      "depends_on": [],
+      "precondition_ids": ["verification:demo-001:tests"],
+      "idempotency_key": "tx:demo-001:effect:1",
+      "timeout_seconds": 60,
+      "requires_receipt": true
+    }
+  ],
+  "compensation_steps": [],
+  "irreversible_effect_ids": [],
+  "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "created_at": "2026-07-23T08:04:00Z"
+}

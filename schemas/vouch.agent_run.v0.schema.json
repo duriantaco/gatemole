@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.agent_run.v0.schema.json",
+  "title": "Vouch AgentRun v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "namespace", "image_digest", "contract_digest",
+    "principal", "delegation_chain", "state", "budget_limits", "budget_usage",
+    "capability_ids", "outstanding_approval_ids", "event_sequence",
+    "created_at", "updated_at"
+  ],
+  "properties": {
+    "version": { "const": "vouch.agent_run.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "namespace": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "image_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "contract_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "principal": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" },
+    "delegation_chain": {
+      "type": "array",
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" }
+    },
+    "parent_run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "state": {
+      "type": "string",
+      "enum": [
+        "created", "admitted", "running", "waiting_for_event",
+        "waiting_for_agent", "waiting_for_approval", "blocked", "failed",
+        "cancelled", "completed"
+      ]
+    },
+    "state_reason": { "type": "string", "minLength": 1 },
+    "priority": { "type": "integer", "minimum": 0 },
+    "deadline": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "budget_limits": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/budget_limits" },
+    "budget_usage": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/budget_usage" },
+    "workspace": { "type": "string", "minLength": 1 },
+    "runtime": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/runtime_binding" },
+    "capability_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "checkpoint_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "outstanding_approval_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "event_sequence": { "type": "integer", "minimum": 1 },
+    "created_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "updated_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "completed_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" }
+  }
+}

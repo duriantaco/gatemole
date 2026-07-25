@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.action_request.v0.schema.json",
+  "title": "Vouch ActionRequest v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "run_id", "operation", "resource", "arguments",
+    "arguments_digest", "idempotency_key", "intent", "requested_at"
+  ],
+  "properties": {
+    "version": { "const": "vouch.action_request.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "operation": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "resource": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/resource_selector" },
+    "arguments": { "type": "object" },
+    "arguments_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "idempotency_key": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "intent": { "type": "string", "minLength": 1 },
+    "capability_hint": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "requested_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "parent_action_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "attempt": { "type": "integer", "minimum": 1 }
+  }
+}

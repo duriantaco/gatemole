@@ -1,0 +1,17 @@
+{
+  "version": "vouch.run_event.v0",
+  "id": "event:invalid:2",
+  "run_id": "run:demo-001",
+  "sequence": 2,
+  "type": "run.state_changed",
+  "actor": {
+    "id": "service:vouchd",
+    "kind": "service"
+  },
+  "occurred_at": "2026-07-23T00:00:01Z",
+  "payload": {
+    "from": "created",
+    "to": "admitted"
+  },
+  "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+}

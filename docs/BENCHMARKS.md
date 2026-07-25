@@ -1,5 +1,31 @@
 # VouchBench
 
+VouchBench covers the release-contract compiler and gate. The experimental
+agent kernel has a separate vertical acceptance harness:
+
+```sh
+scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
+```
+
+VouchKernelBench proves an allowed brokered filesystem write, a denied and
+audited path escape, authorization-before-execution ordering, and exact run and
+event recovery across a real daemon restart. Keeping the harnesses separate
+prevents the new kernel claim from weakening or silently changing the existing
+114-assertion release-gate acceptance floor.
+
+Agent Transaction Control has a third, independent acceptance harness:
+
+```sh
+scripts/vouchtransactionbench.sh
+```
+
+VouchTransactionBench performs 10 checks through the real CLI, Unix-socket
+daemon, SQLite store, and a temporary Git repository. It proves detached
+staging, exact effect inventory, source isolation, post-freeze mutation
+rejection, sequence-level control/test coupling detection, append-only history,
+and byte-equivalent projection recovery after daemon restart. It does not claim
+that production commit, compensation, or universal rollback is implemented.
+
 VouchBench is the repo-local acceptance harness for Vouch's current release-gate claim:
 
 > Tests can pass while release obligations remain uncovered; Vouch makes that gap explicit and blocks or routes the change according to policy.

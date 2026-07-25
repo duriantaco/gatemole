@@ -1,0 +1,28 @@
+{
+  "version": "vouch.agent_profiles.v0",
+  "profiles": [
+    {
+      "name": "coding-agent",
+      "oci_image": "registry.example.invalid/coding-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "descriptor": {
+        "version": "vouch.agent_image.v0",
+        "id": "image.coding-agent.v1",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": {
+          "adapter": "oci",
+          "adapter_version": "v1",
+          "entrypoint": [
+            "/opt/vouch-agent",
+            "serve"
+          ]
+        },
+        "source_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "publisher": {
+          "id": "service:agent-publisher",
+          "kind": "service",
+          "issuer": "https://publisher.example.invalid"
+        }
+      }
+    }
+  ]
+}

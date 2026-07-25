@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.agent_execution.v0.schema.json",
+  "title": "Vouch AgentExecution v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "transaction_id",
+    "run_id",
+    "stage_binding_id",
+    "program",
+    "command_digest",
+    "runtime_class",
+    "runtime_config_digest",
+    "status",
+    "started_at"
+  ],
+  "properties": {
+    "version": { "const": "vouch.agent_execution.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "transaction_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "stage_binding_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "program": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "command_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "runtime_class": { "type": "string", "enum": ["oci", "host"] },
+    "runtime_config_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "image_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "task_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "model_broker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "image_digest", "policy_digest", "calls", "completed_calls", "failed_calls", "unknown_calls", "input_tokens", "output_tokens"],
+      "properties": {
+        "provider": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "image_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "policy_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "receipt_ledger_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "calls": { "type": "integer", "minimum": 0 },
+        "completed_calls": { "type": "integer", "minimum": 0 },
+        "failed_calls": { "type": "integer", "minimum": 0 },
+        "unknown_calls": { "type": "integer", "minimum": 0 },
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "succeeded", "failed", "interrupted", "start_failed"]
+    },
+    "exit_code": { "type": "integer" },
+    "stdout_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "stderr_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "started_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "completed_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "runtime_class": { "const": "oci" } },
+        "required": ["runtime_class"]
+      },
+      "then": {
+        "required": ["image_digest"]
+      },
+      "else": {
+        "not": { "required": ["image_digest"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "running" } },
+        "required": ["status"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["exit_code"] },
+            { "required": ["stdout_digest"] },
+            { "required": ["stderr_digest"] },
+            { "required": ["completed_at"] }
+          ]
+        }
+      },
+      "else": {
+        "required": ["stdout_digest", "stderr_digest", "completed_at"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "succeeded" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["exit_code"],
+        "properties": { "exit_code": { "const": 0 } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "failed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["exit_code"],
+        "properties": { "exit_code": { "not": { "const": 0 } } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "enum": ["interrupted", "start_failed"] }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "not": { "required": ["exit_code"] }
+      }
+    }
+  ]
+}
