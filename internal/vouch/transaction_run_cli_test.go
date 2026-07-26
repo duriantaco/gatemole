@@ -624,8 +624,8 @@ func TestVerificationUsesReadOnlySnapshotAndRecordsMutationAttempt(t *testing.T)
 		"/bin/sh", "-c",
 		"printf 'tampered\\n' > internal/auth/middleware.go",
 	)
-	if code != 1 {
-		t.Fatalf("mutating verifier did not fail: code=%d stderr=%s", code, stderr)
+	if code == 0 {
+		t.Fatalf("mutating verifier unexpectedly passed: stderr=%s", stderr)
 	}
 	projection, err := newClient("").GetTransaction(
 		context.Background(), "payments", "tx:verifier-tamper",

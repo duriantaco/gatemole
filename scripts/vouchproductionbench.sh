@@ -364,7 +364,7 @@ jq -e --arg issuer "$identity_issuer" '
   any(.[]; .actor.issuer == $issuer and
     (.actor.claims_digest | test("^sha256:[a-f0-9]{64}$")))
 ' "$bench_root/events.json" >/dev/null
-if rg -q 'sensitive benchmark prompt|provider-secret-must-never-reach-agent' "$transactions/.vouch-model-evidence"; then
+if grep -R -E -q 'sensitive benchmark prompt|provider-secret-must-never-reach-agent' "$transactions/.vouch-model-evidence"; then
   echo "model receipt ledger leaked a prompt or provider secret" >&2
   exit 1
 fi

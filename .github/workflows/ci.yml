@@ -195,7 +195,6 @@ jobs:
           docker version
           command -v curl
           command -v jq
-          command -v rg
 
       - name: Build local production fixture image
         id: fixture
