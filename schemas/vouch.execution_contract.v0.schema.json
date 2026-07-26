@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.execution_contract.v0.schema.json",
+  "title": "Vouch ExecutionContract v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "digest", "owner", "goal", "risk", "resources", "budgets"],
+  "properties": {
+    "version": { "const": "vouch.execution_contract.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "owner": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" },
+    "goal": { "type": "string", "minLength": 1 },
+    "non_goals": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "risk": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "selector", "operations"],
+        "properties": {
+          "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "selector": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/resource_selector" },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+          },
+          "conditions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "approval_required": { "type": "boolean" },
+              "workspace_root": { "type": "string", "minLength": 1 },
+              "environment_allowlist": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "data_classifications": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "max_output_bytes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "budgets": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/budget_limits" },
+    "deadline": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "max_child_depth": { "type": "integer", "minimum": 0 },
+    "max_children": { "type": "integer", "minimum": 0 },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "trigger"],
+        "properties": {
+          "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "trigger": { "type": "string", "minLength": 1 },
+          "approval_required": { "type": "boolean" },
+          "required_evidence": { "type": "array", "uniqueItems": true, "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" } }
+        }
+      }
+    },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "required_evidence"],
+        "properties": {
+          "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "kind": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "required_evidence": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "on_timeout"],
+      "properties": {
+        "owner": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" },
+        "timeout_seconds": { "type": "integer", "minimum": 0 },
+        "on_timeout": { "type": "string", "enum": ["block", "cancel", "escalate"] }
+      }
+    },
+    "release_contract_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+  }
+}

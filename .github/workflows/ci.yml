@@ -17,12 +17,13 @@ jobs:
   go:
     name: Go checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -41,18 +42,42 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Scan reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
       - name: Run tests
         run: go test ./...
+
+  kernel-race:
+    name: Kernel race tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run kernel tests with the race detector
+        run: go test -race -count=1 ./internal/kernel/...
 
   vouchbench:
     name: VouchBench acceptance
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -69,11 +94,118 @@ jobs:
 
       - name: Upload benchmark artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vouchbench-results
           path: /tmp/vouchbench
           if-no-files-found: ignore
+
+  kernelbench:
+    name: VouchKernelBench acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run VouchKernelBench
+        run: scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
+
+      - name: Add benchmark summary
+        if: always()
+        run: |
+          if [ -f /tmp/vouchkernelbench/vouchkernelbench.latest.md ]; then
+            cat /tmp/vouchkernelbench/vouchkernelbench.latest.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vouchkernelbench-results
+          path: /tmp/vouchkernelbench
+          if-no-files-found: ignore
+
+  transactionbench:
+    name: VouchTransactionBench acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify benchmark dependencies
+        run: |
+          command -v git
+          command -v jq
+
+      - name: Run VouchTransactionBench
+        run: scripts/vouchtransactionbench.sh
+
+  runtimebench:
+    name: VouchRuntimeBench acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify benchmark dependencies
+        run: |
+          command -v git
+          command -v jq
+
+      - name: Run VouchRuntimeBench
+        run: scripts/vouchruntimebench.sh
+
+  production-acceptance:
+    name: Production OCI acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify Docker
+        run: |
+          docker version
+          command -v curl
+          command -v jq
+
+      - name: Build local production fixture image
+        id: fixture
+        run: |
+          image="$(scripts/vouchproductionfixture.sh --tag "vouch-production-fixture:${GITHUB_SHA}")"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Run production acceptance
+        env:
+          VOUCH_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
+        run: scripts/vouchproductionbench.sh
 
   skylos:
     name: Skylos advisory
@@ -81,10 +213,10 @@ jobs:
     continue-on-error: true
     steps:
       - name: Check out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
 
@@ -107,7 +239,7 @@ jobs:
 
       - name: Upload Skylos SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: skylos-sarif
           path: skylos.sarif.json

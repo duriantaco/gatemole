@@ -1,0 +1,37 @@
+{
+  "version": "vouch.agent_image.v0",
+  "id": "image.coding-agent.v1",
+  "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "runtime": {
+    "adapter": "subprocess",
+    "adapter_version": "v0",
+    "entrypoint": ["coding-agent", "--stdio"]
+  },
+  "models": [
+    {
+      "provider": "openai",
+      "name": "configured-by-operator"
+    }
+  ],
+  "instructions": [
+    {
+      "uri": "artifact://instructions/coding-agent.md",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "media_type": "text/markdown"
+    }
+  ],
+  "tools": [
+    {
+      "name": "workspace",
+      "driver": "filesystem",
+      "operations": ["filesystem.read", "filesystem.write"]
+    }
+  ],
+  "contract_refs": ["contract.demo-change"],
+  "source_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "publisher": {
+    "id": "service:vouch-fixtures",
+    "kind": "service",
+    "issuer": "https://example.invalid"
+  }
+}

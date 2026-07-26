@@ -1,0 +1,20 @@
+{
+  "version": "vouch.approval_decision.v0",
+  "id": "approval-decision:tx-demo:1",
+  "transaction_id": "tx:demo",
+  "approval_id": "approval:security:1",
+  "package_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "approval_class": "security-reviewer",
+  "decision": "approve",
+  "approver": {
+    "id": "human:alice",
+    "kind": "human",
+    "issuer": "https://id.example.invalid"
+  },
+  "key_id": "approver:alice:2026",
+  "issued_at": "2026-07-23T08:10:00Z",
+  "expires_at": "2026-07-23T08:20:00Z",
+  "nonce": "019c9f50a5747e28",
+  "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "signature_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+}

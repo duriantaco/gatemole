@@ -1,0 +1,10 @@
+{
+  "initial": "created",
+  "transitions": [
+    { "from": "created", "to": "admitted" },
+    { "from": "admitted", "to": "running" },
+    { "from": "running", "to": "completed" },
+    { "from": "completed", "to": "running" }
+  ],
+  "error_code": "KERNEL_TRANSITION_INVALID"
+}

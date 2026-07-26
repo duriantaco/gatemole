@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.checkpoint.v0.schema.json",
+  "title": "Vouch Checkpoint v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "run_id", "event_sequence", "image_digest",
+    "contract_digest", "runtime", "created_at", "state_ref", "state_digest",
+    "memory_refs", "pending_action_ids", "compatible_adapter_versions"
+  ],
+  "properties": {
+    "version": { "const": "vouch.checkpoint.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "event_sequence": { "type": "integer", "minimum": 1 },
+    "image_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "contract_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "runtime": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/runtime_binding" },
+    "created_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "state_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" },
+    "state_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "memory_refs": {
+      "type": "array",
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" }
+    },
+    "workspace_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" },
+    "pending_action_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "compatible_adapter_versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Default ownership
+* @duriantaco
+
+# Security-sensitive control and delivery surfaces
+/.github/workflows/ @duriantaco
+/build/ @duriantaco
+/internal/kernel/ @duriantaco
+/schemas/ @duriantaco
+/scripts/ @duriantaco
+/CODEOWNERS @duriantaco
+/SECURITY.md @duriantaco

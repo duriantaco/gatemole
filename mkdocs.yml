@@ -1,4 +1,5 @@
-site_name: Vouch
+site_name: Vouch Runtime
+site_description: Transaction runtime for autonomous software agents
 site_url: https://duriantaco.github.io/vouch/
 repo_url: https://github.com/duriantaco/vouch
 repo_name: duriantaco/vouch
@@ -28,7 +29,8 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Home: index.md
-  - Compiler: compiler.md
-  - GitHub Actions: github-actions.md
-  - Benchmarks: benchmarks.md
+  - Runtime: index.md
+  - Contracts:
+      - Compiler module: compiler.md
+      - CI integration: github-actions.md
+  - Acceptance: benchmarks.md

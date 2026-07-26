@@ -1,0 +1,33 @@
+{
+  "version": "vouch.effect.v0",
+  "id": "effect:demo-001:1",
+  "transaction_id": "tx:demo-001",
+  "sequence": 1,
+  "run_id": "run:demo-001",
+  "origin_action_id": "action:demo-001:1",
+  "system": "git",
+  "resource": {
+    "kind": "file",
+    "pattern": "internal/auth/middleware.go"
+  },
+  "operation": "modify",
+  "arguments": {
+    "path": "internal/auth/middleware.go"
+  },
+  "arguments_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "dependencies": [],
+  "estimated_scope": {
+    "bytes": 142,
+    "objects": 1
+  },
+  "data_classification": "source-code",
+  "recovery_class": "stageable",
+  "status": "staged",
+  "stage_ref": {
+    "uri": "worktree://tx:demo-001/internal/auth/middleware.go",
+    "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "media_type": "text/x-go"
+  },
+  "created_at": "2026-07-23T08:01:00Z",
+  "updated_at": "2026-07-23T08:01:00Z"
+}

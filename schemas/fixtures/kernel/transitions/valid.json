@@ -1,0 +1,11 @@
+{
+  "initial": "created",
+  "transitions": [
+    { "from": "created", "to": "admitted" },
+    { "from": "admitted", "to": "running" },
+    { "from": "running", "to": "waiting_for_approval" },
+    { "from": "waiting_for_approval", "to": "running" },
+    { "from": "running", "to": "completed" }
+  ],
+  "final": "completed"
+}

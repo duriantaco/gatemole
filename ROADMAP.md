@@ -1,291 +1,257 @@
-# Roadmap
-
-## Status
-
-Vouch is in beta/research-prototype mode.
-
-It is not a code reviewer. It does not inspect implementation diffs and decide whether the code is good. The roadmap is about building a compiler-like verification control plane: intent becomes obligations, obligations require evidence, and policy decides whether a change can ship.
-
-## North Star
-
-The long-term goal is a serious replacement surface for line-by-line review when agents produce more code than humans can inspect:
-
-1. Human-owned intent
-2. Typed compiler pipeline
-3. Generated verification artifacts
-4. Artifact-backed verifiers and deterministic checks
-5. Runtime enforcement
-6. Auditable release decision
-
-## Positioning Guardrails
-
-Vouch should not be positioned as another CI/CD gate.
-
-CI can execute Vouch, but the product is the compiler-like control plane:
-
-- Contract language.
-- Typed AST and diagnostics.
-- Obligation IR.
-- Evidence manifest.
-- Artifact-backed verifier inputs.
-- Deterministic policy decision.
-- Auditable release result.
-
-If a feature only makes Vouch a nicer wrapper around existing test commands, it should not be a roadmap priority unless it also strengthens obligation coverage, evidence quality, policy semantics, or auditability.
-
-Vouch should also be explicit about how it composes with existing supply-chain
-and policy tools. Sigstore/cosign, SLSA, in-toto, OPA, and Conftest cover
-important parts of the system; Vouch's distinct surface is the contract language,
-obligation IR, evidence mapping, and release result built on top.
-
-## Current Beta
-
-Implemented today:
+# Vouch Runtime Roadmap
+
+## Product direction
+
+Vouch Runtime is the transaction runtime for autonomous agents. The current
+product is not the older release-contract compiler, and it is not yet a complete
+Agent OS.
+
+The product hierarchy is:
+
+| Layer | Role | Status |
+| --- | --- | --- |
+| Vouch Runtime | Isolate, stage, verify, authorize, commit and recover an agent task | Current product |
+| `vouchd` | Trusted transaction kernel and local enforcement point | Implemented |
+| Vouch Contracts | Optional contract-to-obligation verification module | Implemented beta module |
+| Vouch Control Plane | Fleet, policy, approvals, audit, connectors and enterprise administration | Future commercial layer |
+| Agent OS | Non-bypassable transaction boundary across the important resources in an agent workflow | Long-term north star |
+
+The immediate technical category remains **Agent Transaction Control**. Vouch
+should earn the Agent OS description through enforcement coverage rather than
+adopt it as a premature marketing claim.
+
+## Product thesis
+
+Agents will receive useful authority only when organizations can control the
+complete task, not merely approve isolated tool calls after the fact.
+
+```text
+human intent
+  -> admitted agent execution
+  -> staged, normalized effects
+  -> exact-state verification
+  -> outcome-oriented approval
+  -> ordered commit and receipts
+  -> postconditions and recovery
+```
+
+Vouch succeeds when a team grants an agent permission to complete work it
+previously allowed the agent only to suggest.
+
+## Implemented foundation
+
+The repository already contains:
+
+- Strict versioned resources for agent images, execution contracts, runs,
+  capabilities, actions, transactions, effects, verifications, approvals,
+  commit plans, checkpoints and events.
+- Deterministic reducers and append-only hash-chained histories.
+- SQLite event/projection persistence, optimistic concurrency and restart
+  recovery.
+- `vouchd` over a mode-`0600` Unix socket.
+- Daemon-owned OCI execution with non-root identities, read-only roots,
+  resource limits and bounded output.
+- Transaction-specific model brokering with provider credential isolation,
+  model/tool policy, token budgets and durable receipts.
+- Detached Git worktrees, bounded raw staging, immutable tree revisions and
+  exact read-only verifier materializations.
+- Normalized effect ledgers and initial sequence/separation policy.
+- OIDC role and namespace enforcement.
+- Immutable approval packages, signed independent approvals and a distinct
+  release identity.
+- Compare-and-swap publication to allowed local Git refs and crash
+  reconciliation.
+- Readiness checks and separate kernel, transaction, runtime, Contracts and
+  production acceptance harnesses.
+- The optional Vouch Contracts compiler, obligation IR, evidence import and
+  release-policy module.
+
+## Current supported profile
+
+The supported runtime profile is deliberately narrow:
+
+- One node, one security tenant and one trusted host/VM.
+- One non-root daemon boundary using SQLite and local storage.
+- Preloaded digest-pinned agent, verifier and broker images.
+- Daemon-owned mandatory verifiers.
+- OIDC operator identity, signed approvals and separation of duties.
+- Publication to an allowed local Git branch ref.
+
+The profile does not include remote push or pull-request merge, deployment,
+database effects, submodules, multi-tenancy, a network control API, distributed
+scheduling or HA. Stable versioned binary packaging and upgrade compatibility
+are still pending. The complete requirements remain in
+[docs/PRODUCTION.md](docs/PRODUCTION.md).
+
+## Execution order
+
+### Phase 0: Coherent developer surface
+
+Make the implemented runtime understandable and usable without exposing its
+internal state-machine choreography.
+
+- Implemented: task execution is the primary top-level `vouch run` workflow;
+  `status`, `approve` and `release` are product-facing commands; the older run
+  kernel is under `vouch kernel`; and the compiler/evidence surface is grouped
+  under `vouch contracts`.
+- Add `watch`, product-level `effects`, `events`, `cancel` and
+  `doctor` experiences around one transaction ID.
+- Add a strict versioned runtime configuration file.
+- Ship stable binary/container installation and a service definition.
+- Publish an explicit CLI and schema compatibility policy.
 
-- Intent YAML parser for a small supported subset.
-- Typed AST with source spans and diagnostics.
-- Intent-to-spec compilation.
-- Spec-to-obligation IR lowering.
-- Stable semantic obligation IDs.
-- Verification-plan generation.
-- Verifier/test/release artifact generation.
-- Evidence artifact reference resolution from change manifests.
-- Artifact path/hash verification.
-- Optional cosign bundle verification for evidence artifacts under `gate --require-signed`.
-- JUnit XML importer for test evidence.
-- Deterministic verifier findings.
-- Touched-spec compilation for faster PR checks.
-- Generic repo init for Python, Node, Go, Rust, and fallback repos.
-- Contract suggestion and creation commands.
-- Manifest creation from changed files and owned paths.
-- Artifact attachment with obligation inference.
-- JUnit test-map adapter for raw pytest-style JUnit evidence.
-- SARIF 2.1.0 import for `security_check` evidence with exact obligation-ID mapping.
-- Machine-readable gate result artifact output for status checks.
-- Release policy files loaded from `.vouch/policy/release-policy.json`.
-- Policy simulation command with structured policy input/output.
-- Structured verifier output artifacts imported into findings and policy input.
-- Release decisions: `block`, `human_escalation`, `canary`, `auto_merge`.
-- Manifest-backed shadow-mode GitHub Actions reference workflow with gate summary
-  and artifact upload conventions.
-- Demo repo with blocked and passing manifests.
-- Unit tests for the current pipeline.
+Exit criteria:
 
-## Validation Status
+- A developer can install Vouch, start a local runtime, run a supported coding
+  agent and understand the next required action from one quick start.
+- Normal use does not require manually authoring event envelopes, digests or
+  sequence cursors.
 
-Recent validation runs used temp copies of real repos, so Vouch exercised the generic path without mutating the source projects:
+### Phase 1: Public runtime API and agent protocol
 
-| Repo | Shape | Evidence Path | Decision |
-| --- | --- | --- | --- |
-| `sundae` | Flat Python package | pytest/JUnit evidence | `auto_merge` |
-| `sago` | Python `src/` layout | high-risk builder contract | `canary` |
-| `wooster` | Flat Python package | pytest JUnit mapped through `.vouch/test-map.json` | `auto_merge` |
+Turn the internal foundation into an embeddable product.
 
-These runs show the current beta can initialize unfamiliar repos, create contracts, create manifests from changed files, map raw test output to required-test obligations, attach evidence, and produce deterministic release decisions.
+- Publish public versioned API resource packages and an OpenAPI document.
+- Publish a supported Go client; add another SDK only after the API stabilizes.
+- Add idempotent task creation and mutation requests.
+- Add bounded event/status streaming and pagination.
+- Implemented locally: strict named profiles make `AgentImage` executable with
+  a pinned OCI reference and fixed entrypoint.
+- Implemented locally: `vouch.agent_task.v0` durably retains and digest-binds
+  exact intent, transaction/run/profile/image/command identity and is mounted
+  read-only at `/vouch/task.json`. External encrypted artifact storage remains
+  control-plane work.
+- Wire execution contracts, budgets, verifier profiles and release targets into
+  transaction creation.
+- Provide a generic command adapter and one polished coding-agent adapter.
 
-It does not yet prove that Vouch understands arbitrary product intent. The contract remains the source of truth, and the next product work should reduce the manual work needed to create and maintain those contracts.
+Exit criteria:
 
-## Execution Order
+- An external application can submit and observe a transaction without
+  importing `internal/` packages or reproducing CLI orchestration.
+- The exact task, agent image, runtime policy and verifier set are immutable and
+  attributable.
 
-Use [`skills.md`](skills.md) as the operating brief for choosing work. The
-direction is compiler/evidence control plane, not AI code review.
+### Phase 2: Deep remote-Git workflow
 
-The next product risk is adoption proof: teams need to see Vouch catch
-release-readiness gaps in a normal pull-request workflow without pretending to
-judge arbitrary implementation correctness. Trust and policy hardening still
-matter, but they should support real evidence workflows rather than lead the
-roadmap by themselves.
+Build the first complete customer workflow rather than many shallow connectors.
 
-Near-term execution order:
+- GitHub App installation and short-lived credential brokering.
+- Staged branch and pull-request creation/update with idempotency and receipts.
+- Exact commit/status/check bindings.
+- Reviewer-facing approval package and decision UX.
+- Merge/reconciliation semantics that expose conflicts and unknown outcomes.
+- Audit bundle export for one transaction.
 
-1. Run the shadow-mode pull-request pilot package against real repositories.
-2. Evidence connector wedge: SARIF/Semgrep import and coverage import.
-3. Reproducible case study where tests pass but Vouch blocks or routes because
-   release obligations are missing, invalid, or out of scope.
-4. GitHub Checks/status integration over the auditable gate result.
-5. Trust hardening that supports evidence workflows: required high-risk hashes,
-   commit/runner provenance, scoped signers, and signed specs or manifests.
-6. JSON schemas and compatibility tests for public artifacts.
-7. Policy profile expansion or Rego adapter once the policy input shape proves
-   stable.
-8. AI evidence verifiers only after evidence provenance and policy semantics are
-   solid.
+Exit criteria:
 
-## Roadmap Phases
+- A design partner lets an agent open or update a protected change through
+  Vouch that it would not let the agent publish directly.
+- No GitHub effect becomes real outside the frozen policy, verification and
+  approval package.
 
-### Phase 1: Compiler Front End Hardening
+### Phase 3: Vouch Control Plane
 
-Make the source language and diagnostics reliable enough for real users.
+Build the future commercial layer around self-hosted runtime data planes.
 
-Planned work:
+- Runtime registration, health and fleet inventory.
+- Organization policy distribution and versioning.
+- SSO/RBAC, approval routing and delegation.
+- Audit retention, search, export and SIEM integration.
+- Usage, model-cost and budget visibility.
+- Connector and verifier profile management.
+- Remote revocation and incident controls.
+- Managed or enterprise-supported deployment options.
 
-- Replace the minimal YAML subset parser with a real source-position-preserving parser.
-- Publish JSON schemas for AST, spec, IR, plan, manifest, and evidence.
-- Add schema compatibility tests.
-- Add golden diagnostic fixtures.
-- Define strict unknown-field behavior.
-- Add version migration hooks.
-- Improve error messages for nested sections.
+The commercial boundary is management and assurance at organization scale.
+The local runtime should remain useful on its own. Likely charging units are
+controlled agent transactions or active agents, with infrastructure/model
+compute accounted for separately; pricing must be validated with paid pilots.
 
-### Phase 2: Policy Engine
+Exit criteria:
 
-Separate release policy from hard-coded Go logic.
+- One paid design partner manages multiple runtime workers through the control
+  plane.
+- Control-plane loss does not cause acknowledged effects to be duplicated or
+  authoritative local receipts to disappear.
 
-Planned work:
+### Phase 4: Multi-system transaction packs
 
-- Rego policy adapter or a richer custom evaluator.
-- Risk-specific policy profiles.
-- Team-specific override rules.
-- Exception handling with audit trails.
-- Policy regression tests.
+Expand only through connectors with explicit stage, commit, reconciliation and
+recovery semantics.
 
-Implemented base:
+Priority order:
 
-- Policy-as-code JSON files loaded from `.vouch/policy/`.
-- Compact policy input containing spec, manifest, IR coverage, findings, invalid evidence, and provenance status.
-- Policy output containing decision, reasons, and fired rule IDs.
-- Policy simulation command.
+1. Kubernetes deployment, canary health and rollback.
+2. PostgreSQL migration staging, invariants and compensation metadata.
+3. A combined GitHub + Kubernetes + PostgreSQL transaction.
 
-### Phase 3: Workflow Integration
+Every connector must classify effects as read-only, stageable, reversible,
+compensatable or irreversible. Unknown non-idempotent effects are reconciled,
+never retried blindly.
 
-Make Vouch useful in real pull-request workflows while keeping CI as the runner, not the product identity.
+### Phase 5: Distributed runtime
 
-Planned work:
+Broaden the deployment claim only after the single-node semantics remain stable.
 
-- GitHub Checks integration.
-- SARIF or annotation output for diagnostics.
-- Artifact upload conventions.
-- Required status check examples.
-- Sample runner workflow.
+- PostgreSQL and object-storage persistence.
+- Leases, scheduling, quotas, priorities and admission control.
+- Multi-tenant network API and data-plane authentication.
+- HA, failover, upgrade and disaster-recovery procedures.
+- Data-residency and retention controls.
+- Multiple runtime and agent adapters.
 
-### Phase 4: Evidence Verifiers
+Only after these paths are non-bypassable should Vouch describe the deployed
+system as an Agent OS.
 
-Turn generated verifier packets into first-class verifier inputs.
+## Vouch Contracts roadmap
 
-This phase should wait until evidence provenance and policy semantics are in
-place. A verifier finding is useful only when the verifier output is tied to a
-runner identity and the release policy says how to use it.
+Vouch Contracts remains an optional verification module, not a parallel product
+identity. Its priorities should support runtime authority:
 
-Implemented base:
+- Compile obligations into daemon-owned verifier requirements.
+- Bind obligation coverage and evidence provenance into approval packages.
+- Import SARIF, coverage, deployment, metrics and rollback evidence.
+- Publish schemas and compatibility tests for compiler artifacts.
+- Add scoped signer and exception policy.
+- Improve source diagnostics and authoring only where real runtime pilots show
+  contract-maintenance cost.
 
-- Verifier input packets include prompt-version and output-schema pins.
-- Structured `vouch.verifier_output.v0` artifacts can be linked from manifests.
-- Verifier output findings are imported into the normal policy path.
-- Malformed verifier outputs invalidate evidence.
-- Verifier output artifacts are excluded from required evidence coverage.
+The Contracts module does not inspect arbitrary diffs and pronounce code
+correct. AI verifiers may contribute evidence but cannot be the sole authority
+for high-impact effects.
 
-Remaining work:
+## Commercial validation
 
-- Signed verifier output schema.
-- Verifier confidence and disagreement handling.
-- Verifier isolation rules.
-- Audit log for every verifier decision.
-- Test fixtures for malicious or incomplete evidence.
+Find teams considering coding or operations agents with write access and ask
+for the last workflow they refused to automate. Do not broaden the product
+until:
 
-Important constraint: AI verifiers should verify evidence against obligations. They should not be presented as a generic code-review replacement.
+- Three organizations provide a real workflow and its policy constraints.
+- Two permit monitor-mode or local-runtime integration.
+- One agrees to a paid control-plane or enterprise pilot.
+- The buyer values task-level control beyond logs and raw tool approvals.
+- Vouch produces measurable permission expansion.
 
-### Phase 5: Code-Aware Evidence Importers
+Primary metrics:
 
-Connect the obligation system to real code, tests, and tooling.
+- Transactions and material effects mediated before release.
+- Permission-expansion events.
+- Automatic, focused-approval, revise and block rates.
+- False-block rate and approval latency.
+- Verification coverage of declared postconditions.
+- Unknown, partial-commit, compensation-failure and manual-recovery rates.
+- Duplicate non-idempotent effects; target zero.
+- Replay mismatch or unattributed effect; target zero.
 
-Implemented base:
-
-- Changed-file ownership checks.
-- Manifest creation from changed files and owned paths.
-- JUnit XML import.
-- Test-map adapter for raw pytest-style JUnit output.
-
-Planned work:
-
-- Spec-to-file traceability beyond owned path globs.
-- OpenAPI-to-contract stub generation.
-- Test discovery and suggested test-map generation.
-- Typed API/signature obligation suggestions.
-- Coverage report import.
-- Static analysis import.
-- Secret scanning import.
-- Logging and PII scanner import.
-- Migration and external-effect detectors.
-
-### Phase 6: Runtime Enforcement
-
-Make release policy continue after merge.
-
-Planned work:
-
-- Deployment integration.
-- Canary metric binding.
-- Alert binding validation.
-- Automatic rollback hooks.
-- Post-release evidence packets.
-- Incident feedback into specs.
-- Production drift detection.
-
-### Phase 7: Trust, Governance, And Scale
-
-Make the system usable by teams.
-
-Implemented base:
-
-- Runner identity in manifests and evidence artifacts.
-- Detached signatures over Vouch evidence bundles.
-- Hardened `gate --require-signed` mode that binds manifest, artifact hashes, and obligation IDs.
-- Tamper-evident evidence bundles.
-- Repo-level allowed signer policy in `.vouch/config.json`.
-- Agent identity and run provenance in bundle validation.
-
-Remaining work:
-
-- Contract- or path-scoped allowed signer policy.
-- Canonical JSON serialization rules for evidence bundles.
-- Signed specs and manifests.
-- Role-based approval exceptions.
-- Organization-level policy packs.
-- Multi-repo spec registry.
-- Long-term audit storage.
-
-## Near-Term Priorities
-
-The next useful contributions are:
-
-- Static-analysis/SARIF importer for security and quality evidence.
-- Coverage XML importer for required-test and behavior evidence.
-- Shadow-mode GitHub PR pilot results from real repositories.
-- Real-world case study showing a plausible bad agent change blocked by an obligation.
-- Reference workflow for `try -> write -> manifest -> attach evidence -> gate`.
-- Test-map discovery to reduce manual required-test mapping.
-- Required hashes for high-risk evidence artifacts.
-- Commit SHA and runner provenance binding for evidence artifacts.
-- Contract- or path-scoped allowed signer policy.
-- Canonical JSON serialization rules for evidence bundles.
-- Signed specs and manifests.
-- JSON schemas plus compatibility tests for AST, spec, IR, plan, manifest, and evidence.
-- Golden diagnostics for parser and compiler failures.
-- OpenAPI-to-contract stub generation.
-- Rego policy adapter decision spike.
-- More demo scenarios beyond password reset, including ordinary library changes.
-
-## Productionization Track
-
-Before calling this production-ready, Vouch needs:
-
-- Stable CLI contract and installable release binary.
-- Sample runner workflow with artifact upload conventions.
-- Documented evidence kinds and required fields.
-- Schema version compatibility tests.
-- Policy profile and exception semantics beyond the base JSON evaluator.
-- Auditable gate result output for GitHub Checks or similar systems.
-- Tamper-evident evidence bundles with agent/run provenance.
-- Fixture repos that cover Python flat layout, Python `src/` layout, Node, Go, Rust, and generic fallback.
-
-## Explicit Non-Goals
+## Non-goals
 
 Vouch should not claim to:
 
+- Be a general-purpose coding agent or reasoning framework.
+- Be an identity provider or credential vault.
+- Be only an MCP gateway or per-call policy proxy.
 - Prove arbitrary code correct.
-- Replace production security review.
-- Replace incident response.
-- Read any diff and declare it good.
-- Act as a general-purpose coding agent.
-
-The project is valuable only if it stays honest about that boundary.
+- Replace production security review or incident response.
+- Offer universal rollback or fictional cross-system ACID semantics.
+- Provide production multi-tenancy or HA before those paths exist.

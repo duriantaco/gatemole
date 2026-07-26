@@ -1,0 +1,20 @@
+{
+  "version": "vouch.agent_transaction.v0",
+  "id": "tx:demo-001",
+  "namespace": "team-payments",
+  "intent_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "sponsor": {
+    "id": "human:alice",
+    "kind": "human",
+    "issuer": "https://identity.example.com"
+  },
+  "agent_run_ids": ["run:demo-001"],
+  "stage_bindings": [],
+  "state": "created",
+  "effect_ids": [],
+  "verification_result_ids": [],
+  "outstanding_approval_ids": [],
+  "event_sequence": 1,
+  "created_at": "2026-07-23T08:00:00Z",
+  "updated_at": "2026-07-23T08:00:00Z"
+}

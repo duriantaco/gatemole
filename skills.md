@@ -1,145 +1,171 @@
-# Vouch Operating Brief
+# Vouch Runtime Operating Brief
 
-Use this before choosing roadmap work, designing features, writing docs, or
+Use this brief when choosing roadmap work, designing features, writing docs or
 describing Vouch.
 
-## Identity
+## Product identity
 
-Vouch is a compiler for release contracts.
+Vouch Runtime is the transaction runtime for autonomous agents.
 
-Its job is to turn human-owned release intent into typed obligations, link those
-obligations to evidence artifacts, and produce an auditable release decision:
-
-```text
-human-owned intent
-  -> typed AST and diagnostics
-  -> spec JSON
-  -> obligation IR
-  -> verification plan and runner artifacts
-  -> evidence and policy input
-  -> block | human_escalation | canary | auto_merge
-```
-
-The release gate is a runtime target for the compiler output. It is not the
-whole product.
-
-## Boundary
-
-Vouch is not an AI code reviewer.
-
-Do not position Vouch as a tool that reads a diff and decides whether the
-implementation is good. It should not compete with AI pull-request review tools
-by producing generic review comments, style suggestions, or line-by-line bug
-claims.
-
-Vouch should answer a different question:
+Its job is to make an agent task a controlled transaction:
 
 ```text
-For the contracts this change touched, which compiled obligations are required,
-which evidence artifacts satisfy them, and what release posture follows?
+intent
+  -> isolated execution
+  -> proposed effects
+  -> immutable staged state
+  -> deterministic policy and verification
+  -> independent authority
+  -> commit | block | revise | recover
 ```
 
-## Good Work
+The product controls whether an agent's effects may become real. It does not
+own the agent's planning, prompting or reasoning loop.
 
-Prefer work that strengthens at least one of these surfaces:
+## Product hierarchy
 
-- Contract language and source diagnostics.
-- Typed AST, semantic analysis, and stable compiler stages.
-- Obligation IR and stable semantic obligation IDs.
-- Spec-to-file traceability for routing changed files to contracts.
-- Evidence artifact import, validation, linking, and coverage.
-- Policy input, policy simulation, policy semantics, and fired-rule reporting.
-- Auditable gate results for CI and pull-request workflows.
-- Evidence provenance, runner identity, signatures, and tamper evidence.
-- Shadow-mode pilot workflows that prove Vouch catches release-readiness gaps.
+Keep these names distinct:
 
-The best next work makes existing CI artifacts more meaningful to Vouch:
+- **Vouch Runtime**: the current product.
+- **`vouchd`**: the trusted transaction kernel inside the runtime.
+- **Vouch Contracts**: an optional module that compiles release intent into
+  verification obligations and maps evidence to them.
+- **Vouch Control Plane**: a future commercial layer for managing runtime
+  fleets, policy, approvals, connectors, audit and enterprise operations.
+- **Agent OS**: the long-term north star, not a claim about the current
+  single-node implementation.
 
-- SARIF or Semgrep import for `security_check` evidence.
-- Coverage import for `test_coverage` or behavior-adjacent evidence.
-- Deployment, metric, alert, and rollback evidence importers.
-- GitHub summary/check output that explains obligations, evidence, and policy.
-- Case studies where tests pass but release obligations remain uncovered.
+Never describe Vouch Contracts as the whole product. Never describe the current
+runtime as a complete Agent OS or a production multi-tenant control plane.
 
-## Wrong Turns
+## Runtime boundary
 
-Avoid work whose main value is generic code review:
+Vouch owns:
 
-- Inline comments about arbitrary diff quality.
-- General bug-finding agents that are not tied to compiled obligations.
-- Style, lint, readability, naming, or refactor suggestions as product output.
-- "Approve this PR" or "this code is correct" claims.
-- Chat-based code review workflows without artifact-backed evidence.
-- AI verifier layers that are not bound to runner identity, evidence artifacts,
-  and release policy.
+- Task-scoped transaction and effect state.
+- Isolated runtime admission and resource limits.
+- Immutable staging and verifier inputs.
+- Deterministic action, sequence and release policy.
+- Verification orchestration and evidence binding.
+- Approval-package integrity and separation of duties.
+- Commit receipts, reconciliation and truthful partial failure.
+- An authoritative replayable event history.
 
-Avoid work that turns Vouch into only a CI wrapper:
+Vouch integrates with, but does not replace:
 
-- Running test commands without improving obligation coverage.
-- Duplicating existing scanner dashboards without mapping results to obligations.
-- Blocking on tool output without explaining the touched contract and evidence
-  requirement.
+- Coding agents and agent frameworks.
+- OCI containers, microVMs and host operating systems.
+- Identity providers, credential stores and policy engines.
+- Git hosting, CI systems, deployment systems and databases.
+- Model providers and tool protocols.
+
+Complete mediation matters. If an agent retains direct credentials, unrestricted
+egress or access around Vouch, the runtime cannot claim authority over those
+paths.
+
+## Current supported profile
+
+The only supported deployment profile is a single-node, single-tenant runtime
+on a dedicated trusted host that publishes an approved commit to an allowed
+local Git ref. It requires pinned images, daemon-owned verification, OIDC,
+signed independent approval, separate release authority and the documented
+storage and host controls.
+
+It does not currently push, open or merge pull requests, deploy, coordinate
+database/Kubernetes effects, provide remote multi-tenant service, or provide
+HA. Stable release packaging is pending.
+
+## Good work
+
+Prefer work that strengthens the runtime path:
+
+- A one-command task experience that preserves kernel authority.
+- Public task, transaction, effect, verification and approval APIs.
+- A stable agent image/task-envelope protocol.
+- Deep, non-bypassable resource connectors with reconciliation.
+- Better staging, isolation, recovery and idempotency invariants.
+- Operator status, watch, logs, approval and recovery UX.
+- Runtime configuration, diagnostics, packaging and upgrades.
+- Policy simulation, provenance, audit export and compatibility guarantees.
+- Real pilots where Vouch lets a team grant an agent authority it previously
+  withheld.
+
+For Vouch Contracts, prefer work that makes runtime verification stronger:
+
+- Contract-to-verifier compilation.
+- Obligation IDs included in transaction verification and approval packages.
+- Evidence provenance and exact staged-state binding.
+- SARIF, coverage, deployment and rollback evidence import.
+- Deterministic, auditable policy inputs.
+
+## Wrong turns
+
+Avoid:
+
+- Turning Vouch into another coding-agent framework.
+- Generic AI code review, style comments or unsupported correctness claims.
+- Treating logs or dashboards as an enforcement boundary.
+- Treating a per-tool allow/deny proxy as sufficient transaction control.
+- Adding shallow connectors that cannot stage, reconcile or report ambiguity.
+- Claiming universal rollback for irreversible or compensatable effects.
+- Building a hosted dashboard before the local runtime has a coherent
+  developer API.
+- Leading the product with the optional Contracts compiler or CI gate.
 
 ## Positioning
 
-Use these phrases:
+Use:
 
-- "compiler for release contracts"
-- "release-contract compiler and evidence gate"
-- "the layer between CI passed and ship it"
-- "obligation-oriented control plane"
-- "auditable release decision for agent-written code"
+- “transaction runtime for autonomous agents”
+- “the controlled boundary between an agent proposal and a real effect”
+- “agent transaction kernel”
+- “isolated, verified and authorized agent execution”
+- “Vouch Runtime”
+- “Vouch Contracts” when referring specifically to the optional compiler
 
-Avoid these phrases as primary positioning:
+Use carefully:
 
-- "AI code reviewer"
-- "automated PR reviewer"
-- "bug finder"
-- "lint bot"
-- "CI wrapper"
-- "general coding agent"
+- “Agent Transaction Control” as the technical category.
+- “Agent OS” only as the north star.
+- “Control Plane” only for the future fleet-management product.
 
-## Decision Test
+Avoid primary positioning as:
 
-Before implementing a feature, answer these questions:
+- “release-contract compiler”
+- “AI code reviewer”
+- “CI/CD gate”
+- “MCP gateway”
+- “identity provider”
+- “general workflow engine”
 
-1. Which human-owned contract or typed source artifact does this strengthen?
-2. Which compiled obligation, evidence kind, or policy fact does this improve?
-3. Does the output remain deterministic and auditable?
-4. Can the result be represented in compiler artifacts, evidence manifests, or
-   gate results?
-5. Would this still matter if all generic AI code reviewers already existed?
-6. Are we inspecting implementation correctness, or are we linking evidence to
-   declared obligations?
+## Decision test
 
-If the answer to question 6 is "inspecting implementation correctness," stop and
-redesign the work around contracts, obligations, evidence, or policy.
+Before implementing a feature, ask:
 
-## Near-Term Work
+1. Which task-scoped effect or authority boundary does this strengthen?
+2. Is the action staged or mediated before it becomes real?
+3. Is the decision deterministic, attributable and replayable?
+4. What happens after a crash or an ambiguous non-idempotent result?
+5. Can an agent bypass it with ambient credentials, filesystem access or
+   network egress?
+6. Does this improve the developer's path from intent to controlled outcome?
+7. Is this core runtime work, an optional Contracts feature, or future Control
+   Plane work?
 
-The current product direction is:
+If the answer depends on an LLM being the sole enforcement authority, redesign
+it.
 
-1. Ship a strong shadow-mode pull-request pilot path.
-2. Add evidence connector importers, starting with SARIF/Semgrep and coverage.
-3. Produce realistic case studies where tests pass but Vouch blocks or routes
-   the change because release evidence is missing, invalid, or out of scope.
-4. Continue trust hardening where it supports real evidence workflows: required
-   high-risk hashes, commit/runner provenance, scoped signers, and signed specs
-   or manifests.
+## Near-term order
 
-Do not lead with AI review features. AI verifiers can come later only as
-evidence verifiers that are tied to obligations, artifacts, provenance, and
-policy.
+1. Stabilize the implemented task-oriented CLI, named `AgentImage` profiles and
+   read-only `vouch.agent_task.v0` envelope; publish the external SDK/API.
+2. Wire execution contracts, budgets, mandatory verifier sets and release
+   targets into task creation.
+3. Deliver one deep remote-Git/GitHub connector and approval experience.
+4. Prove paid design-partner demand for fleet policy, audit and approvals.
+5. Build the Control Plane around self-hosted runtimes.
+6. Add Kubernetes and PostgreSQL transaction packs only after Git release and
+   reconciliation are deep.
 
-## Integration Posture
-
-Vouch should compose with existing tools instead of replacing them:
-
-- Sigstore/cosign proves evidence signer identity.
-- SLSA and in-toto-style metadata describe provenance and authorized steps.
-- OPA/Rego can evaluate policy over structured inputs.
-- SARIF, Semgrep, coverage, test reports, deployment plans, metrics, and
-  rollback plans are evidence inputs.
-
-Vouch supplies the missing semantic layer: contract language, obligation IR,
-evidence mapping, and release result.
+The primary product metric is permission expansion: a customer safely lets an
+agent complete work it previously could only propose.

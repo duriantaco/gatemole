@@ -1,207 +1,196 @@
 # Contributing
 
-Thanks for helping with Vouch.
+Thanks for helping build Vouch Runtime.
 
-## First Principle
+## Product first principle
 
-Vouch is in beta/research-prototype mode.
+Vouch Runtime is the transaction runtime for autonomous agents. A contribution
+should strengthen the controlled path from task intent to isolated execution,
+staged effects, exact-state verification, authority, commit and recovery.
 
-It is not a code reviewer. Please do not frame contributions as "the tool reviews code and says it is safe."
+Keep the hierarchy clear:
 
-The project is a compiler-like verification control plane:
+- Vouch Runtime is the current product.
+- `vouchd` is the trusted transaction kernel.
+- Vouch Contracts is an optional verification module.
+- Vouch Control Plane is a future commercial fleet-management layer.
+- Agent OS is the long-term north star.
 
-1. Intent
-2. Obligations
-3. Evidence
-4. Policy
-5. Release decision
+Vouch is not a coding agent, generic AI code reviewer, identity provider or
+universal rollback system.
 
-Good contributions make that pipeline more explicit, deterministic, testable, and auditable.
+## Start locally
 
-## How To Start
-
-Run the tests:
+Run the baseline checks:
 
 ```sh
 go test ./...
+go vet ./...
 ```
 
-Install the CLI locally:
+Build the runtime:
 
 ```sh
-go install ./cmd/vouch
+go install ./cmd/vouch ./cmd/vouchd ./cmd/vouch-model-broker
 ```
 
-If `vouch` is not on your `PATH`:
+If the binaries are not on `PATH`:
 
 ```sh
 export PATH="$(go env GOPATH)/bin:$PATH"
 ```
 
-Run the demo pipeline:
+The runtime acceptance paths are separate so failures retain a useful scope:
 
 ```sh
-vouch intent parse --intent demo_repo/.vouch/intents/auth.password_reset.yaml --out /tmp/auth.password_reset.ast.json
-vouch intent compile --intent demo_repo/.vouch/intents/auth.password_reset.yaml --out /tmp/auth.password_reset.json
-vouch ir build --spec demo_repo/.vouch/specs/auth.password_reset.json --out /tmp/auth.password_reset.ir.json
-vouch plan build --spec demo_repo/.vouch/specs/auth.password_reset.json --manifest demo_repo/.vouch/manifests/pass.json --out /tmp/auth.password_reset.plan.json
-vouch artifacts build --spec demo_repo/.vouch/specs/auth.password_reset.json --out /tmp/vouch-artifacts
-vouch --repo demo_repo --manifest demo_repo/.vouch/manifests/blocked.json evidence
-vouch --repo demo_repo --manifest demo_repo/.vouch/manifests/pass.json evidence
+scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
+scripts/vouchtransactionbench.sh
+scripts/vouchruntimebench.sh
 ```
 
-Expected demo outcomes:
+The OCI production acceptance requires a working Docker-compatible engine:
 
-| Manifest | Decision |
-| --- | --- |
-| `blocked.json` | `block` |
-| `pass.json` | `canary` |
+```sh
+image="$(scripts/vouchproductionfixture.sh --tag vouch-production-fixture:acceptance)"
+VOUCH_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+```
 
-## Where Help Is Needed
+The optional Contracts module has its own regression harness:
 
-### Compiler Front End
+```sh
+scripts/vouchbench.sh --out /tmp/vouchbench
+```
 
-Useful work:
+## Runtime work areas
 
-- Real YAML parser with source positions.
-- Better AST validation.
-- Clearer diagnostics.
-- Golden diagnostic fixtures.
-- Strict unknown-field behavior.
-- Schema version migration.
+### Developer API and task experience
 
-### Schemas And Contracts
+Useful work includes:
 
-Useful work:
+- A task-oriented CLI over the transaction state machine.
+- Public versioned API types, OpenAPI and supported SDKs.
+- Idempotent create/mutation requests and status streaming.
+- A stable task envelope passed to agent images.
+- Runtime configuration, diagnostics, packaging and upgrades.
 
-- JSON schemas for all artifacts.
-- Schema compatibility tests.
-- Example artifact bundles.
-- Strict fixture validation.
-- Documentation for every field.
+Clients should not need to author event hashes, replay state or duplicate kernel
+authority logic.
 
-### IR And Verification Planning
+### Isolation and execution
 
-Useful work:
+Useful work includes:
 
-- Better obligation IDs.
-- More obligation kinds.
-- Traceability from spec fields to obligations.
-- Verification-plan validation.
-- Verifier-role assignment rules.
-- Release-policy artifact improvements.
+- Agent adapters that preserve the daemon-owned boundary.
+- OCI or microVM hardening.
+- Resource, output, storage and concurrency bounds.
+- Model/tool credential brokering and egress controls.
+- Checkpoint, cancellation and workload reconciliation.
 
-### Policy Engine
+Do not label a path mediated when an agent retains an ambient bypass.
 
-Useful work:
+### Transactions and effects
 
-- Move hard-coded gate rules into policy files.
-- Add policy simulation.
-- Add risk-specific policy profiles.
-- Add exception handling.
-- Add policy regression tests.
+Useful work includes:
 
-### Evidence Importers
+- Typed effect normalization.
+- Deterministic sequence and separation-of-duty policy.
+- Immutable staging and exact verifier inputs.
+- Idempotent commit, receipts and reconciliation.
+- Honest partial-commit and manual-recovery semantics.
+- Deep resource drivers with tested failure boundaries.
 
-Useful work:
+Unknown non-idempotent effects must be reconciled, never blindly retried.
 
-- Coverage report importers.
-- Test result importers.
-- Static-analysis importers.
-- Secret-scanner importers.
-- Runtime metric importers.
-- Changed-file to spec traceability.
+### Identity, approval and audit
 
-### Evidence Verifier Infrastructure
+Useful work includes:
 
-Useful work:
+- Identity-provider integration and key rotation.
+- Outcome-oriented approval packages.
+- Authority delegation, expiry and revocation.
+- Tamper-evident audit export and retention interfaces.
+- Operator recovery and incident tooling.
 
-- Verifier packet schemas.
-- Structured verifier output validation.
-- Verifier disagreement handling.
-- Prompt and model version pinning.
-- Verifier audit logs.
-- Fixtures for incomplete, misleading, or malicious evidence.
+An agent or verifier cannot authorize its own protected result.
 
-Important: AI verifiers should verify evidence against obligations. They should not be presented as generic code reviewers.
+### Connectors
 
-### Workflow And Developer Experience
+Prefer one deep connector to many shallow wrappers. A connector should define:
 
-Useful work:
+- What can be staged.
+- The exact expected resource version.
+- Commit ordering and idempotency.
+- Receipts and reconciliation.
+- Whether recovery is reversible, compensatable or manual.
+- Tests for crashes and ambiguous outcomes.
 
-- GitHub Actions examples.
-- GitHub Checks output.
-- SARIF or annotation output.
-- Machine-readable gate result files.
-- Better CLI help.
-- Installation docs.
+Remote Git/GitHub is first, followed by Kubernetes and PostgreSQL.
 
-### Runtime And Rollback
+## Vouch Contracts contributions
 
-Useful work:
+The Contracts module under `internal/vouch/` remains useful as optional
+verification policy. Its most valuable work connects it to runtime authority:
 
-- Canary metric binding.
-- Alert validation.
-- Deployment integration examples.
-- Rollback hook examples.
-- Post-release evidence packets.
-- Incident feedback loops.
+- Compile obligations into daemon-owned verifier requirements.
+- Bind evidence and obligation coverage to exact staged state.
+- Add SARIF, coverage, deployment, metric and rollback evidence.
+- Publish schemas and compatibility fixtures.
+- Improve contract authoring where runtime pilots show real friction.
 
-### Documentation And Examples
+AI verifiers may verify evidence against obligations. They must not be
+presented as a generic code-review replacement or the sole authority for a
+high-impact effect.
 
-Useful work:
+## Contribution standards
 
-- More demo repos.
-- More risk categories.
-- Example specs for migrations, payments, auth, privacy, and data deletion.
-- Clear diagrams of the pipeline.
-- Operator docs.
-- Threat model docs.
-
-## Contribution Standards
-
-Please keep changes narrow and testable.
+Keep changes narrow and testable.
 
 For code changes:
 
 - Add or update tests for changed behavior.
-- Keep generated outputs deterministic.
-- Prefer structured data over ad hoc string parsing.
-- Preserve source-span diagnostics where possible.
-- Avoid unrelated refactors.
+- Keep authoritative behavior deterministic.
+- Use strict versioned resources at public boundaries.
+- Preserve append-before-execute and receipt-after-execute invariants.
+- Bound untrusted inputs, outputs and resource consumption.
+- Test restart, conflict, tamper and cancellation behavior when applicable.
+- Avoid unrelated refactors and preserve compatibility intentionally.
 
-For docs changes:
+For documentation:
 
-- Be explicit that this is beta.
-- Be explicit that this is not a code reviewer.
-- Avoid overclaiming correctness.
-- Explain what is implemented versus planned.
-- Include runnable commands when helpful.
+- Lead with Vouch Runtime, not the Contracts compiler.
+- Distinguish implemented, supported and planned behavior.
+- Preserve the single-node/single-tenant/local-Git production limits.
+- Do not claim arbitrary code correctness, universal rollback, multi-tenancy or
+  HA.
+- Include runnable commands and state their prerequisites.
 
-## Good First Contributions
+## Good first contributions
 
-Good first areas:
+- Improve transaction CLI output or usage text.
+- Add a strict schema fixture.
+- Add a runtime or recovery regression test.
+- Improve operator diagnostics without leaking sensitive data.
+- Document one public resource or state transition.
+- Add a verifier-profile example.
+- Add a Contracts evidence importer with deterministic fixtures.
 
-- Add a new demo scenario.
-- Add a schema draft for one artifact.
-- Add golden tests for invalid intent files.
-- Improve CLI usage text.
-- Document artifact fields.
-- Add a runner workflow example.
+## Changes to avoid
 
-## What To Avoid
+Avoid changes that:
 
-Avoid contributions that:
+- Move agent reasoning into the kernel.
+- Treat telemetry as enforcement.
+- Introduce a privileged direct path around the broker.
+- Hide ambiguous or partially committed state.
+- Depend on nondeterministic model output for authority.
+- Add a connector without reconciliation semantics.
+- Present Vouch Contracts as the whole product.
+- Call the current implementation a complete Agent OS.
 
-- Claim the tool proves code is correct.
-- Turn the project into a generic coding agent.
-- Hide uncertainty instead of reporting it.
-- Depend on nondeterministic output without tests.
-- Make verifiers inspect huge diffs without obligation context.
-- Weaken the beta/prototype warnings.
-
-The project should be ambitious about infrastructure and conservative about claims.
+The project should be ambitious about enforcement and conservative about its
+claims.
 
 ## License
 
-By contributing to Vouch, you agree that your contributions are licensed under the Apache License, Version 2.0.
+By contributing to Vouch, you agree that your contributions are licensed under
+the Apache License, Version 2.0.

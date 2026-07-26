@@ -82,7 +82,7 @@ jobs:
         run: go install github.com/duriantaco/vouch/cmd/vouch@latest
 
       - name: Compile Vouch contracts
-        run: vouch compile
+        run: vouch contracts compile
 
       - name: Create PR manifest
         env:
@@ -91,7 +91,7 @@ jobs:
           VOUCH_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
           VOUCH_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
         run: |
-          vouch manifest create \
+          vouch contracts manifest create \
             --task-id "$VOUCH_TASK_ID" \
             --summary "$VOUCH_TASK_SUMMARY" \
             --agent github-actions \
@@ -115,7 +115,7 @@ jobs:
       - name: Attach JUnit evidence
         if: steps.tests.outputs.exit_code == '0'
         run: |
-          vouch manifest attach-artifact \
+          vouch contracts manifest attach-artifact \
             --manifest "$VOUCH_MANIFEST" \
             --id pytest \
             --kind test_coverage \

@@ -1,101 +1,147 @@
-# Comparison With Supply-Chain And Policy Tools
+# Where Vouch Runtime Fits
 
-Vouch should be honest about where it fits. It is not a replacement for
-Sigstore, SLSA, in-toto, OPA, or Conftest. The defensible position is that
-Vouch is an obligation-oriented control plane that can compose with those tools.
+Vouch Runtime is the transaction boundary between an autonomous agent and the
+systems it may change. It composes with agent frameworks, sandboxes, identity,
+policy, CI and supply-chain tools rather than replacing them.
 
-One-sentence version: Vouch is the layer between "tests passed" and "ship it"
-for AI-written code; it maps the contract a change touched to the exact evidence
-required to release it, then composes with supply-chain identity, policy engines,
-and runner artifacts to decide whether the change can ship.
+One-sentence version:
 
-## What Existing Tools Cover
+> Vouch runs an agent's task as a controlled transaction: isolate execution,
+> stage and normalize effects, verify the exact outcome, obtain authority, then
+> commit or recover.
 
-| Tool | Primary Job | What It Gives Vouch | What It Does Not Give Vouch |
-| --- | --- | --- | --- |
-| [Sigstore/cosign](https://docs.sigstore.dev/cosign/signing/overview/) | Keyless signing, identity-bound verification, transparency logging. | A way to prove an artifact was signed by an expected runner identity and recorded with auditable signing metadata. | A product contract language, obligation IR, or mapping from feature intent to required evidence. |
-| [SLSA](https://slsa.dev/spec/v1.2/) | Supply-chain security levels and provenance expectations for source/build artifacts. | A vocabulary for provenance quality and build trustworthiness. | A release contract for behavior, security invariants, runtime metrics, and rollback obligations. |
-| [in-toto](https://in-toto.io/docs/getting-started/) | Layouts and signed link metadata for expected supply-chain steps. | A mature model for authorized steps, materials/products, and signed supply-chain metadata. | A compiler from product intent into obligations or policy decisions over changed feature contracts. |
-| [OPA/Rego](https://www.openpolicyagent.org/docs/policy-language) | General policy evaluation over structured input. | A policy engine that can replace hard-coded release-decision logic. | Vouch-specific IR, evidence collection, artifact linking, or contract authoring. |
-| [Conftest](https://www.conftest.dev/) | Rego tests for structured configuration data. | A simple way to run policy checks over JSON/YAML/TOML inputs. | Vouch-specific evidence import, obligation coverage, or release-result semantics. |
+## Product boundary
 
-## Why Not Just Compose Existing Tools Directly?
+| Layer | Primary job | Relationship to Vouch |
+| --- | --- | --- |
+| Agent framework or coding agent | Plan, reason, call models and tools, produce a solution | Runs inside or connects through Vouch; remains untrusted at the authority boundary |
+| Container, microVM or host OS | Process and resource isolation | Supplies isolation primitives that `vouchd` configures and constrains |
+| Identity provider | Authenticate people, services and workloads | Supplies principals and claims; Vouch applies them to transaction authority |
+| Policy engine | Evaluate deterministic policy over structured facts | Can evaluate Vouch transaction/effect facts; does not stage or commit effects |
+| CI and scanners | Execute tests, builds and analysis | Produce verifier results and evidence bound to the exact staged state |
+| Supply-chain tooling | Sign artifacts and describe provenance | Establishes identity and provenance inputs used by Vouch authority |
+| Vouch Contracts | Compile release intent into obligations and map evidence | Optional module that strengthens Vouch Runtime verification |
+| Vouch Runtime | Govern the complete task from isolated execution through commit/recovery | Current product |
+| Vouch Control Plane | Manage runtime fleets, organization policy, approval UX and audit | Future commercial layer |
 
-For some workflows, direct composition is enough:
+## Why a per-tool gateway is not enough
 
-```sh
-cosign verify-blob artifact.json \
-  --bundle artifact.sigstore.json \
-  --certificate-identity "$RUNNER_IDENTITY" \
-  --certificate-oidc-issuer "$OIDC_ISSUER"
-conftest test manifest.json
+A gateway can answer whether one request is allowed. A harmful task can still
+be a sequence of individually allowed calls:
+
+```text
+change security control
+  -> change the test that checks it
+  -> approve the new evidence
+  -> publish the result
 ```
 
-That proves useful things: the artifact may have a valid signer, and the
-manifest may satisfy a policy. It does not answer the Vouch-specific question:
+Vouch evaluates the ordered effect set and freezes the exact state presented to
+verification and approval. A material mutation invalidates that authority.
 
-> For the contracts this change touches, which compiled obligations are required,
-> which evidence artifacts cover them, and what release posture follows from the
-> contract risk and evidence quality?
+## Why a sandbox is not enough
 
-Vouch should use existing tools for signing, provenance, and policy execution
-where possible. The unique surface is the typed contract-to-obligation pipeline:
+A sandbox can constrain a process but does not by itself define:
 
-1. Human-owned intent.
-2. Spec and obligation IR.
-3. Changed-file to touched-contract traceability.
-4. Evidence artifact linking by obligation ID and evidence kind.
-5. Deterministic release result.
+- The business effects produced by a complete task.
+- Which outcome verifiers must run.
+- Who may approve the exact proposed outcome.
+- Commit ordering and expected resource versions.
+- What to do after an ambiguous or partially committed effect.
 
-## How Vouch Should Compose With Them
+Vouch uses an OCI boundary in the current profile, but its distinct layer is the
+transaction and authority protocol around that execution.
 
-### Sigstore/cosign
+## Why observability is not enforcement
 
-Vouch should not invent a long-term signing system. The production path should
-verify detached evidence bundles signed by approved runner identities.
-`gate --require-signed` already rejects unsigned artifacts and asks cosign to
-verify the artifact blob against its Sigstore bundle and expected signer
-identity. The next hardening step is to sign a canonical evidence bundle that
-also binds the manifest, artifact hashes, and covered obligation IDs.
+Logs and traces explain what happened after an action. Vouch persists an action
+or effect decision before execution and withholds stageable or irreversible
+effects until the release policy is satisfied. Telemetry remains valuable
+evidence; it is not the commit boundary.
 
-### SLSA
+## Why an agent framework is not the product
 
-Vouch should treat SLSA provenance as evidence about the runner/build chain, not
-as a substitute for product obligations. A high-quality SLSA provenance record
-can support the claim that evidence came from an expected builder. It does not
-say whether `auth.password_reset.security.reset_token_is_never_logged` was
-covered.
+Agent frameworks should continue to own prompting, planning, memory and model
+loops. Vouch should remain runtime- and model-independent. An adapter may
+request work and report observations, but it cannot author authoritative policy,
+approval or commit receipts.
 
-### in-toto
+## Identity and policy systems
 
-in-toto is the closest conceptual neighbor for supply-chain step integrity.
-Vouch should borrow the idea of authorized steps and signed metadata, while
-keeping its own obligation IR as the semantic layer for agent-change release
-decisions.
+Vouch should consume existing OIDC identities and integrate general policy
+engines rather than become an identity provider or invent a universal policy
+language.
 
-### OPA/Rego
+Identity answers “who is this?” A policy engine can answer “is this structured
+request allowed?” Vouch adds task-scoped facts and enforcement:
 
-OPA is the best near-term candidate for moving policy out of Go. Vouch should
-prepare a compact policy input that includes manifest data, spec risk, coverage,
-findings, invalid evidence, and signer/provenance status. The policy output
-should be the release decision and reasons. The current implementation uses a
-small Vouch JSON rule engine for that policy boundary; Rego remains the likely
-next step if the policy input shape proves stable.
+- Sponsor, agent and authority participation.
+- Ordered normalized effects.
+- Immutable staged-state and effect-set digests.
+- Verification independence and freshness.
+- Approval-package and commit-plan bindings.
+- Commit receipts and reconciliation state.
 
-### Conftest
+## CI, signing and provenance
 
-Conftest is useful as a reference workflow and local policy runner. Vouch should
-not become only a wrapper around Conftest; the value is in generating the policy
-input from contracts, obligations, and evidence.
+Vouch should compose with established tooling:
 
-## Boundary
+- [Sigstore/cosign](https://docs.sigstore.dev/cosign/signing/overview/) can
+  establish artifact signer identity.
+- [SLSA](https://slsa.dev/spec/v1.2/) can describe build provenance.
+- [in-toto](https://in-toto.io/docs/getting-started/) can describe authorized
+  supply-chain steps and signed link metadata.
+- [OPA/Rego](https://www.openpolicyagent.org/docs/policy-language) can evaluate
+  structured Vouch policy input.
+- CI systems, tests, scanners and deployment checks can produce evidence.
 
-Vouch is not trying to prove that code is correct. It is trying to make release
-decisions auditable against explicit contracts. The strongest architecture is
-therefore compositional:
+Those tools do not create Vouch's task-scoped transaction, isolate its mutable
+workspace, freeze its complete effect set, bind approval to the exact outcome,
+or coordinate commit and recovery.
 
-- Sigstore/cosign proves who signed evidence.
-- SLSA/in-toto-style metadata proves where evidence came from and which steps ran.
-- OPA/Rego decides release posture from structured facts.
-- Vouch supplies the contract language, obligation IR, evidence linkage, and gate
-  result.
+## Vouch Contracts
+
+Vouch Contracts supplies an optional semantic verification layer:
+
+```text
+human-owned release intent
+  -> typed AST and diagnostics
+  -> obligation IR
+  -> verification requirements
+  -> evidence coverage
+  -> policy facts for the transaction
+```
+
+This remains useful for high-risk code where “tests passed” does not establish
+that security, rollout, observability or rollback obligations were checked. It
+is a module of Vouch Runtime, not the whole product and not a generic AI code
+reviewer.
+
+## Current versus future
+
+Today, the supported Vouch Runtime profile is a single-node, single-tenant
+local-Git boundary. It can run pinned agent and verifier containers, broker
+model access, stage an immutable Git tree, enforce independent authority and
+atomically update an allowed local ref.
+
+It does not yet provide remote GitHub merge, deployment or database connectors,
+a network multi-tenant service, HA or fleet management.
+
+The future Vouch Control Plane will manage multiple self-hosted runtime data
+planes, organization policy, approvals, audit and enterprise connectors. The
+long-term Agent OS description becomes appropriate only when those important
+resource paths are non-bypassable.
+
+## Non-goals
+
+Vouch is not trying to:
+
+- Replace an agent's reasoning framework.
+- Replace containers, microVMs or the host OS.
+- Become an identity directory or credential vault.
+- Be only a CI gate or MCP proxy.
+- Read arbitrary code and declare it correct.
+- Promise universal rollback or cross-system ACID transactions.
+
+The defensible product is narrower and stronger: a durable transaction and
+authority boundary for autonomous work.

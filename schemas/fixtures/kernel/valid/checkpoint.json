@@ -1,0 +1,29 @@
+{
+  "version": "vouch.checkpoint.v0",
+  "id": "checkpoint:demo-001:12",
+  "run_id": "run:demo-001",
+  "event_sequence": 12,
+  "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "contract_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "runtime": {
+    "adapter": "subprocess",
+    "adapter_version": "v0",
+    "lease_id": "lease:demo-001",
+    "lease_expires_at": "2026-07-23T01:00:00Z"
+  },
+  "created_at": "2026-07-23T00:05:00Z",
+  "state_ref": {
+    "uri": "artifact://checkpoints/demo-001/12.json",
+    "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "media_type": "application/json"
+  },
+  "state_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "memory_refs": [],
+  "workspace_ref": {
+    "uri": "artifact://workspaces/demo-001/12.tar.zst",
+    "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "media_type": "application/zstd"
+  },
+  "pending_action_ids": ["action:demo-push-001"],
+  "compatible_adapter_versions": ["v0"]
+}

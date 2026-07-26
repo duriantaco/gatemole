@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.effect.v0.schema.json",
+  "title": "Vouch Effect v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "transaction_id", "sequence", "system", "resource",
+    "operation", "arguments", "arguments_digest", "dependencies",
+    "estimated_scope", "recovery_class", "status", "created_at", "updated_at"
+  ],
+  "properties": {
+    "version": { "const": "vouch.effect.v0" },
+    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "transaction_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "origin_action_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "system": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "resource": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/resource_selector" },
+    "operation": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "arguments": { "type": "object" },
+    "arguments_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "estimated_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rows": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "objects": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "data_classification": { "type": "string", "minLength": 1 },
+    "recovery_class": {
+      "type": "string",
+      "enum": ["read_only", "stageable", "reversible", "compensatable", "irreversible"]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "proposed", "staged", "validated", "release_ready", "committing",
+        "committed", "blocked", "rejected", "failed", "unknown",
+        "compensating", "compensated", "manual_recovery_required"
+      ]
+    },
+    "idempotency_key": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "stage_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" },
+    "before_state_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" },
+    "compensation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "arguments", "arguments_digest"],
+      "properties": {
+        "operation": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "arguments": { "type": "object" },
+        "arguments_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "plan_ref": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" }
+      }
+    },
+    "receipt": { "$ref": "#/$defs/receipt" },
+    "compensation_receipt": { "$ref": "#/$defs/receipt" },
+    "created_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "updated_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" }
+  },
+  "$defs": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["driver", "operation_id", "result_digest", "committed_at"],
+      "properties": {
+        "driver": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "operation_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "result_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "resource_version": { "type": "string", "minLength": 1 },
+        "committed_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" }
+      }
+    }
+  }
+}
