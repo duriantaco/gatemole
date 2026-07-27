@@ -22,7 +22,7 @@ One-sentence version:
 | Supply-chain tooling | Sign artifacts and describe provenance | Establishes identity and provenance inputs used by Vouch authority |
 | Vouch Contracts | Compile release intent into obligations and map evidence | Optional module that strengthens Vouch Runtime verification |
 | Vouch Runtime | Govern the complete task from isolated execution through commit/recovery | Current product |
-| Vouch Control Plane | Manage runtime fleets, organization policy, approval UX and audit | Future commercial layer |
+| Vouch Control Plane | Manage Runtime fleets, organization policy, approval UX, audit and connector configuration | Future commercial layer; it does not execute connector actions |
 
 ## Why a per-tool gateway is not enough
 
@@ -127,10 +127,11 @@ atomically update an allowed local ref.
 It does not yet provide remote GitHub merge, deployment or database connectors,
 a network multi-tenant service, HA or fleet management.
 
-The future Vouch Control Plane will manage multiple self-hosted runtime data
-planes, organization policy, approvals, audit and enterprise connectors. The
-long-term Agent OS description becomes appropriate only when those important
-resource paths are non-bypassable.
+The future Vouch Control Plane will manage multiple customer-side Vouch
+Runtimes, organization policy, approvals, audit and connector configuration.
+Connector drivers will continue to execute inside each Runtime. The complete
+Vouch Agent OS external claim requires both non-bypassable multi-system Runtime
+enforcement and demonstrated Control Plane operation across a Runtime fleet.
 
 ## Non-goals
 

@@ -2,40 +2,95 @@
   <img src="assets/vouch.png" alt="Vouch logo" width="220">
 </p>
 
-# Vouch Runtime
+# Vouch
 
-Vouch Runtime is the transaction runtime for autonomous software agents. It
-runs an agent inside an isolated task boundary, records the resulting effects,
-verifies the exact proposed state, obtains any required independent authority,
-and publishes an approved outcome atomically.
+Vouch is the transaction operating layer between autonomous agents and
+enterprise systems. Agents may propose work, but a deterministic enforcement
+runtime controls which exact effects may become real.
+
+Vouch does not replace an agent framework, model provider, identity provider,
+container runtime, Kubernetes or the host operating system. It controls the
+authority and transaction boundary around agent work.
+
+## Architecture: where the OS, Runtime and kernel sit
+
+**Vouch Agent OS** names the complete target system; it is not another process
+or deployment. The enforcement function lives in one or more customer-side
+**Vouch Runtime** installations. Each Runtime contains a trusted **`vouchd`
+kernel**. The planned **Vouch Control Plane** manages a fleet of Runtimes.
 
 ```text
-task intent
-  -> isolated agent execution
-  -> normalized effect ledger
-  -> immutable staged state
-  -> policy and independent verification
-  -> approval when required
-  -> commit | block | revise | recover
+                         administrators / approvers
+                                   |
+       +---------------- Vouch Agent OS ------------------+
+       |          the complete target Vouch system       |
+       |                                                  |
+       |  Vouch Control Plane [planned]                   |
+       |  fleet | organization policy | approval routing |
+       |  audit | incident response | fleet revocation   |
+       |                 |                 ^              |
+       |      signed policy/authority      | receipts     |
+       |                 v                 |              |
+task   |  +------- Vouch Runtime [customer-side] ------+  |
+------>|  | customer-side enforcement boundary         |  |
+       |  |                                             |  |
+       |  |              vouchd kernel                  |  |
+       |  |  admission | identity and lineage          |  |
+       |  |  lifecycle | capabilities | budgets        |  |
+       |  |  action broker | sequence policy           |  |
+       |  |  transaction journal | verification        |  |
+       |  |  approvals | commit | reconciliation       |  |
+       |  |       | launches          ^        |        |  |
+       |  |       v                   |        v        |  |
+       |  |  agent sandbox ------ ActionRequest ------  |  |
+       |  |  + agent adapter          |   connector     |  |
+       |  |  untrusted; no            +-> driver        |  |
+       |  |  downstream credentials       scoped creds  |  |
+       |  +--------------------------------------|------+  |
+       +-----------------------------------------|---------+
+                                                 v
+                    GitHub | Kubernetes | PostgreSQL
+                    SAP | Salesforce | cloud | email
 ```
 
-Vouch does not decide how an agent reasons or writes code. It controls the
-boundary between an agent's proposal and a real effect.
+The operating-system analogy is precise:
 
-## Product hierarchy
+| Name | Meaning | Status |
+| --- | --- | --- |
+| **Vouch Agent OS** | The complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
+| **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
+| **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Narrow single-node local-Git profile implemented |
+| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Foundation implemented; production authority paths are not yet unified |
+| **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
+| **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
+| **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Rooted filesystem and local Git exist; common interface and remote connectors planned |
+| **Vouch Contracts** | Optional verification module that turns human-owned intent into evidence obligations used by Runtime policy. | Beta |
 
-- **Vouch Runtime** is the current product and developer surface.
-- **`vouchd`** is its trusted local kernel. It owns execution, durable state,
-  policy, verification, approval and commit.
-- **Vouch Contracts** is an optional verification module. It compiles
-  human-owned release intent into obligations and maps evidence to those
-  obligations. It strengthens a runtime policy; it is not the primary product.
-- **Vouch Control Plane** is the future commercial management layer for runner
-  fleets, organization policy, approval UX, audit retention, connectors and
-  enterprise operations. It is not implemented in this repository today.
-- **Agent OS** is the long-term north star. Vouch should use that description
-  only after it provides a non-bypassable transaction boundary across the
-  important resources in an agent workflow.
+The diagram states the intended ownership boundary, not a completion claim.
+Today the supported transaction path and the lower-level
+run/capability/action path are adjacent but not yet one authoritative
+lifecycle. Converging them is the first implementation milestone.
+
+Every consequential action must follow one authority path:
+
+```text
+agent proposes an action
+  -> vouchd authenticates the run and delegated authority
+  -> vouchd evaluates the action and complete transaction sequence
+  -> deny | request approval | authorize
+  -> connector driver stages or executes with scoped credentials
+  -> vouchd records the receipt and verifies the outcome
+  -> commit | compensate | reconcile | require manual recovery
+```
+
+An agent with direct downstream credentials can bypass Vouch. A deployment is
+therefore enforcement-grade only when production credentials and network paths
+are available exclusively through Vouch connector drivers.
+
+The current local-Git transaction is the first kernel and connector slice. A
+complete Vouch Agent OS external claim requires both non-bypassable,
+multi-system Runtime enforcement and a Vouch Control Plane managing a fleet of
+those Runtimes.
 
 ## Runtime quick start
 
@@ -173,6 +228,7 @@ code correct and are not a generic AI code reviewer.
 - [Production runtime operations](docs/PRODUCTION.md)
 - [Kernel internals](docs/KERNEL.md)
 - [Runtime and product roadmap](ROADMAP.md)
+- [Product validation and competitive assessment](docs/PRODUCT_VALIDATION.md)
 - [Transaction-control decision](docs/architecture/ADR-002-agent-transaction-control.md)
 - [Threat model](docs/architecture/TRANSACTION_THREAT_MODEL.md)
 - [Vouch Contracts](docs/COMPILER.md)
