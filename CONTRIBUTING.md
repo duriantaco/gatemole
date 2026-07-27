@@ -4,17 +4,22 @@ Thanks for helping build Vouch Runtime.
 
 ## Product first principle
 
-Vouch Runtime is the transaction runtime for autonomous agents. A contribution
-should strengthen the controlled path from task intent to isolated execution,
-staged effects, exact-state verification, authority, commit and recovery.
+Vouch Runtime provides transaction and outcome control for autonomous-agent
+actions. A contribution should strengthen the controlled path from task intent
+to isolated execution, staged effects, exact-state verification, authority,
+commit and recovery.
 
 Keep the hierarchy clear:
 
-- Vouch Runtime is the current product.
-- `vouchd` is the trusted transaction kernel.
+- Vouch is the company and product name.
+- Vouch Agent OS is the complete architecture: Control Plane plus Runtime
+  fleet, transaction protocol and connector model.
+- Vouch Runtime is the first sellable product and customer-side enforcement
+  boundary.
+- `vouchd` is the trusted transaction kernel inside each Runtime.
 - Vouch Contracts is an optional verification module.
-- Vouch Control Plane is a future commercial fleet-management layer.
-- Agent OS is the long-term north star.
+- Vouch Control Plane is the future central fleet, policy, approval and audit
+  manager; it does not execute downstream agent actions.
 
 Vouch is not a coding agent, generic AI code reviewer, identity provider or
 universal rollback system.
@@ -97,7 +102,7 @@ Useful work includes:
 - Immutable staging and exact verifier inputs.
 - Idempotent commit, receipts and reconciliation.
 - Honest partial-commit and manual-recovery semantics.
-- Deep resource drivers with tested failure boundaries.
+- Deep connector drivers with tested failure boundaries.
 
 Unknown non-idempotent effects must be reconciled, never blindly retried.
 
@@ -185,7 +190,7 @@ Avoid changes that:
 - Depend on nondeterministic model output for authority.
 - Add a connector without reconciliation semantics.
 - Present Vouch Contracts as the whole product.
-- Call the current implementation a complete Agent OS.
+- Call the current implementation a complete Vouch Agent OS.
 
 The project should be ambitious about enforcement and conservative about its
 claims.

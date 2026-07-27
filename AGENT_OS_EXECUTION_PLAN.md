@@ -3,13 +3,17 @@
 > This document records the kernel foundation implemented on 2026-07-23. Its
 > original identity-and-control-plane product framing is superseded by
 > [`AGENT_TRANSACTION_EXECUTION_PLAN.md`](./AGENT_TRANSACTION_EXECUTION_PLAN.md).
-> The run lifecycle, durable event store, capability broker, and resource-driver
+> The canonical hierarchy is now defined by [`README.md`](./README.md) and
+> [`ROADMAP.md`](./ROADMAP.md): Vouch Agent OS is the complete architecture,
+> Vouch Runtime is the customer-side enforcement product, `vouchd` is its
+> kernel, and Vouch Control Plane manages Runtime fleets. The run lifecycle,
+> durable event store, capability broker, and connector-driver
 > boundary remain required substrate for the transaction product.
 
 ## Purpose
 
-Evolve Vouch from a release-contract compiler and evidence gate into the trusted
-control plane for software agents.
+Evolve Vouch from a release-contract compiler and evidence gate into the
+trusted `vouchd` authority kernel inside Vouch Runtime.
 
 The intended system is not another reasoning framework. Existing agents and
 frameworks should continue to own prompting, planning, model calls, and their
@@ -41,14 +45,14 @@ Implementation status as of 2026-07-23:
   decision/execution/result events, denied path-escape tests, and ambiguous
   action recovery to `unknown` without retry.
 - The rest of Milestone 2 and later milestones remain planned. In particular,
-  process and external-service drivers, authenticated approvals, revocation,
-  runtime adapters, scheduling, identity, and distributed operation are not yet
-  complete.
+  process and external-service connector drivers, authenticated approvals,
+  revocation, agent adapters, scheduling, identity and distributed operation
+  are not yet complete.
 
 ## Product Definition
 
-Vouch will be ready to call an agent operating system when it can make the
-following guarantees:
+This historical plan defined kernel-readiness through the following
+guarantees:
 
 1. Every agent run has a stable identity, owner, parent lineage, lifecycle,
    budget, contract, and isolated state.
@@ -66,8 +70,9 @@ following guarantees:
 9. Agents, memory, credentials, and workspaces are isolated by default.
 10. An operator can inspect, approve, pause, resume, cancel, and recover runs.
 
-Until those guarantees hold, describe Vouch as an agent control plane or agent
-kernel rather than a complete agent OS.
+Under the current hierarchy, these guarantees produce a credible Vouch Runtime
+kernel. The complete Vouch Agent OS additionally requires the Vouch Control
+Plane to manage a Runtime fleet.
 
 ## North-Star Demonstration
 
@@ -75,7 +80,7 @@ The first complete demonstration should govern one real coding-agent run:
 
 ```text
 1. A human creates a run from a reviewed execution contract.
-2. Vouch admits the run and launches an agent through a runtime adapter.
+2. Vouch admits the run and launches an agent through an agent adapter.
 3. The agent requests a permitted workspace write; Vouch authorizes and logs it.
 4. The agent requests an out-of-scope write; Vouch denies it before execution.
 5. The agent requests a protected action such as push or deployment.
@@ -99,7 +104,7 @@ infrastructure.
                          Vouch Control API
                                |
           +--------------------+--------------------+
-          |                 Vouch Kernel             |
+          |                 vouchd kernel             |
           |                                           |
           |  Run supervisor      Contract compiler   |
           |  Admission/scheduler Policy evaluator    |
@@ -110,21 +115,21 @@ infrastructure.
                 State + event log     Action broker
                         |                  |
          +--------------+------+    +------+------------+
-         | Runtime adapters    |    | Resource drivers   |
+         | Agent adapters      |    | Connector drivers  |
          | CLI / Codex /       |    | filesystem / shell |
          | Claude / SDKs       |    | MCP / GitHub /     |
          | LangGraph / custom  |    | cloud / databases  |
          +---------------------+    +--------------------+
 ```
 
-### Control plane and data plane
+### `vouchd` authority and Runtime workload subsystems
 
 Keep these boundaries explicit:
 
-- The control plane stores contracts, runs, capabilities, policy, approvals,
+- The `vouchd` authority subsystem stores contracts, runs, capabilities, policy, approvals,
   checkpoints, and decisions.
-- The data plane executes model and tool operations through runtime adapters and
-  resource drivers.
+- The Runtime workload subsystem executes model operations through agent
+  adapters; connector drivers perform authorized downstream operations.
 - Adapters and agents are untrusted clients of the kernel. They may propose an
   action but may not authorize it.
 - The policy evaluator is deterministic. Model output may be evidence or input,
@@ -139,7 +144,7 @@ JSON Schemas before adding multiple wire formats.
 
 An immutable, content-addressed definition of an agent:
 
-- Runtime adapter and entrypoint.
+- Agent adapter and entrypoint.
 - Model requirements and permitted providers.
 - Instructions, skills, and tool declarations.
 - Contract references.
@@ -247,7 +252,7 @@ These invariants take priority over feature count:
 5. Never expose raw long-lived credentials to the model or agent workspace.
 6. A child run cannot receive more authority than its parent can delegate.
 7. Revocation applies at the next broker boundary and blocks new effects.
-8. Runtime adapters cannot write authoritative run or decision state directly.
+8. Agent adapters cannot write authoritative run or decision state directly.
 9. Every public resource is schema-versioned and rejects unknown fields.
 10. The event history is sufficient to explain the current run state.
 
@@ -270,7 +275,7 @@ requested
 - Policy inputs, decisions, explanations, and enforcement points.
 - Action and event schemas.
 - Evidence linkage and release decisions.
-- Runtime adapter and resource-driver interfaces.
+- Agent-adapter and connector-driver interfaces.
 - Audit history and operator-facing explanation.
 
 ### Vouch should integrate
@@ -297,7 +302,8 @@ Goal: define the public semantics before writing a daemon.
 
 Deliverables:
 
-- Architecture decision record for control plane versus data plane.
+- Architecture decision record for `vouchd` authority versus Runtime workload
+  and connector subsystems.
 - Threat model covering malicious prompts, agents, tools, adapters, evidence,
   and operators.
 - JSON Schemas for the eight core resources.
@@ -372,7 +378,7 @@ Exit criteria:
   process driver.
 - Every attempted action appears in the event history, including denials.
 
-### Milestone 3: Runtime adapter protocol
+### Milestone 3: Agent adapter protocol
 
 Goal: govern agents without owning their reasoning loop.
 
@@ -480,7 +486,7 @@ Exit criteria:
 - Remote actions retain human, parent-agent, and child-agent attribution.
 - Cross-protocol traces correlate to the same Vouch run and event sequence.
 
-### Milestone 8: Distributed production control plane
+### Milestone 8: Distributed production Runtime
 
 Goal: make the proven kernel operable by teams.
 
@@ -496,7 +502,7 @@ Deliverables:
 
 Exit criteria:
 
-- Control-plane failover does not lose acknowledged events or duplicate known
+- Runtime failover does not lose acknowledged events or duplicate known
   committed effects.
 - Tenant isolation is covered by automated authorization tests.
 - An operator can diagnose and recover a stuck run without database surgery.
@@ -542,7 +548,7 @@ internal/kernel/reducer/   lifecycle and action state reducers
 internal/kernel/store/     event/run store interfaces and SQLite adapter
 internal/kernel/policy/    admission and action policy boundary
 internal/kernel/broker/    action mediation and driver dispatch
-internal/kernel/runtime/   runtime adapter protocol and supervision
+internal/kernel/runtime/   agent adapter protocol and supervision
 internal/kernel/drivers/   filesystem/process, later MCP and remote drivers
 schemas/                   versioned JSON Schemas and compatibility fixtures
 ```
@@ -608,12 +614,13 @@ Keep two separate claims:
 - `VouchKernelBench`: run durability, action mediation, delegation, budgets,
   approvals, and recovery.
 
-Do not claim agent-task quality from either harness. They validate control-plane
-behavior, not model intelligence.
+Do not claim agent-task quality from either harness. They validate kernel
+authority behavior, not model intelligence.
 
 ## Metrics
 
-Track metrics that reveal whether Vouch is functioning as a control plane:
+Track metrics that reveal whether `vouchd` is functioning as an authority
+kernel:
 
 - Percentage of privileged actions mediated by the broker.
 - Unauthorized actions prevented before side effects.
@@ -656,14 +663,14 @@ At the end of each milestone, answer:
 7. Did the existing compiler/evidence/release behavior remain compatible?
 
 If a milestone adds orchestration features without strengthening an authority,
-durability, isolation, or audit boundary, it is not moving Vouch toward an
-agent OS.
+durability, isolation or audit boundary, it is not moving Vouch Runtime toward
+the complete Vouch Agent OS architecture.
 
 ## Immediate Next Actions
 
 1. Review and approve the product definition and ten OS guarantees in this
    document.
-2. Write the control-plane/data-plane architecture decision record.
+2. Write the kernel-authority/Runtime-workload architecture decision record.
 3. Write the threat model before choosing daemon or adapter APIs.
 4. Specify the eight versioned resources and their lifecycle invariants.
 5. Create golden fixtures for the north-star run.

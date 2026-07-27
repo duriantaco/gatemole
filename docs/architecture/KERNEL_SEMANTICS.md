@@ -57,7 +57,8 @@ Rules:
 
 - `denied`, `rejected`, `expired`, `committed`, and `failed` are terminal.
 - `unknown` is not success or failure. It means an effect may have occurred and
-  requires driver reconciliation or human resolution.
+  requires connector-specific reconciliation coordinated by `vouchd` or human
+  resolution.
 - Authorization is persisted before `executing`.
 - `committed` requires a validated receipt.
 - A request's normalized argument digest is immutable. A changed request needs
@@ -102,7 +103,7 @@ field. Human text may improve without changing the code.
 | `KERNEL_CHECKPOINT_INCOMPATIBLE` | Checkpoint cannot resume under current versions. |
 | `KERNEL_NOT_FOUND` | Requested kernel resource does not exist in the caller's namespace. |
 | `KERNEL_CONFLICT` | Optimistic concurrency or lease ownership failed. |
-| `KERNEL_DRIVER_UNAVAILABLE` | Required resource driver cannot accept work. |
+| `KERNEL_DRIVER_UNAVAILABLE` | Required connector driver cannot accept work. |
 | `KERNEL_INTERNAL` | Unexpected trusted-kernel failure. |
 
 Unknown or internal errors fail closed at admission and action boundaries.

@@ -1,9 +1,8 @@
 # Agent Transactions
 
-Vouch's transaction runtime is the executable Agent Transaction Control path.
-Its development profile supports local exploration; its supported enforcement
-profile is deliberately limited to a single-node, single-tenant local-Git
-runtime.
+Vouch Runtime provides the executable transaction path. Its development
+profile supports local exploration; its supported enforcement profile is
+deliberately limited to a single-node, single-tenant local-Git runtime.
 
 The complete implemented lifecycle is:
 

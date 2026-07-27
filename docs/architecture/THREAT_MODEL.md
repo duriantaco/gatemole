@@ -3,7 +3,7 @@
 ## Scope
 
 This threat model covers the agent-kernel architecture described in
-`ADR-001-agent-kernel-boundary.md`. It focuses on control-plane authority,
+`ADR-001-agent-kernel-boundary.md`. It focuses on kernel authority,
 resource mediation, durable execution, evidence, and audit.
 
 The model does not claim that Vouch can make an arbitrary model correct. It
@@ -21,7 +21,7 @@ this first driver and remains outside the complete-mediation claim.
 - Human and service authority delegated to an agent run.
 - Source code, repositories, filesystems, and workspaces.
 - Credentials, tokens, signing keys, and identity documents.
-- External systems reached through resource drivers.
+- External systems reached through connector drivers.
 - Contracts, policies, capability grants, and approval decisions.
 - Run state, checkpoints, memory, evidence, and artifacts.
 - Event-history integrity and attribution.
@@ -48,13 +48,13 @@ diagnosis and recovery.
 
 - Model output and generated code.
 - Agent reasoning loops.
-- Runtime adapters.
+- Agent adapters.
 - Child and remote agents.
 - MCP/A2A servers and external tools.
 - Web pages, repository contents, messages, retrieved documents, and memory
   candidates.
 - Evidence supplied by the run until provenance and artifact checks succeed.
-- Resource-driver responses until validated and recorded.
+- Connector-driver responses until validated and recorded.
 - Human-authored inputs that do not carry authenticated authority.
 
 ### Administrative trust
@@ -66,7 +66,7 @@ authority.
 ## Attacker models
 
 1. A prompt-injected agent tries to exceed its task.
-2. A compromised runtime adapter forges events or claims an action succeeded.
+2. A compromised agent adapter forges events or claims an action succeeded.
 3. A malicious tool returns instructions intended to change the agent's goal.
 4. A child agent attempts to escalate beyond its parent's delegation.
 5. A tenant tries to read another tenant's run, memory, or credentials.
