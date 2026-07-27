@@ -1,11 +1,14 @@
-# Vouch Runtime Operating Brief
+# Vouch Product Operating Brief
 
 Use this brief when choosing roadmap work, designing features, writing docs or
 describing Vouch.
 
 ## Product identity
 
-Vouch Runtime is the transaction runtime for autonomous agents.
+Vouch is the product name. **Vouch Agent OS** is the complete target
+architecture: the Vouch Control Plane plus a fleet of customer-side Vouch
+Runtimes. **Vouch Runtime** is the first sellable product and the enforcement
+boundary for autonomous-agent actions.
 
 Its job is to make an agent task a controlled transaction:
 
@@ -26,17 +29,22 @@ own the agent's planning, prompting or reasoning loop.
 
 Keep these names distinct:
 
-- **Vouch Runtime**: the current product.
-- **`vouchd`**: the trusted transaction kernel inside the runtime.
+- **Vouch Agent OS**: the complete architecture containing the Control Plane,
+  Runtime fleet, transaction protocol and connector model. It is an umbrella,
+  not a process.
+- **Vouch Control Plane**: the future central manager for Runtime fleets,
+  organization policy, approval routing, audit and incident response. It
+  manages connector configuration but does not execute downstream actions.
+- **Vouch Runtime**: the current product and customer-side enforcement
+  boundary.
+- **`vouchd` kernel**: the trusted authority and transaction engine inside each
+  Runtime.
 - **Vouch Contracts**: an optional module that compiles release intent into
   verification obligations and maps evidence to them.
-- **Vouch Control Plane**: a future commercial layer for managing runtime
-  fleets, policy, approvals, connectors, audit and enterprise operations.
-- **Agent OS**: the long-term north star, not a claim about the current
-  single-node implementation.
 
 Never describe Vouch Contracts as the whole product. Never describe the current
-runtime as a complete Agent OS or a production multi-tenant control plane.
+Vouch Runtime as a complete Vouch Agent OS or a production multi-tenant Vouch
+Control Plane.
 
 ## Runtime boundary
 
@@ -116,18 +124,22 @@ Avoid:
 
 Use:
 
-- “transaction runtime for autonomous agents”
+- “Vouch Runtime — transaction and outcome control for autonomous-agent
+  actions”
 - “the controlled boundary between an agent proposal and a real effect”
-- “agent transaction kernel”
+- “`vouchd` kernel” for the trusted authority and transaction engine
 - “isolated, verified and authorized agent execution”
 - “Vouch Runtime”
+- “Vouch Agent OS” for the complete Control Plane plus Runtime-fleet
+  architecture
 - “Vouch Contracts” when referring specifically to the optional compiler
 
 Use carefully:
 
-- “Agent Transaction Control” as the technical category.
-- “Agent OS” only as the north star.
-- “Control Plane” only for the future fleet-management product.
+- “enterprise Agent OS” as an external completeness claim only after
+  multi-system Runtime enforcement and fleet-level Control Plane operation are
+  implemented.
+- “Control Plane” only for the central fleet-management product.
 
 Avoid primary positioning as:
 
@@ -163,7 +175,7 @@ it.
    targets into task creation.
 3. Deliver one deep remote-Git/GitHub connector and approval experience.
 4. Prove paid design-partner demand for fleet policy, audit and approvals.
-5. Build the Control Plane around self-hosted runtimes.
+5. Build the Vouch Control Plane around customer-side Vouch Runtimes.
 6. Add Kubernetes and PostgreSQL transaction packs only after Git release and
    reconciliation are deep.
 

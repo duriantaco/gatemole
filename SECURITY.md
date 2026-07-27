@@ -13,8 +13,9 @@ should be treated as unsupported.
 The only supported production deployment profile is the mandatory-gate-tested,
 single-node, single-tenant Vouch Runtime that publishes to allowed local Git
 refs. Vouch Contracts is an optional verification module. The future Vouch
-Control Plane, enterprise connectors, multi-tenancy, and HA are not implemented
-production claims. There is no production push, merge, or deployment connector.
+Control Plane, enterprise connector drivers, multi-tenancy and HA are not
+implemented production claims. There is no production push, merge or deployment
+connector driver.
 Mandatory gates include reachable Go vulnerability scanning and
 VouchRuntimeBench in addition to test, vet, race, compiler/kernel/transaction
 benchmarks, and production OCI acceptance.

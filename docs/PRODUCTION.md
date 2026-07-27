@@ -1,13 +1,13 @@
 # Production Runtime Operations
 
-Vouch's production profile is a single-node transaction runtime for autonomous
-software changes released through local Git refs. It enforces the runtime
+Vouch's production profile is a single-node Vouch Runtime for autonomous
+software changes released through local Git refs. It enforces the Runtime
 boundary; it does not turn the current implementation into a multi-tenant or
-highly available control plane. This narrow, single-tenant Git profile is
+highly available Vouch Control Plane. This narrow, single-tenant Git profile is
 supported only for revisions that pass the mandatory Go formatting,
 module, test, vet, and `govulncheck` checks; kernel race tests; VouchBench,
 VouchKernelBench, VouchTransactionBench, VouchRuntimeBench; and production OCI
-acceptance. Vouch Contracts, enterprise connectors, multi-tenancy, and HA
+acceptance. Vouch Contracts, enterprise connector drivers, multi-tenancy and HA
 architecture remain beta.
 
 ## Enforced production boundary
@@ -401,7 +401,7 @@ The production profile is suitable only when all of these constraints are
 acceptable:
 
 - One daemon, one security tenant, and one local SQLite ledger on a dedicated
-  trusted host or VM; no HA, failover, or remote control plane.
+  trusted host or VM; no HA, failover or Vouch Control Plane.
 - A trusted dedicated daemon account and same-UID container boundary. Vouch
   does not protect against a malicious host administrator, OCI-engine operator,
   or identity able to replace configured parent paths.

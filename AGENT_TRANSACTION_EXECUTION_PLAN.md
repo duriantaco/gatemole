@@ -13,15 +13,14 @@ Vouch is the transaction and verification layer for autonomous agents:
 > necessary approval, commits the effects, and coordinates recovery when the
 > outcome fails.
 
-The immediate category is **Agent Transaction Control**. The product is not an
-identity directory, another agent framework, an MCP-only gateway, or a generic
-allow/deny policy proxy. Identity providers and cloud policy engines remain
-integrations beneath or beside Vouch.
+This historical plan used **Agent Transaction Control** as a working technical
+category. The canonical current name for the first product is **Vouch
+Runtime**. It is not an identity directory, another agent framework, an
+MCP-only gateway or a generic allow/deny policy proxy.
 
-The long-term “agent OS” claim becomes credible when the system provides a
-non-bypassable transaction boundary across the important resources in an
-agent's workflow. Until then, call the implementation a transaction runtime or
-transaction kernel.
+Under the current hierarchy, **Vouch Agent OS** is the complete Control Plane
+plus Runtime-fleet architecture. See the current README and roadmap for the
+claim boundary.
 
 ## Current foundation
 
@@ -233,22 +232,22 @@ Exit criteria:
   partially-committed, or manual-recovery outcome.
 - No unknown non-idempotent action is automatically repeated.
 
-### Phase T4: Enterprise control plane
+### Phase T4: Vouch Control Plane
 
 Deliver:
 
-- Self-hosted data plane and highly available central control plane.
+- Customer-side Vouch Runtime fleet and highly available Vouch Control Plane.
 - Entra/Okta/IAM identity adapters, SSO, RBAC, and approval delegation.
 - Policy versioning/simulation, SIEM export, evidence retention, and audit
   bundles.
 - Credential brokering, restricted egress, emergency revocation, and data
   residency controls.
-- Multiple coding-agent and runtime adapters.
+- Multiple coding-agent and agent adapters.
 
 Exit criteria:
 
 - Production paths are non-bypassable under the documented deployment model.
-- Control-plane failover neither loses acknowledged receipts nor duplicates
+- Vouch Control Plane failover neither loses acknowledged receipts nor duplicates
   known effects.
 - Operators can recover stuck transactions without database surgery.
 

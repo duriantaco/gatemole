@@ -1,7 +1,8 @@
-# Vouch Runtime
+# Vouch
 
-Vouch Runtime is the transaction runtime for autonomous software agents. It
-controls the boundary between an agent's proposal and a real effect:
+Vouch is the transaction operating layer for autonomous software agents. Its
+customer-side Runtime controls the boundary between an agent's proposal and a
+real effect:
 
 ```text
 intent
@@ -14,19 +15,21 @@ intent
 ```
 
 Vouch does not decide how an agent reasons or writes code. The trusted local
-kernel, `vouchd`, owns execution, durable transaction state, verification,
-authority and commit.
+kernel, `vouchd`, orchestrates sandboxed execution and owns authoritative
+transaction state, verification, policy decisions and commit coordination.
 
 ## Product hierarchy
 
-- **Vouch Runtime** is the current product.
-- **`vouchd`** is its trusted transaction kernel.
+- **Vouch Agent OS** is the complete target architecture: the Control Plane,
+  Runtime fleet, transaction protocol and connector model. It is an umbrella,
+  not another process.
+- **Vouch Control Plane** is the planned commercial management layer for
+  Runtime fleets, organization policy, approvals, audit and incident response.
+- **Vouch Runtime** is the deployable customer-side enforcement boundary. A
+  narrow single-node local-Git profile is implemented today.
+- **`vouchd`** is the trusted transaction kernel inside each Runtime.
 - **Vouch Contracts** is an optional verification module that compiles release
   intent into obligations and maps evidence to them.
-- **Vouch Control Plane** is the future commercial management layer for fleets,
-  organization policy, approvals, audit and enterprise connectors.
-- **Agent OS** is the long-term north star, not a claim about the current
-  implementation.
 
 ## Try the runtime
 
@@ -95,4 +98,4 @@ Contracts and evidence enrich runtime verification and approval. They are not a
 generic AI code reviewer and do not prove arbitrary code correct.
 
 Use the **Contracts** navigation only when working with that optional module.
-The runtime and `vouchd` remain the product center.
+Vouch Runtime is the current product; `vouchd` is its trusted kernel.
