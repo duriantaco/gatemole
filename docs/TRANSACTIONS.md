@@ -82,6 +82,93 @@ The agent should read the task from `VOUCH_TASK_PATH`. Do not put credentials
 or other secrets in task intent; the envelope is intentionally retained in the
 durable transaction history.
 
+## Agent integration contract
+
+An existing coding agent does not need to adopt a Vouch SDK. Its OCI entrypoint
+receives:
+
+```text
+/workspace                 writable detached Git worktree
+/vouch/task.json           read-only admitted AgentTask
+VOUCH_TASK_PATH            /vouch/task.json
+VOUCH_TASK_DIGEST          digest of that exact task
+VOUCH_TRANSACTION_ID       kernel transaction identity
+VOUCH_RUN_ID               kernel run identity
+VOUCH_RUNTIME_ROLE         agent
+```
+
+The process edits `/workspace` and exits. It must not receive the source
+repository, the `vouchd` socket, Git hosting credentials or downstream
+production credentials. Vouch re-inspects the worktree, freezes the exact
+effects and records the daemon-authored process receipt.
+
+Example entrypoint:
+
+```sh
+#!/bin/sh
+set -eu
+test "$VOUCH_RUNTIME_ROLE" = agent
+test -r "$VOUCH_TASK_PATH"
+cd /workspace
+exec /opt/acme-agent --task-file "$VOUCH_TASK_PATH"
+```
+
+### No model access
+
+Without `--model-provider`, the agent starts with `network=none`; model broker
+variables are absent:
+
+```sh
+vouch --repo /path/to/service run \
+  --namespace payments \
+  --intent "Apply the checked-in deterministic migration" \
+  --agent migration-agent
+```
+
+### Explicit model access
+
+If the daemon has a pinned broker image and policy for `openai`, request that
+provider in task admission:
+
+```sh
+vouch --repo /path/to/service run \
+  --namespace payments \
+  --intent "Fix the failing idempotency test" \
+  --agent coding-agent \
+  --model-provider openai
+```
+
+The agent then receives `OPENAI_BASE_URL` and a transaction-scoped
+`OPENAI_API_KEY` that authenticate only to the internal broker. The real
+provider credential remains in `vouchd`. The broker enforces the configured
+origin, model allowlist and request/token ceilings and writes a hash-chained
+receipt ledger.
+
+```python
+import json
+import os
+import urllib.request
+
+request = urllib.request.Request(
+    os.environ["OPENAI_BASE_URL"] + "/responses",
+    data=json.dumps({
+        "model": "policy-allowed-model",
+        "input": "Review the current worktree change.",
+        "store": False,
+    }).encode(),
+    headers={
+        "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"],
+        "Content-Type": "application/json",
+    },
+)
+with urllib.request.urlopen(request, timeout=30) as response:
+    result = json.load(response)
+```
+
+The model name must also be allowed by daemon policy. Selecting an unconfigured
+provider, changing the admitted image or command, launching after expiry, or
+racing a run cancellation fails before any broker or agent workload starts.
+
 Verification, preparation and authority remain explicit operations:
 
 ```sh

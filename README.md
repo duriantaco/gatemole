@@ -60,7 +60,7 @@ The operating-system analogy is precise:
 | **Vouch Agent OS** | The complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
 | **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Narrow single-node local-Git profile implemented |
-| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Atomic task admission implemented; execution and action enforcement are still converging |
+| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Atomic task admission, live OCI authority preflight and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
 | **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Rooted filesystem and local Git exist; common interface and remote connectors planned |
@@ -68,9 +68,13 @@ The operating-system analogy is precise:
 
 The diagram states the intended ownership boundary, not a completion claim.
 Today `vouch run` atomically admits its task, content-bound contract, real run,
-initial grants and transaction. The OCI execution and lower-level brokered
-action path do not yet consume that authority as one synchronized lifecycle;
-that is the next Runtime milestone.
+initial grants and transaction. Before OCI launch, `vouchd` reloads that live
+authority and fail-closed derives the permitted image, command, full-workspace
+access, model-broker access and deadline. It then atomically verifies the
+admitted run and transaction heads while recording execution start, before
+starting any broker or agent workload. Execution still advances only the
+transaction ledger; paired run lifecycle and durable budget charging are the
+next Runtime milestone.
 
 Every consequential action must follow one authority path:
 
@@ -126,6 +130,30 @@ vouch --repo /path/to/service run \
   -- /usr/local/bin/agent
 ```
 
+For a developer, the integration contract is deliberately small:
+
+1. Package the existing agent as a digest-pinned OCI image.
+2. Make its command read the retained task at `$VOUCH_TASK_PATH`.
+3. Let it edit only `/workspace` and return a normal process exit code.
+4. Start it with `vouch run`; do not give the container the daemon socket,
+   repository credentials or downstream production credentials.
+5. Inspect the transaction and its hash-chained events before verification,
+   approval and release.
+
+For example, an agent entrypoint can begin with:
+
+```sh
+#!/bin/sh
+set -eu
+test "$VOUCH_RUNTIME_ROLE" = agent
+test -r "$VOUCH_TASK_PATH"
+cd /workspace
+
+# Invoke your existing agent loop here. All intended file effects stay in this
+# detached transaction worktree.
+exec /opt/my-agent --task-file "$VOUCH_TASK_PATH"
+```
+
 For repeatable integrations, define a strict, repository-owned
 `.vouch/agent-profiles.json` and select it by name:
 
@@ -145,6 +173,33 @@ into a durable task envelope. Before launch, `vouchd` atomically admits that
 task with its derived execution contract, real run, initial grants and
 transaction. Daemon-owned OCI agents receive the task envelope read-only at
 `/vouch/task.json`.
+
+Model egress is absent unless the task explicitly requests the configured
+daemon broker, for example with `--model-provider openai`. The provider
+credential never enters the agent container:
+
+```sh
+# No model authority: network=none and no model credential in the container.
+vouch --repo /path/to/service run \
+  --socket /tmp/vouch-service/vouchd.sock \
+  --intent "Apply the deterministic migration" \
+  --agent migration-agent
+
+# Explicit model authority: only the configured OpenAI-compatible broker is
+# reachable. OPENAI_API_KEY is a transaction-scoped broker token, not the
+# provider credential.
+vouch --repo /path/to/service run \
+  --socket /tmp/vouch-service/vouchd.sock \
+  --intent "Fix the failing authentication test" \
+  --agent coding-agent \
+  --model-provider openai
+```
+
+At launch, the kernel derives the run identity, image, command, workspace
+access, broker access and deadline from live admitted state. A stale run, an
+expired grant, a changed image or command, a narrower unsupported workspace
+grant, or an ungranted model provider fails before any broker or agent
+container starts.
 
 `vouch run` then creates the isolated worktree, runs the agent, freezes its Git
 effects, and performs deterministic sequence validation. Inspect the result

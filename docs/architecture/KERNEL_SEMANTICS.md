@@ -59,6 +59,30 @@ or later lifecycle progress. Reusing the key with changed authority fails with
 `KERNEL_IDEMPOTENCY_CONFLICT`. A failed persistence step leaves none of the
 admission resources behind.
 
+## Live execution authority
+
+Before daemon-owned OCI execution performs workspace ownership changes, starts
+a model broker or launches a container, `vouchd` reads one consistent
+transaction-keyed authority snapshot. It verifies the complete run and
+transaction event histories, then compiles an execution plan from the current
+task, contract, admitted run, grants and transaction.
+
+The image reference and command remain untrusted executable material: their
+digests must match the persisted task. The caller may narrow the timeout but
+cannot widen the live deadline. The current profile supports exactly
+`workspace/**` read/write and optional `model` `<provider>/*` `model.invoke`
+authority through the configured daemon broker. Narrower mounts, unsupported
+conditions and unimplemented budgets fail before workload creation.
+
+After preflight and non-workload preparation, launch is claimed in one SQLite
+transaction: the admitted run head and transaction head must still match the
+snapshot while `agent_execution.started` is appended. The authority deadline
+also bounds model-broker startup. A stale or expired plan therefore starts no
+broker or agent container.
+
+The claim does not yet advance and settle both lifecycle ledgers. That paired
+run/transaction mutation and durable usage charging are the next OS-3 step.
+
 ## Action lifecycle
 
 ```text

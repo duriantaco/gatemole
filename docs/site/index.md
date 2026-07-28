@@ -66,6 +66,30 @@ with `--agent NAME`; Vouch then binds the profile, pinned image, final command
 and exact intent into a durable task envelope mounted read-only at
 `/vouch/task.json`.
 
+An agent integration only needs to read `$VOUCH_TASK_PATH`, edit `/workspace`
+and exit. It should never receive the daemon socket or production credentials.
+Without explicit model authority the container has no network:
+
+```sh
+vouch --repo /path/to/service run \
+  --intent "Apply the deterministic migration" \
+  --agent migration-agent
+```
+
+When the daemon has a pinned provider broker, one task can request it
+explicitly:
+
+```sh
+vouch --repo /path/to/service run \
+  --intent "Fix the failing authentication test" \
+  --agent coding-agent \
+  --model-provider openai
+```
+
+The resulting `OPENAI_API_KEY` is a transaction-scoped broker token, not the
+provider credential. A stale run, expired authority or executable mismatch is
+rejected before any broker or agent workload starts.
+
 Read the
 [transaction guide](https://github.com/duriantaco/vouch/blob/main/docs/TRANSACTIONS.md)
 and

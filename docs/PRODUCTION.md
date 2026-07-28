@@ -95,10 +95,12 @@ The production runtime:
   endpoints.
 - Permanently denies mediated filesystem reads and writes through any `.git`
   or `.vouch` path component, regardless of the requested capability.
-- Optionally gives an agent model access through a transaction-specific broker.
-  The agent receives no provider credential and has no direct Internet route;
-  the broker enforces the provider origin, model/tool allowlists, byte and token
-  budgets, stateless requests, and a durable hash-chained receipt ledger.
+- Gives an agent model access only when admission explicitly declares the
+  daemon provider, such as `vouch run --model-provider openai`. The
+  transaction-specific broker remains a daemon ceiling: the agent receives no
+  provider credential and has no direct Internet route; the broker enforces
+  the provider origin, model/tool allowlists, byte and token budgets, stateless
+  requests, and a durable hash-chained receipt ledger.
   Completed, failed, and unknown call counts are bound into the execution
   receipt. Missing/invalid provider usage is marked unknown and conservatively
   exhausts the input budget.
@@ -284,6 +286,20 @@ The initial broker supports only OpenAI-compatible `POST /v1/responses`. Its
 policy must use an HTTPS upstream and `force_store_false: true` in production.
 The agent sees a transaction-scoped broker credential as `OPENAI_API_KEY` and
 the internal broker URL as `OPENAI_BASE_URL`; it never sees the provider key.
+Model access is still absent by default. Admit it for one task with:
+
+```sh
+vouch --repo /srv/vouch/service run \
+  --socket /run/vouch/vouchd.sock \
+  --namespace engineering \
+  --intent "Fix the approved authentication regression" \
+  --agent coding-agent \
+  --model-provider openai
+```
+
+Omitting `--model-provider` produces a networkless agent container. Requesting
+a provider that does not exactly match the daemon broker policy is denied
+before a broker or agent workload starts.
 
 Use a dedicated release ref that is not checked out in the source repository.
 Vouch rejects publication to a checked-out ref because the worktree and index
@@ -438,6 +454,11 @@ acceptable:
   mutation APIs are disabled in production; transaction authority begins at
   atomic task admission. The mediated filesystem API cannot access `.git` or
   `.vouch` control state.
+- OCI launch revalidates live admission authority and atomically pins the
+  admitted run and transaction heads while recording execution start before
+  any workload. Run and transaction execution events are not yet advanced and
+  settled as one paired lifecycle, and run budget usage is not yet durably
+  charged. That is the remaining OS-3 boundary.
 - No claim of universal rollback. The implemented commit primitive is an
   atomic, version-checked Git-ref update.
 

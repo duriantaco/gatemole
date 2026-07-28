@@ -66,12 +66,22 @@ operation to persist the exact `AgentTask`, content-bound
 `ExecutionContract`, real `AgentRun`, initial capability grants and
 `AgentTransaction` in one SQLite transaction.
 
-Execution is not yet the same authority lifecycle. The OCI workload advances
-the transaction without advancing the admitted run or consuming its grants,
-budgets and data boundaries. The older brokered `ActionRequest` endpoints also
-remain disabled by the production profile. OS-3 must close that gap before
-remote connectors are added, or connector behavior would form a second
-authority path around the kernel.
+Immediately before OCI launch, `vouchd` now reloads a consistent live snapshot
+of those resources and compiles a fail-closed execution plan. Caller-supplied
+image and command material must match admitted digests; only full-workspace
+read/write and explicitly granted provider-scoped model brokering are
+currently supported. Expired, terminal, narrowed or otherwise unsupported
+authority starts no workload.
+
+Before any broker or agent workload starts, `vouchd` now atomically verifies
+that both snapshot heads are still current and records execution start in the
+transaction ledger. A concurrent run or transaction change therefore starts
+no workload. Execution is not yet one paired lifecycle: the OCI workload
+advances the transaction without advancing the admitted run, and usage is not
+yet durably charged to run budgets. OS-3 must next pair execution start,
+settlement and recovery across both ledgers before remote connectors are
+added. The older brokered `ActionRequest` endpoints remain disabled by the
+production profile.
 
 ## Execution principles
 
