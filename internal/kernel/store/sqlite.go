@@ -580,12 +580,14 @@ type rowQuerier interface {
 
 func loadProjection(ctx context.Context, query rowQuerier, namespace, runID string) (reducer.Projection, error) {
 	var data []byte
+	var sequence int64
 	var lastDigest string
 	err := query.QueryRowContext(ctx,
-		`SELECT state_json, last_event_digest FROM runs WHERE namespace = ? AND run_id = ?`,
+		`SELECT state_json, event_sequence, last_event_digest
+		 FROM runs WHERE namespace = ? AND run_id = ?`,
 		namespace,
 		runID,
-	).Scan(&data, &lastDigest)
+	).Scan(&data, &sequence, &lastDigest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return reducer.Projection{}, storeError(model.ErrorNotFound, "get_run", runID, "run not found in namespace", err)
 	}
@@ -599,8 +601,10 @@ func loadProjection(ctx context.Context, query rowQuerier, namespace, runID stri
 	if err := run.Validate(); err != nil {
 		return reducer.Projection{}, storeError(model.ErrorEventChain, "get_run", runID, "stored run failed validation", err)
 	}
-	if run.Namespace != namespace || run.ID != runID {
-		return reducer.Projection{}, storeError(model.ErrorEventChain, "get_run", runID, "stored run identity does not match its key", nil)
+	if run.Namespace != namespace ||
+		run.ID != runID ||
+		run.EventSequence != sequence {
+		return reducer.Projection{}, storeError(model.ErrorEventChain, "get_run", runID, "stored run identity or sequence does not match its key", nil)
 	}
 	if !digestPattern.MatchString(lastDigest) {
 		return reducer.Projection{}, storeError(model.ErrorEventChain, "get_run", runID, "stored event digest is invalid", nil)
