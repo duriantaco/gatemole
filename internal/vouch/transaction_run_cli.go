@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
@@ -211,53 +212,53 @@ func transactionRunNamed(
 		*runID = "run:" + *id
 	}
 	actor := model.Principal{ID: *actorID, Kind: model.PrincipalKind(*actorKind)}
-	now := time.Now().UTC()
 	profileBinding, err := selectedProfile.binding()
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	task, err := model.NewAgentTask(
-		transactionTaskID(*id),
-		*id,
+	maxWallTimeSeconds := int64(*timeout / time.Second)
+	admissionRequest := admission.Request{
+		Version:        admission.RequestVersion,
+		IdempotencyKey: *id,
+		TransactionID:  *id,
+		RunID:          *runID,
+		Intent:         string(intentBytes),
+		AgentProfile:   profileBinding,
+		Sponsor: model.Principal{
+			ID:   *sponsorID,
+			Kind: model.PrincipalKind(*sponsorKind),
+		},
+		Actor: actor,
+		Contract: admission.ContractSpec{
+			Risk: "high",
+			Resources: []model.ContractResource{{
+				ID: "workspace",
+				Selector: model.ResourceSelector{
+					Kind:    "filesystem",
+					Pattern: "workspace/**",
+				},
+				Operations: []string{"filesystem.read", "filesystem.write"},
+				Conditions: model.CapabilityConditions{
+					WorkspaceRoot: "workspace",
+				},
+			}},
+			Budgets: model.BudgetLimits{
+				MaxWallTimeSeconds: &maxWallTimeSeconds,
+			},
+		},
+	}
+	client := newClient(*socket)
+	admitted, err := client.AdmitTask(
+		context.Background(),
 		*namespace,
-		*runID,
-		string(intentBytes),
-		profileBinding,
-		now,
+		admissionRequest,
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	transaction := model.AgentTransaction{
-		Version:                model.AgentTransactionVersion,
-		ID:                     *id,
-		Namespace:              *namespace,
-		IntentDigest:           task.IntentDigest,
-		Sponsor:                model.Principal{ID: *sponsorID, Kind: model.PrincipalKind(*sponsorKind)},
-		AgentRunIDs:            []string{*runID},
-		Task:                   &task,
-		StageBindings:          []model.StageBinding{},
-		State:                  model.TransactionCreated,
-		EffectIDs:              []string{},
-		VerificationResultIDs:  []string{},
-		OutstandingApprovalIDs: []string{},
-		EventSequence:          1,
-		CreatedAt:              now,
-		UpdatedAt:              now,
-	}
-	creation, err := transactionreducer.CreationEvent(transaction, actor)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	client := newClient(*socket)
-	projection, err := client.CreateTransaction(context.Background(), creation)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
+	projection := admitted.Transaction
 	projection, err = client.StartTransaction(
 		context.Background(), *namespace, *id,
 		projection.Transaction.EventSequence, actor,
@@ -405,11 +406,6 @@ func generateTransactionID(now time.Time) (string, error) {
 		now.UTC().Format("20060102T150405Z"),
 		hex.EncodeToString(random),
 	), nil
-}
-
-func transactionTaskID(transactionID string) string {
-	sum := sha256.Sum256([]byte(transactionID))
-	return "task:" + hex.EncodeToString(sum[:16])
 }
 
 func digestCommand(command []string) (string, error) {

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	"github.com/duriantaco/vouch/internal/kernel/broker"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/reducer"
@@ -132,6 +133,17 @@ func (c *Client) CreateTransaction(ctx context.Context, event model.TransactionE
 	var projection transactionreducer.Projection
 	err := c.do(ctx, http.MethodPost, "/v0/transactions", event, &projection)
 	return projection, err
+}
+
+func (c *Client) AdmitTask(
+	ctx context.Context,
+	namespace string,
+	request admission.Request,
+) (admission.Result, error) {
+	var result admission.Result
+	path := "/v0/namespaces/" + url.PathEscape(namespace) + "/task-admissions"
+	err := c.do(ctx, http.MethodPost, path, request, &result)
+	return result, err
 }
 
 // CreateTaskTransaction is the product-level creation path for a single

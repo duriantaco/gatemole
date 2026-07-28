@@ -60,6 +60,14 @@ func TestIdentityMiddlewareEnforcesRoleNamespaceAndActorBinding(t *testing.T) {
 		t, privateKey, "key:api-test", now, "service:auditor", model.PrincipalService,
 		[]string{"fixture"}, []string{"viewer"},
 	)
+	parentNamespaceToken := apiIdentityToken(
+		t, privateKey, "key:api-test", now, "service:parent", model.PrincipalService,
+		[]string{"team"}, []string{"viewer"},
+	)
+	nestedNamespaceToken := apiIdentityToken(
+		t, privateKey, "key:api-test", now, "service:nested", model.PrincipalService,
+		[]string{"team/platform"}, []string{"viewer"},
+	)
 
 	response := requestJSONWithToken(
 		t, handler, http.MethodGet, "/healthz", nil, "",
@@ -114,6 +122,28 @@ func TestIdentityMiddlewareEnforcesRoleNamespaceAndActorBinding(t *testing.T) {
 	)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("cross-namespace viewer status=%d, want 403", response.Code)
+	}
+	escapedNamespacePath := "/v0/namespaces/team%2Fplatform/runs"
+	response = requestJSONWithToken(
+		t, handler, http.MethodGet,
+		escapedNamespacePath, nil, parentNamespaceToken,
+	)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf(
+			"parent namespace token crossed encoded namespace boundary: status=%d",
+			response.Code,
+		)
+	}
+	response = requestJSONWithToken(
+		t, handler, http.MethodGet,
+		escapedNamespacePath, nil, nestedNamespaceToken,
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"encoded namespace token did not reach its namespace: status=%d body=%s",
+			response.Code,
+			response.Body.String(),
+		)
 	}
 
 	forged := created

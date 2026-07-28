@@ -59,20 +59,19 @@ The repository contains a substantial foundation:
 The supported profile remains one node, one security tenant and publication to
 an allowed local Git ref. It does not yet control a remote enterprise system.
 
-### Critical architecture gap
+### Next architecture gap
 
-The repository currently has two adjacent authority paths:
+The production `vouch run` path now uses one daemon-owned, idempotent admission
+operation to persist the exact `AgentTask`, content-bound
+`ExecutionContract`, real `AgentRun`, initial capability grants and
+`AgentTransaction` in one SQLite transaction.
 
-1. The production `vouch run` path creates an `AgentTask` and
-   `AgentTransaction`, executes an OCI workload and stages Git effects.
-2. The older kernel path owns `AgentRun`, `ExecutionContract`, capability
-   grants and brokered `ActionRequest` resources, but those endpoints are
-   disabled by the production profile.
-
-The production transaction therefore does not yet bind a real kernel run,
-contract, capabilities, lineage and task budgets into one authoritative
-lifecycle. Adding remote connectors before converging these paths would create
-connector-specific product logic around the wrong kernel boundary.
+Execution is not yet the same authority lifecycle. The OCI workload advances
+the transaction without advancing the admitted run or consuming its grants,
+budgets and data boundaries. The older brokered `ActionRequest` endpoints also
+remain disabled by the production profile. OS-3 must close that gap before
+remote connectors are added, or connector behavior would form a second
+authority path around the kernel.
 
 ## Execution principles
 

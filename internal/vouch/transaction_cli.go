@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 )
 
 type transactionClient interface {
+	AdmitTask(context.Context, string, admission.Request) (admission.Result, error)
 	CreateTransaction(context.Context, model.TransactionEvent) (transactionreducer.Projection, error)
 	GetTransaction(context.Context, string, string) (transactionreducer.Projection, error)
 	ListTransactions(context.Context, string) ([]model.AgentTransaction, error)
