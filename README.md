@@ -60,16 +60,17 @@ The operating-system analogy is precise:
 | **Vouch Agent OS** | The complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
 | **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Narrow single-node local-Git profile implemented |
-| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Foundation implemented; production authority paths are not yet unified |
+| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Atomic task admission implemented; execution and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
 | **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Rooted filesystem and local Git exist; common interface and remote connectors planned |
 | **Vouch Contracts** | Optional verification module that turns human-owned intent into evidence obligations used by Runtime policy. | Beta |
 
 The diagram states the intended ownership boundary, not a completion claim.
-Today the supported transaction path and the lower-level
-run/capability/action path are adjacent but not yet one authoritative
-lifecycle. Converging them is the first implementation milestone.
+Today `vouch run` atomically admits its task, content-bound contract, real run,
+initial grants and transaction. The OCI execution and lower-level brokered
+action path do not yet consume that authority as one synchronized lifecycle;
+that is the next Runtime milestone.
 
 Every consequential action must follow one authority path:
 
@@ -140,12 +141,14 @@ The public profile schema is
 with a complete
 [example profile](schemas/fixtures/runtime/valid/agent_profiles.json). Vouch
 binds the selected profile, final command, pinned image and exact task intent
-into a durable task envelope. Daemon-owned OCI agents receive that envelope
-read-only at `/vouch/task.json`.
+into a durable task envelope. Before launch, `vouchd` atomically admits that
+task with its derived execution contract, real run, initial grants and
+transaction. Daemon-owned OCI agents receive the task envelope read-only at
+`/vouch/task.json`.
 
-`vouch run` currently creates the transaction and worktree, runs the agent, freezes
-its Git effects, and performs deterministic sequence validation. Inspect the
-result with:
+`vouch run` then creates the isolated worktree, runs the agent, freezes its Git
+effects, and performs deterministic sequence validation. Inspect the result
+with:
 
 ```sh
 vouch --repo /path/to/service status <transaction-id> \

@@ -180,10 +180,12 @@ The repository proves meaningful ingredients:
 
 It does not yet prove the intended Runtime enforcement boundary:
 
-- the production transaction path does not create the existing durable
-  `AgentRun` or bind an `ExecutionContract` and compiled capability grants;
-- task budgets, lineage, data boundaries and release scope are not one atomic
-  authority envelope;
+- atomic admission now binds the retained task, a content-digest
+  `ExecutionContract`, a durable `AgentRun`, initial capability grants and the
+  transaction, but production OCI execution does not yet transition that run
+  or consume those grants;
+- budgets, lineage, data boundaries and release scope are therefore not yet
+  enforced as one synchronized execution lifecycle;
 - lifecycle controls do not yet interrupt a running production OCI workload;
 - there is no connector driver interface or external production connector;
 - sequence policy does not span transactions, sessions or identity lineage;

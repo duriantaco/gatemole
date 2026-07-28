@@ -24,6 +24,15 @@ func (s *SQLiteStore) CreateTransaction(ctx context.Context, event model.Transac
 	if err := projection.Validate(); err != nil {
 		return transactionreducer.Projection{}, err
 	}
+	if projection.Transaction.Admission != nil {
+		return transactionreducer.Projection{}, storeError(
+			model.ErrorCapabilityDenied,
+			"create_transaction",
+			event.TransactionID,
+			"admission bindings can only be created by atomic task admission",
+			nil,
+		)
+	}
 	projectionJSON, err := json.Marshal(projection)
 	if err != nil {
 		return transactionreducer.Projection{}, storeError(model.ErrorInternal, "create_transaction", event.TransactionID, "encode projection", err)

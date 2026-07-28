@@ -22,6 +22,7 @@ const (
 	ErrorCheckpointIncompatible ErrorCode = "KERNEL_CHECKPOINT_INCOMPATIBLE"
 	ErrorNotFound               ErrorCode = "KERNEL_NOT_FOUND"
 	ErrorConflict               ErrorCode = "KERNEL_CONFLICT"
+	ErrorIdempotencyConflict    ErrorCode = "KERNEL_IDEMPOTENCY_CONFLICT"
 	ErrorDriverUnavailable      ErrorCode = "KERNEL_DRIVER_UNAVAILABLE"
 	ErrorTransactionConflict    ErrorCode = "TRANSACTION_CONFLICT"
 	ErrorEffectSequence         ErrorCode = "TRANSACTION_EFFECT_SEQUENCE"

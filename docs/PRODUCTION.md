@@ -434,8 +434,9 @@ acceptable:
 - Verifiers use a private, read-only materialization of the exact frozen Git
   tree. The Git executable, object database, and host materialization path
   remain trusted operator-controlled inputs.
-- Legacy client-supervised execution/verification mutation APIs are disabled
-  in production, and the mediated filesystem API cannot access `.git` or
+- Legacy transaction creation and client-supervised execution/verification
+  mutation APIs are disabled in production; transaction authority begins at
+  atomic task admission. The mediated filesystem API cannot access `.git` or
   `.vouch` control state.
 - No claim of universal rollback. The implemented commit primitive is an
   atomic, version-checked Git-ref update.

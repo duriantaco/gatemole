@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/reducer"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
@@ -33,6 +34,13 @@ type TransactionStore interface {
 	VerifyTransaction(context.Context, string, string) error
 }
 
+// AdmissionStore atomically creates and retrieves the immutable authority
+// envelope that binds a task, contract, run, capabilities, and transaction.
+type AdmissionStore interface {
+	AdmitTask(context.Context, admission.Prepared) (admission.Result, bool, error)
+	GetTaskAdmission(context.Context, string, string) (admission.Result, string, error)
+}
+
 // Store combines the local kernel persistence boundaries with lifecycle
 // management. Implementations must commit an event and its projection in one
 // transaction.
@@ -40,6 +48,7 @@ type Store interface {
 	RunStore
 	EventStore
 	TransactionStore
+	AdmissionStore
 	Health(context.Context) error
 	Close() error
 }

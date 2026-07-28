@@ -17,10 +17,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const sqliteSchemaVersion = 2
+const sqliteSchemaVersion = 3
 
 type SQLiteStore struct {
-	db *sql.DB
+	db             *sql.DB
+	admissionFault func(string) error
 }
 
 // Health performs a bounded, constant-work database readiness check. It does
@@ -195,6 +196,57 @@ func (s *SQLiteStore) initialize(ctx context.Context) error {
 		) STRICT`,
 		`CREATE INDEX IF NOT EXISTS transaction_events_by_type
 			ON transaction_events(namespace, transaction_id, event_type, sequence)`,
+		`CREATE TABLE IF NOT EXISTS execution_contracts (
+			namespace TEXT NOT NULL,
+			contract_digest TEXT NOT NULL,
+			contract_id TEXT NOT NULL,
+			contract_json BLOB NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (namespace, contract_digest),
+			UNIQUE (namespace, contract_id)
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS agent_tasks (
+			namespace TEXT NOT NULL,
+			task_id TEXT NOT NULL,
+			task_digest TEXT NOT NULL,
+			transaction_id TEXT NOT NULL,
+			run_id TEXT NOT NULL,
+			task_json BLOB NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (namespace, task_id),
+			UNIQUE (namespace, task_digest),
+			UNIQUE (namespace, transaction_id),
+			UNIQUE (namespace, run_id),
+			UNIQUE (namespace, task_id, task_digest)
+		) STRICT`,
+		`CREATE TABLE IF NOT EXISTS task_admissions (
+			namespace TEXT NOT NULL,
+			idempotency_key TEXT NOT NULL,
+			request_digest TEXT NOT NULL,
+			task_id TEXT NOT NULL,
+			task_digest TEXT NOT NULL,
+			contract_digest TEXT NOT NULL,
+			run_id TEXT NOT NULL,
+			transaction_id TEXT NOT NULL,
+			result_json BLOB NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (namespace, idempotency_key),
+			UNIQUE (namespace, task_id),
+			UNIQUE (namespace, run_id),
+			UNIQUE (namespace, transaction_id),
+			FOREIGN KEY (namespace, task_id, task_digest)
+				REFERENCES agent_tasks(namespace, task_id, task_digest)
+				ON DELETE RESTRICT,
+			FOREIGN KEY (namespace, contract_digest)
+				REFERENCES execution_contracts(namespace, contract_digest)
+				ON DELETE RESTRICT,
+			FOREIGN KEY (namespace, run_id)
+				REFERENCES runs(namespace, run_id)
+				ON DELETE RESTRICT,
+			FOREIGN KEY (namespace, transaction_id)
+				REFERENCES agent_transactions(namespace, transaction_id)
+				ON DELETE RESTRICT
+		) STRICT`,
 	}
 	for _, statement := range statements {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
@@ -217,6 +269,15 @@ func (s *SQLiteStore) initialize(ctx context.Context) error {
 	if version == "1" {
 		if _, err := s.db.ExecContext(ctx,
 			`UPDATE kernel_metadata SET value = ? WHERE key = 'schema_version' AND value = '1'`,
+			"2",
+		); err != nil {
+			return storeError(model.ErrorInternal, "migrate_store", "", "upgrade schema version", err)
+		}
+		version = "2"
+	}
+	if version == "2" {
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE kernel_metadata SET value = ? WHERE key = 'schema_version' AND value = '2'`,
 			fmt.Sprintf("%d", sqliteSchemaVersion),
 		); err != nil {
 			return storeError(model.ErrorInternal, "migrate_store", "", "upgrade schema version", err)

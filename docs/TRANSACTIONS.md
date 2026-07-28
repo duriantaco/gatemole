@@ -110,10 +110,12 @@ These commands require the hardened daemon identity, verifier, approval and
 release configuration described in
 [Production Runtime Operations](PRODUCTION.md).
 
-The lower-level `vouch tx create|start|worktree|stage|validate` commands remain
-available for connector development, recovery and debugging. They do not
-replace the primary task-oriented path. Abort discards an unreleased isolated
-worktree:
+The lower-level `vouch tx create` command remains available only in the
+development profile. Existing-transaction operations such as
+`start|worktree|stage|validate` remain available for connector development,
+recovery and debugging. They do not replace the primary task-oriented path,
+and production transaction creation requires atomic task admission. Abort
+discards an unreleased isolated worktree:
 
 ```sh
 vouch --repo /path/to/service tx abort \

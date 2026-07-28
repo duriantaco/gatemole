@@ -4,17 +4,17 @@
 
 This is a **target acceptance scenario**, not one currently executable path.
 
-The repository implements its pieces in two adjacent paths:
+The supported transaction path now atomically admits its task,
+`ExecutionContract`, `AgentRun`, initial capabilities and transaction before it
+runs an OCI agent. It then stages immutable local Git effects, validates their
+sequence, runs daemon-owned verification, binds signed approvals and publishes
+to an allowed local ref.
 
-- The supported transaction path runs an OCI agent, stages immutable local Git
-  effects, validates their sequence, runs daemon-owned verification, binds
-  signed approvals and publishes to an allowed local ref.
-- The lower-level kernel path models `AgentRun`, `ExecutionContract`,
-  capabilities and brokered filesystem actions, but it is disabled by the
-  production profile and is not created by `vouch run`.
-
-The roadmap's OS-2 through OS-7 work converges those paths before this document
-becomes an executable end-to-end acceptance test.
+The OCI workload does not yet advance that admitted run or consume its
+capabilities through the lower-level brokered action path. The roadmap's OS-3
+through OS-7 work closes that execution, supervision, connector and temporal
+policy gap before this document becomes an executable end-to-end acceptance
+test.
 
 ## Target claim
 
