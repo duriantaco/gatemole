@@ -356,7 +356,7 @@ func (c *Client) RunTransactionAgent(
 	ctx context.Context,
 	namespace, transactionID string,
 	expectedSequence int64,
-	runID, image string,
+	image string,
 	command []string,
 	timeoutSeconds int64,
 	actor model.Principal,
@@ -364,21 +364,24 @@ func (c *Client) RunTransactionAgent(
 	request := struct {
 		ExpectedSequence int64           `json:"expected_sequence"`
 		Actor            model.Principal `json:"actor"`
-		RunID            string          `json:"run_id"`
 		Image            string          `json:"image"`
 		Command          []string        `json:"command"`
-		TimeoutSeconds   int64           `json:"timeout_seconds"`
+		TimeoutSeconds   int64           `json:"timeout_seconds,omitempty"`
 	}{
 		ExpectedSequence: expectedSequence,
 		Actor:            actor,
-		RunID:            runID,
 		Image:            image,
 		Command:          append([]string(nil), command...),
 		TimeoutSeconds:   timeoutSeconds,
 	}
 	var result TransactionAgentRunResult
 	longHTTP := *c.http
-	longHTTP.Timeout = time.Duration(timeoutSeconds)*time.Second + 30*time.Second
+	if timeoutSeconds > 0 {
+		longHTTP.Timeout =
+			time.Duration(timeoutSeconds)*time.Second + 30*time.Second
+	} else {
+		longHTTP.Timeout = 0
+	}
 	longClient := &Client{http: &longHTTP, bearerToken: c.bearerToken}
 	err := longClient.do(
 		ctx, http.MethodPost,

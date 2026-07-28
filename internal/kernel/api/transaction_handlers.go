@@ -84,10 +84,9 @@ type finishAgentExecutionRequest struct {
 type runAgentExecutionRequest struct {
 	ExpectedSequence int64           `json:"expected_sequence"`
 	Actor            model.Principal `json:"actor"`
-	RunID            string          `json:"run_id"`
 	Image            string          `json:"image"`
 	Command          []string        `json:"command"`
-	TimeoutSeconds   int64           `json:"timeout_seconds"`
+	TimeoutSeconds   int64           `json:"timeout_seconds,omitempty"`
 }
 
 type runAgentExecutionResponse struct {
@@ -423,31 +422,12 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if !model.IsIdentifier(request.RunID) ||
-		len(request.Command) == 0 ||
+	if len(request.Command) == 0 ||
 		request.Image == "" ||
-		request.TimeoutSeconds < 1 ||
+		request.TimeoutSeconds < 0 ||
 		s.executionPolicy.MaxAgentTimeoutSecs < 1 ||
-		request.TimeoutSeconds > s.executionPolicy.MaxAgentTimeoutSecs ||
 		s.executionPolicy.EnginePath == "" {
 		writeError(w, schemaError("daemon-run agent request or runtime policy is invalid", nil))
-		return
-	}
-	imageDigest, err := sandbox.ImageDigest(request.Image)
-	if err != nil {
-		writeError(w, schemaError("agent image must be digest-pinned", err))
-		return
-	}
-	if !s.executionPolicy.agentImageAllowed(imageDigest) {
-		writeError(w, &model.KernelError{
-			Code: model.ErrorCapabilityDenied, Operation: "run_agent_execution",
-			Resource: imageDigest, Message: "agent image digest is not allowed by daemon policy",
-		})
-		return
-	}
-	commandDigest, err := transactionreducer.ComputeCommandDigest(request.Command)
-	if err != nil {
-		writeError(w, schemaError("compute agent command digest", err))
 		return
 	}
 	namespace := r.PathValue("namespace")
@@ -465,33 +445,29 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, transactionTransitionError("agent execution requires a running transaction with one stage boundary"))
 		return
 	}
-	if err := taskAuthorizesDaemonExecution(
-		projection.Transaction.Task,
-		request.RunID,
-		"oci",
-		imageDigest,
-		commandDigest,
-	); err != nil {
+	liveAuthority, err := s.compileLiveExecutionAuthority(
+		r.Context(),
+		namespace,
+		transactionID,
+		projection,
+		request.Image,
+		request.Command,
+		request.TimeoutSeconds,
+	)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
-	entrypoint := ""
-	command := append([]string(nil), request.Command...)
-	if task := projection.Transaction.Task; task != nil &&
-		task.AgentProfile.Entrypoint != "" {
-		if request.Command[0] != task.AgentProfile.Entrypoint {
-			writeError(w, &model.KernelError{
-				Code:      model.ErrorCapabilityDenied,
-				Operation: "run_agent_execution",
-				Resource:  transactionID,
-				Message:   "persisted task entrypoint does not match the requested command",
-			})
-			return
-		}
-		entrypoint = task.AgentProfile.Entrypoint
-		command = append([]string(nil), request.Command[1:]...)
-	}
-	workspace, err := s.transactionWorkspace(r, projection)
+	executionPlan := liveAuthority.Plan
+	authorityContext, cancelAuthority := context.WithDeadline(
+		r.Context(),
+		executionPlan.NotAfter,
+	)
+	defer cancelAuthority()
+	workspace, err := s.transactionWorkspace(
+		r.WithContext(authorityContext),
+		projection,
+	)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -519,23 +495,26 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	config := sandbox.OCIConfig{
 		EnginePath:    s.executionPolicy.EnginePath,
-		Image:         request.Image,
+		Image:         executionPlan.ImageReference,
 		Workspace:     workspace.Path,
 		TransactionID: transactionID,
-		RunID:         request.RunID,
-		Entrypoint:    entrypoint,
-		Command:       command,
+		RunID:         executionPlan.RunID,
+		Entrypoint:    executionPlan.Entrypoint,
+		Command:       append([]string(nil), executionPlan.Command...),
 		UID:           s.executionPolicy.VerifierUID,
 		GID:           s.executionPolicy.VerifierGID,
 		MemoryBytes:   s.executionPolicy.VerifierMemoryBytes,
 		CPUMillis:     s.executionPolicy.VerifierCPUMillis,
 		PIDsLimit:     s.executionPolicy.VerifierPIDsLimit,
 		TmpfsBytes:    s.executionPolicy.VerifierTmpfsBytes,
-		ContainerName: sandbox.ContainerName(transactionID, request.RunID),
+		ContainerName: sandbox.ContainerName(
+			transactionID,
+			executionPlan.RunID,
+		),
 		Role:          "agent",
 		WorkspaceMode: "transaction_rw",
 	}
-	taskDigest := ""
+	taskDigest := executionPlan.TaskDigest
 	if projection.Transaction.Task != nil {
 		taskDirectory, cleanupTask, taskErr := materializeAgentTask(
 			s.transactionStaging,
@@ -547,12 +526,22 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		}
 		defer func() { _ = cleanupTask() }()
 		config.TaskDirectory = taskDirectory
-		config.TaskDigest = projection.Transaction.Task.Digest
-		taskDigest = projection.Transaction.Task.Digest
+		config.TaskDigest = executionPlan.TaskDigest
 	}
 	var brokerSession *sandbox.ModelBrokerSession
 	var brokerExecution *model.ModelBrokerExecution
-	if brokerPolicy := s.executionPolicy.ModelBroker; brokerPolicy != nil {
+	var brokerConfig *sandbox.ModelBrokerConfig
+	if executionPlan.ModelBroker != nil {
+		brokerPolicy := s.executionPolicy.ModelBroker
+		if brokerPolicy == nil {
+			writeError(w, &model.KernelError{
+				Code:      model.ErrorInternal,
+				Operation: "run_agent_execution",
+				Resource:  transactionID,
+				Message:   "compiled model authority has no daemon broker",
+			})
+			return
+		}
 		agentToken, tokenErr := randomBrokerToken()
 		if tokenErr != nil {
 			writeError(w, &model.KernelError{
@@ -565,48 +554,43 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		receiptDirectory := filepath.Join(
 			s.transactionStaging,
 			".vouch-model-evidence",
-			sandbox.ModelBrokerContainerName(transactionID, request.RunID),
+			sandbox.ModelBrokerContainerName(
+				transactionID,
+				executionPlan.RunID,
+			),
 		)
-		startedBroker, brokerErr := sandbox.StartModelBroker(
-			r.Context(),
-			sandbox.ModelBrokerConfig{
-				EnginePath: s.executionPolicy.EnginePath,
-				Image:      brokerPolicy.Image, PolicyPath: brokerPolicy.PolicyPath,
-				PolicyDigest:     brokerPolicy.PolicyDigest,
-				ReceiptDirectory: receiptDirectory,
-				TransactionID:    transactionID, RunID: request.RunID,
-				AgentToken:          agentToken,
-				ProviderBearerToken: brokerPolicy.ProviderBearerToken,
-				UID:                 s.executionPolicy.VerifierUID, GID: s.executionPolicy.VerifierGID,
-				MemoryBytes: 512 << 20, CPUMillis: 1000,
-				PIDsLimit: 64, TmpfsBytes: 64 << 20,
-			},
-		)
-		if brokerErr != nil {
-			writeError(w, &model.KernelError{
-				Code: model.ErrorDriverUnavailable, Operation: "start_model_broker",
-				Resource: transactionID, Message: "start policy-controlled model egress",
-				Cause: brokerErr,
-			})
-			return
+		brokerConfig = &sandbox.ModelBrokerConfig{
+			EnginePath: s.executionPolicy.EnginePath,
+			Image:      brokerPolicy.Image, PolicyPath: brokerPolicy.PolicyPath,
+			PolicyDigest:        brokerPolicy.PolicyDigest,
+			ReceiptDirectory:    receiptDirectory,
+			TransactionID:       transactionID,
+			RunID:               executionPlan.RunID,
+			AgentToken:          agentToken,
+			ProviderBearerToken: brokerPolicy.ProviderBearerToken,
+			UID:                 s.executionPolicy.VerifierUID, GID: s.executionPolicy.VerifierGID,
+			MemoryBytes: 512 << 20, CPUMillis: 1000,
+			PIDsLimit: 64, TmpfsBytes: 64 << 20,
 		}
-		brokerSession = &startedBroker
 		brokerExecution = &model.ModelBrokerExecution{
-			Provider:     brokerPolicy.Policy.Provider,
-			ImageDigest:  startedBroker.ImageDigest,
-			PolicyDigest: startedBroker.PolicyDigest,
+			Provider:     executionPlan.ModelBroker.Provider,
+			ImageDigest:  executionPlan.ModelBroker.ImageDigest,
+			PolicyDigest: executionPlan.ModelBroker.PolicyDigest,
 		}
 		tokenDigest := sha256.Sum256([]byte(agentToken))
-		config.NetworkName = startedBroker.NetworkName
+		config.NetworkName = sandbox.ModelBrokerNetworkName(
+			transactionID,
+			executionPlan.RunID,
+		)
 		config.ModelBroker = &sandbox.ModelBrokerBinding{
 			URL:   "http://vouch-model-broker:8080/v1",
-			Token: agentToken, ImageDigest: startedBroker.ImageDigest,
-			PolicyDigest:      startedBroker.PolicyDigest,
+			Token: agentToken, ImageDigest: executionPlan.ModelBroker.ImageDigest,
+			PolicyDigest:      executionPlan.ModelBroker.PolicyDigest,
 			TokenDigest:       "sha256:" + hex.EncodeToString(tokenDigest[:]),
-			ReceiptLedgerHint: startedBroker.ReceiptPath,
+			ReceiptLedgerHint: filepath.Join(receiptDirectory, "model-calls.jsonl"),
 		}
 	}
-	brokerStopped := brokerSession == nil
+	brokerStopped := false
 	defer func() {
 		if brokerStopped || brokerSession == nil {
 			return
@@ -624,18 +608,26 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	if !model.IsIdentifier(program) {
 		program = "agent-command"
 	}
+	if err := s.requireLiveExecutionAuthority(
+		authorityContext,
+		transactionID,
+		executionPlan.NotAfter,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
 	now := s.now().UTC()
 	execution := model.AgentExecution{
 		Version:             model.AgentExecutionVersion,
 		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
 		TransactionID:       transactionID,
-		RunID:               request.RunID,
-		StageBindingID:      projection.Transaction.StageBindings[0].ID,
+		RunID:               executionPlan.RunID,
+		StageBindingID:      executionPlan.StageBindingID,
 		Program:             program,
-		CommandDigest:       commandDigest,
+		CommandDigest:       executionPlan.CommandDigest,
 		RuntimeClass:        "oci",
 		RuntimeConfigDigest: runtimeDigest,
-		ImageDigest:         imageDigest,
+		ImageDigest:         executionPlan.ImageDigest,
 		TaskDigest:          taskDigest,
 		ModelBroker:         brokerExecution,
 		Status:              model.AgentExecutionRunning,
@@ -650,20 +642,60 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	projection, err = s.store.AppendTransactionEvents(
-		r.Context(), namespace, request.ExpectedSequence, []model.TransactionEvent{started},
+	projection, err = s.store.AppendTransactionEventsIfRunCurrent(
+		authorityContext,
+		namespace,
+		request.ExpectedSequence,
+		liveAuthority.RunSequence,
+		liveAuthority.RunLastEventDigest,
+		[]model.TransactionEvent{started},
 	)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	processContext, cancel := context.WithTimeout(
-		r.Context(), time.Duration(request.TimeoutSeconds)*time.Second,
-	)
-	defer cancel()
-	outcome, runErr := (verification.Runner{
-		EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-agent-evidence"),
-	}).Run(processContext, config, execution.ID)
+	var outcome verification.Outcome
+	var runErr error
+	runOperation := "run_agent_execution"
+	runMessage := "execute daemon-owned OCI agent"
+	if brokerConfig != nil {
+		startedBroker, brokerErr := sandbox.StartModelBroker(
+			authorityContext,
+			*brokerConfig,
+		)
+		if brokerErr != nil {
+			runErr = brokerErr
+			if authorityErr := s.requireLiveExecutionAuthority(
+				authorityContext,
+				transactionID,
+				executionPlan.NotAfter,
+			); authorityErr != nil {
+				runErr = authorityErr
+			}
+			runOperation = "start_model_broker"
+			runMessage = "start policy-controlled model egress"
+		} else {
+			brokerSession = &startedBroker
+			if startedBroker.ImageDigest != executionPlan.ModelBroker.ImageDigest ||
+				startedBroker.PolicyDigest != executionPlan.ModelBroker.PolicyDigest {
+				runErr = errors.New("started model broker does not match execution authority")
+				runOperation = "start_model_broker"
+				runMessage = "start policy-controlled model egress"
+			}
+		}
+	}
+	if runErr == nil {
+		runErr = s.requireLiveExecutionAuthority(
+			authorityContext,
+			transactionID,
+			executionPlan.NotAfter,
+		)
+	}
+	if runErr == nil {
+		outcome, runErr = (verification.Runner{
+			EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-agent-evidence"),
+		}).Run(authorityContext, config, execution.ID)
+	}
 	if brokerSession != nil {
 		cleanupContext, stopBroker := context.WithTimeout(context.Background(), 10*time.Second)
 		brokerErr := sandbox.RemoveModelBroker(
@@ -683,8 +715,8 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		summary, summaryErr := kernelmodelbroker.FinalizeLedger(
 			brokerSession.ReceiptPath,
 			transactionID,
-			request.RunID,
-			s.executionPolicy.ModelBroker.Policy.Provider,
+			executionPlan.RunID,
+			executionPlan.ModelBroker.Provider,
 		)
 		if summaryErr != nil {
 			writeError(w, &model.KernelError{
@@ -722,9 +754,9 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			Version:             "vouch.verification_process_receipt.v0",
 			Name:                execution.ID,
 			Status:              model.AgentExecutionStartFailed,
-			CommandDigest:       commandDigest,
+			CommandDigest:       executionPlan.CommandDigest,
 			RuntimeConfigDigest: runtimeDigest,
-			ImageDigest:         imageDigest,
+			ImageDigest:         executionPlan.ImageDigest,
 			StdoutDigest:        emptySHA256Digest,
 			StderrDigest:        emptySHA256Digest,
 			CompletedAt:         s.now().UTC(),
@@ -759,9 +791,14 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	execution = projection.Executions[len(projection.Executions)-1]
 	if runErr != nil {
+		var kernelErr *model.KernelError
+		if errors.As(runErr, &kernelErr) {
+			writeError(w, runErr)
+			return
+		}
 		writeError(w, &model.KernelError{
-			Code: model.ErrorDriverUnavailable, Operation: "run_agent_execution",
-			Resource: transactionID, Message: "execute daemon-owned OCI agent", Cause: runErr,
+			Code: model.ErrorDriverUnavailable, Operation: runOperation,
+			Resource: transactionID, Message: runMessage, Cause: runErr,
 		})
 		return
 	}
@@ -769,22 +806,6 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		Projection: projection, Execution: execution,
 		Process: outcome.Receipt, EvidenceDirectory: outcome.EvidenceDirectory,
 	})
-}
-
-func taskAuthorizesDaemonExecution(
-	task *model.AgentTask,
-	runID, runtimeClass, imageDigest, commandDigest string,
-) error {
-	if task == nil {
-		return &model.KernelError{
-			Code:      model.ErrorCapabilityDenied,
-			Operation: "run_agent_execution",
-			Message:   "daemon-owned agent execution requires a persisted task envelope",
-		}
-	}
-	return taskAuthorizesExecution(
-		task, runID, runtimeClass, imageDigest, commandDigest,
-	)
 }
 
 func taskAuthorizesExecution(

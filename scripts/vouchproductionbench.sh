@@ -221,6 +221,7 @@ VOUCH_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx
   --run run:production-bench \
   --runtime oci \
   --image "$production_image" \
+  --model-provider openai \
   -- \
   /bin/sh -c '
     set -eu
