@@ -169,6 +169,10 @@ The model name must also be allowed by daemon policy. Selecting an unconfigured
 provider, changing the admitted image or command, launching after expiry, or
 racing a run cancellation fails before any broker or agent workload starts.
 
+The [real-world examples guide](EXAMPLES.md) contains a complete runnable
+authentication-hotfix scenario plus production coding-agent and networkless
+migration workflows.
+
 Verification, preparation and authority remain explicit operations:
 
 ```sh

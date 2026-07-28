@@ -201,6 +201,12 @@ expired grant, a changed image or command, a narrower unsupported workspace
 grant, or an ungranted model provider fails before any broker or agent
 container starts.
 
+For concrete scenarios rather than placeholders, see
+[Real-world Runtime examples](docs/EXAMPLES.md). It includes a fully runnable
+authentication-hotfix repository and agent image, a production
+model-assisted coding flow, a networkless migration generator, and an explicit
+description of which enterprise connector examples are not implemented yet.
+
 `vouch run` then creates the isolated worktree, runs the agent, freezes its Git
 effects, and performs deterministic sequence validation. Inspect the result
 with:

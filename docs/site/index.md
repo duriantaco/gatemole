@@ -90,6 +90,11 @@ The resulting `OPENAI_API_KEY` is a transaction-scoped broker token, not the
 provider credential. A stale run, expired authority or executable mismatch is
 rejected before any broker or agent workload starts.
 
+For a complete runnable payments-service example, including building the
+agent image, starting `vouchd`, inspecting effects, and understanding why an
+authentication change requires approval, read the
+[real-world examples guide](https://github.com/duriantaco/vouch/blob/main/docs/EXAMPLES.md).
+
 Read the
 [transaction guide](https://github.com/duriantaco/vouch/blob/main/docs/TRANSACTIONS.md)
 and
