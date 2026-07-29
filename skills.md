@@ -10,6 +10,15 @@ architecture: the Vouch Control Plane plus a fleet of customer-side Vouch
 Runtimes. **Vouch Runtime** is the first sellable product and the enforcement
 boundary for autonomous-agent actions.
 
+One `vouchd` kernel supports two experiences:
+
+- **Vouch Developer Runtime** is the local developer experience around one
+  Runtime: initialize a real agent profile, execute it in a bounded Git
+  transaction, inspect the exact outcome and explicitly accept or reject it.
+- **Vouch Agent OS** is the enterprise experience and complete target:
+  non-bypassable connectors, cross-run policy and fleet management around the
+  same Runtime kernel.
+
 Its job is to make an agent task a controlled transaction:
 
 ```text
@@ -37,6 +46,8 @@ Keep these names distinct:
   manages connector configuration but does not execute downstream actions.
 - **Vouch Runtime**: the current product and customer-side enforcement
   boundary.
+- **Vouch Developer Runtime**: the local product experience around one Runtime,
+  not a separate or weaker engine.
 - **`vouchd` kernel**: the trusted authority and transaction engine inside each
   Runtime.
 - **Vouch Contracts**: an optional module that compiles release intent into
@@ -83,6 +94,11 @@ It does not currently push, open or merge pull requests, deploy, coordinate
 database/Kubernetes effects, provide remote multi-tenant service, or provide
 HA. Stable release packaging is pending.
 
+Runtime profile initialization and diagnostics exist. A maintained agent
+adapter, asynchronous supervision, live cancellation, friendly diff/apply and
+stable packaging remain in progress or planned; do not call the current
+low-level integration a self-serve developer preview yet.
+
 ## Good work
 
 Prefer work that strengthens the runtime path:
@@ -126,6 +142,8 @@ Use:
 
 - “Vouch Runtime — transaction and outcome control for autonomous-agent
   actions”
+- “Vouch Developer Runtime” for the local developer experience around the same
+  kernel
 - “the controlled boundary between an agent proposal and a real effect”
 - “`vouchd` kernel” for the trusted authority and transaction engine
 - “isolated, verified and authorized agent execution”
@@ -169,15 +187,17 @@ it.
 
 ## Near-term order
 
-1. Stabilize the implemented task-oriented CLI, named `AgentImage` profiles and
-   read-only `vouch.agent_task.v0` envelope; publish the external SDK/API.
-2. Wire execution contracts, budgets, mandatory verifier sets and release
-   targets into task creation.
-3. Deliver one deep remote-Git/GitHub connector and approval experience.
-4. Prove paid design-partner demand for fleet policy, audit and approvals.
-5. Build the Vouch Control Plane around customer-side Vouch Runtimes.
-6. Add Kubernetes and PostgreSQL transaction packs only after Git release and
+1. Pair the admitted run and transaction lifecycle and durably charge budgets.
+2. Complete the Vouch Developer Runtime shell: maintained adapter, supervision,
+   watch/cancel, diff and explicit apply/reject.
+3. Stabilize the authenticated action protocol and connector coordinator.
+4. Deliver one deep remote-Git/GitHub connector and approval experience.
+5. Prove paid design-partner demand for fleet policy, audit and approvals.
+6. Build the Vouch Control Plane around customer-side Vouch Runtimes.
+7. Add Kubernetes and PostgreSQL transaction packs only after Git release and
    reconciliation are deep.
 
-The primary product metric is permission expansion: a customer safely lets an
-agent complete work it previously could only propose.
+Developer success means a new user repeatedly reaches a controlled local
+outcome without low-level transaction surgery. Enterprise success means
+permission expansion: a customer safely lets an agent complete work it
+previously could only propose.

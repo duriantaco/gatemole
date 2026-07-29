@@ -4,7 +4,7 @@ Vouch Runtime provides the executable transaction path. Its development
 profile supports local exploration; its supported enforcement profile is
 deliberately limited to a single-node, single-tenant local-Git runtime.
 
-The complete implemented lifecycle is:
+The implemented local-Git transaction path is:
 
 ```text
 human intent + selected agent profile
@@ -22,6 +22,14 @@ human intent + selected agent profile
   -> compare-and-swap update of an allowed local Git ref
 ```
 
+This is the transaction-ledger path, not yet one fully paired execution
+lifecycle. Admission creates the associated `AgentRun`, and launch revalidates
+its live authority and atomically pins both ledger heads. The OCI workload
+currently advances and settles only the transaction ledger; the run lifecycle
+and durable budget usage are not yet advanced with it. A metadata cancellation
+before launch can prevent launch, but Vouch does not yet provide a supervisor
+that interrupts an already-running production workload.
+
 Vouch can create and publish the prepared commit to an allowed local Git ref.
 It does not push to a remote, merge a pull request, deploy software, or execute
 a production-database effect. Those connectors remain outside the implemented
@@ -29,22 +37,34 @@ profile.
 
 ## Walkthrough
 
-Start the local daemon. Its transaction root must be outside the repository:
+Create a strict profile for a digest-pinned image that is already loaded in the
+local OCI engine:
 
 ```sh
-vouch --repo /path/to/service daemon \
-  --transaction-root /tmp/vouch-service-transactions
+vouch --repo /path/to/service runtime init \
+  --agent coding-agent \
+  --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  -- /usr/local/bin/agent
 ```
 
-Run a task through the primary runtime surface:
+Start the local daemon. The convenience command keeps its transaction root
+outside the repository:
 
 ```sh
+vouch --repo /path/to/service daemon
+```
+
+In another terminal, diagnose the selected profile and run a task through the
+primary Runtime surface:
+
+```sh
+vouch --repo /path/to/service doctor --agent coding-agent
+
 vouch --repo /path/to/service run \
   --namespace payments \
   --intent "Upgrade the service without changing authentication behavior" \
-  --runtime oci \
-  --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
-  -- /usr/local/bin/agent
+  --agent coding-agent
 ```
 
 `vouch run` creates and starts the transaction, creates its isolated worktree,
@@ -62,9 +82,8 @@ vouch --repo /path/to/service tx events \
   --namespace payments --id <transaction-id>
 ```
 
-For repeatable agent integrations, define `.vouch/agent-profiles.json` using
-the [public profile schema](../schemas/vouch.agent_profiles.v0.schema.json) and
-run with `--agent NAME` instead of supplying a raw image and command. The
+`vouch runtime init` writes `.vouch/agent-profiles.json` using the
+[public profile schema](../schemas/vouch.agent_profiles.v0.schema.json). The
 [checked-in fixture](../schemas/fixtures/runtime/valid/agent_profiles.json)
 shows the complete document shape.
 
@@ -166,12 +185,13 @@ with urllib.request.urlopen(request, timeout=30) as response:
 ```
 
 The model name must also be allowed by daemon policy. Selecting an unconfigured
-provider, changing the admitted image or command, launching after expiry, or
-racing a run cancellation fails before any broker or agent workload starts.
+provider, changing the admitted image or command, launching after expiry, or a
+terminal run transition that wins the atomic launch claim fails before any
+broker or agent workload starts.
 
-The [real-world examples guide](EXAMPLES.md) contains a complete runnable
-authentication-hotfix scenario plus production coding-agent and networkless
-migration workflows.
+The [Runtime examples guide](EXAMPLES.md) contains a runnable deterministic
+authentication-hotfix fixture plus illustrative coding-agent and networkless
+migration deployment patterns.
 
 Verification, preparation and authority remain explicit operations:
 
@@ -206,7 +226,8 @@ development profile. Existing-transaction operations such as
 `start|worktree|stage|validate` remain available for connector development,
 recovery and debugging. They do not replace the primary task-oriented path,
 and production transaction creation requires atomic task admission. Abort
-discards an unreleased isolated worktree:
+discards an unreleased isolated worktree after execution; it is not a live
+workload-cancellation command:
 
 ```sh
 vouch --repo /path/to/service tx abort \

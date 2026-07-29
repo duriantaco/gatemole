@@ -3,12 +3,15 @@
 Vouch's production profile is a single-node Vouch Runtime for autonomous
 software changes released through local Git refs. It enforces the Runtime
 boundary; it does not turn the current implementation into a multi-tenant or
-highly available Vouch Control Plane. This narrow, single-tenant Git profile is
-supported only for revisions that pass the mandatory Go formatting,
+highly available Vouch Agent OS. It is the hardened operator profile for the
+same kernel used by the Vouch Developer Runtime, not a fleet product. This
+narrow, single-tenant Git profile is supported only for revisions that pass the
+mandatory Go formatting,
 module, test, vet, and `govulncheck` checks; kernel race tests; VouchBench,
 VouchKernelBench, VouchTransactionBench, VouchRuntimeBench; and production OCI
-acceptance. Vouch Contracts, enterprise connector drivers, multi-tenancy and HA
-architecture remain beta.
+acceptance. Vouch Contracts has separate beta status. Enterprise connector
+drivers, multi-tenancy, HA and the Control Plane are not implemented in this
+profile.
 
 ## Enforced production boundary
 
@@ -257,7 +260,7 @@ account and uses that same numeric UID/GID for agent and verifier containers.
 Linux bind-mounted worktrees and broker receipt directories must have the same
 owner. Vouch refuses a mismatched non-root production configuration rather
 than starting containers that cannot write their staged state. A root-run
-daemon configuration is outside this narrow productionized boundary.
+daemon configuration is outside this narrow hardened execution boundary.
 
 Set the caller's short-lived access token for every CLI process:
 
@@ -425,9 +428,10 @@ acceptable:
   SQLite/WAL, bind-mounted transaction worktrees, immutable verifier
   materializations, and evidence. Host filesystem exhaustion is not contained
   by OCI resource flags.
-- One deeply implemented release connector: compare-and-swap updates of local
-  Git refs. There is no push, pull-request merge, deployment, or production
-  database connector.
+- One deeply implemented release primitive: compare-and-swap updates of local
+  Git refs. It is not yet behind the planned generic connector interface.
+  There is no push, pull-request merge, deployment, or production database
+  connector.
 - Static OIDC issuer/JWKS trust only. There is no discovery, automatic JWKS
   refresh, token revocation feed, Entra/Okta provisioning adapter, or SCIM
   lifecycle integration.
@@ -463,6 +467,8 @@ acceptable:
   atomic, version-checked Git-ref update.
 
 Within those limits and after all mandatory gates pass, the single-node,
-single-tenant Git runtime is the productionized profile. The compiler's wider
-product surface, additional effect connectors, enterprise administration,
-multi-tenancy, and HA remain beta.
+single-tenant Git runtime is the hardened production execution profile. This
+does not imply stable product packaging or fleet operations. The compiler's
+wider product surface remains experimental. Additional effect connectors,
+enterprise administration, multi-tenancy and HA are planned and unimplemented,
+not beta features of this profile.

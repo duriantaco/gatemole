@@ -1,14 +1,14 @@
-# Real-world Runtime examples
+# Runtime examples
 
 Vouch's implemented production boundary today is a Git repository on one
 trusted node. These examples therefore use software-delivery work rather than
 pretending that the current repository can already control SAP, Salesforce or
 bank transfers.
 
-## 1. Run the shipped production scenario
+## 1. Run the repository production-acceptance scenario
 
-The fastest complete example is the same acceptance flow used before release.
-It requires Git, Go, Docker, `jq`, and `curl`:
+The fastest end-to-end local-Git example is the same acceptance flow used
+before release. It requires Git, Go, Docker, `jq`, and `curl`:
 
 ```sh
 go test ./...
@@ -39,7 +39,7 @@ receipt records an unknown call rather than pretending it succeeded. The
 scenario also proves that the provider credential never reaches the agent and
 that direct agent Internet egress is blocked.
 
-## 2. Runnable example: authentication hotfix
+## 2. Runnable deterministic fixture: authentication hotfix
 
 This example creates a small payments-service repository and a digest-pinned
 agent image. The agent changes authentication code and its test inside a Vouch
@@ -228,7 +228,11 @@ silently publish the change. Stop the example daemon with:
 kill "$DAEMON_PID"
 ```
 
-## 3. Production pattern: model-assisted coding agent
+## 3. Illustrative deployment pattern: model-assisted coding agent
+
+Unlike the first two sections, this is not a self-contained shipped example.
+It assumes that the operator has supplied the named agent and verifier images,
+OIDC configuration and production trust material.
 
 Assume a payments team has:
 
@@ -328,7 +332,7 @@ compare-and-swap. Vouch does not push or merge a remote pull request in the
 current profile. The trust setup is described in the
 [production operations guide](PRODUCTION.md).
 
-## 4. Production pattern: networkless migration generation
+## 4. Illustrative deployment pattern: networkless migration generation
 
 A schema team can run a deterministic migration generator without any model
 authority:
@@ -348,7 +352,7 @@ the detached worktree, but it receives no database credentials and cannot
 apply the migration to production. Review, verification and release operate on
 the exact generated Git effects.
 
-## 5. What is not a current example
+## 5. Planned multi-system examples
 
 The accounts-payable scenario—create vendor, change bank details, approve an
 invoice and transfer money—is the intended multi-system Agent OS direction,
@@ -357,5 +361,5 @@ claim to execute or roll back SAP, Salesforce, cloud or bank operations.
 
 That future flow requires typed connector drivers, scoped downstream
 credentials, separation-of-duty policies, outcome reconciliation and
-compensation. The current Git Runtime supplies the kernel pattern those
-connectors will use, but the connector work remains on the roadmap.
+compensation. The current Git Runtime proves transaction primitives intended to
+support those future connectors, but the connector work remains on the roadmap.

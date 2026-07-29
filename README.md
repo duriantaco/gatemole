@@ -4,13 +4,28 @@
 
 # Vouch
 
-Vouch is the transaction operating layer between autonomous agents and
-enterprise systems. Agents may propose work, but a deterministic enforcement
-runtime controls which exact effects may become real.
+Vouch is an enforcement kernel and transaction Runtime for autonomous agents.
+Agents may propose work, but Vouch controls the boundary between that proposal
+and an exact effect.
 
 Vouch does not replace an agent framework, model provider, identity provider,
 container runtime, Kubernetes or the host operating system. It controls the
 authority and transaction boundary around agent work.
+
+One kernel serves two product experiences:
+
+- **Vouch Developer Runtime** is the local experience for developers who want
+  to run an existing coding agent in an isolated Git transaction, inspect its
+  exact effects and control release. A low-level, manually operated local-Git
+  integration exists today; the self-serve developer preview is still a
+  milestone.
+- **Vouch Agent OS** is the target enterprise experience: the same `vouchd`
+  kernel plus non-bypassable action connectors, cross-run policy and a Control
+  Plane for a fleet of Runtimes. Those fleet and remote-system capabilities
+  are planned, not implemented.
+
+These are not separate engines. Developer adoption exercises the same kernel
+semantics that future enterprise deployments require.
 
 ## Architecture: where the OS, Runtime and kernel sit
 
@@ -35,35 +50,39 @@ task   |  +------- Vouch Runtime [customer-side] ------+  |
 ------>|  | customer-side enforcement boundary         |  |
        |  |                                             |  |
        |  |              vouchd kernel                  |  |
-       |  |  admission | identity and lineage          |  |
-       |  |  lifecycle | capabilities | budgets        |  |
-       |  |  action broker | sequence policy           |  |
-       |  |  transaction journal | verification        |  |
-       |  |  approvals | commit | reconciliation       |  |
-       |  |       | launches          ^        |        |  |
-       |  |       v                   |        v        |  |
-       |  |  agent sandbox ------ ActionRequest ------  |  |
-       |  |  + agent adapter          |   connector     |  |
-       |  |  untrusted; no            +-> driver        |  |
-       |  |  downstream credentials       scoped creds  |  |
+       |  |  admission | live authority | Git journal  |  |
+       |  |  Git effects | sequence policy | approval  |  |
+       |  |  local-ref commit                  [current]|  |
+       |  |                                             |  |
+       |  |  paired lifecycle | durable budgets        |  |
+       |  |  action broker | cross-run policy          |  |
+       |  |  reconciliation                    [planned]|  |
+       |  |       | launches                           |  |
+       |  |       v                                    |  |
+       |  |  agent sandbox ---> private Git worktree   |  |
+       |  |  + agent adapter                 [current]  |  |
+       |  |       |                                     |  |
+       |  |       +-- ActionRequest -> connector API    |  |
+       |  |                                  [planned]  |  |
        |  +--------------------------------------|------+  |
        +-----------------------------------------|---------+
                                                  v
-                    GitHub | Kubernetes | PostgreSQL
-                    SAP | Salesforce | cloud | email
+             external systems via planned drivers:
+             GitHub | Kubernetes | PostgreSQL | SAP | cloud
 ```
 
 The operating-system analogy is precise:
 
 | Name | Meaning | Status |
 | --- | --- | --- |
-| **Vouch Agent OS** | The complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
+| **Vouch Developer Runtime** | The local product experience around one Runtime: package an agent, execute it in an isolated Git transaction, inspect exact effects and control release. | Low-level integration, Runtime profile initialization and diagnostics implemented; packaged adapters, `watch`, live cancellation and review UX planned |
+| **Vouch Agent OS** | The enterprise product experience and complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
 | **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Narrow single-node local-Git profile implemented |
 | **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Atomic task admission, live OCI authority preflight and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
-| **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Rooted filesystem and local Git exist; common interface and remote connectors planned |
+| **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Generic interface and remote drivers planned. Local Git currently uses a dedicated transaction path, not that future interface |
 | **Vouch Contracts** | Optional verification module that turns human-owned intent into evidence obligations used by Runtime policy. | Beta |
 
 The diagram states the intended ownership boundary, not a completion claim.
@@ -76,7 +95,7 @@ starting any broker or agent workload. Execution still advances only the
 transaction ledger; paired run lifecycle and durable budget charging are the
 next Runtime milestone.
 
-Every consequential action must follow one authority path:
+The target remote-effect path is:
 
 ```text
 agent proposes an action
@@ -88,47 +107,70 @@ agent proposes an action
   -> commit | compensate | reconcile | require manual recovery
 ```
 
-An agent with direct downstream credentials can bypass Vouch. A deployment is
-therefore enforcement-grade only when production credentials and network paths
-are available exclusively through Vouch connector drivers.
+This broker-and-connector path is not implemented in the current production
+profile; the older action endpoints are disabled there. Today the contained
+effect boundary is mutation of a private Git worktree followed by exact
+inspection, verification, approval and a local-ref compare-and-swap.
 
-The current local-Git transaction is the first kernel and connector slice. A
-complete Vouch Agent OS external claim requires both non-bypassable,
+An agent with direct downstream credentials can bypass Vouch. A future
+multi-system deployment is therefore enforcement-grade only when production
+credentials and network paths are available exclusively through Vouch
+connector drivers.
+
+The current local-Git transaction is the first kernel transaction-and-effect
+slice. A complete Vouch Agent OS external claim requires both non-bypassable,
 multi-system Runtime enforcement and a Vouch Control Plane managing a fleet of
 those Runtimes.
 
-## Runtime quick start
+## Developer Runtime: current local-Git integration
 
 The current runtime requires Git, an OCI engine such as Docker, a running
 `vouchd`, and a digest-pinned agent image.
 
-Build the local binaries:
+This is a low-level developer integration, not yet a self-serve desktop agent
+environment. `vouch runtime init` creates a strict repository-owned profile and
+`vouch doctor` diagnoses Git, OCI, profile, local-image and daemon readiness.
+Packaged adapters, daemon supervision, `watch`, live cancellation and a
+friendly diff/apply flow remain roadmap work.
+
+Build the CLI from source:
 
 ```sh
-go install ./cmd/vouch ./cmd/vouchd
+go install ./cmd/vouch
 ```
 
-Start a development daemon for one repository:
+In a Git repository with a `HEAD` commit, register an agent image that is
+already present in the local OCI engine:
 
 ```sh
-vouchd \
-  --repo /path/to/service \
-  --db /tmp/vouch-service/kernel.db \
-  --socket /tmp/vouch-service/vouchd.sock \
-  --transaction-root /tmp/vouch-service/transactions
-```
-
-Run an agent in an isolated transaction:
-
-```sh
-vouch --repo /path/to/service run \
-  --socket /tmp/vouch-service/vouchd.sock \
-  --namespace local \
-  --intent "Fix authentication without changing public behavior" \
-  --runtime oci \
+vouch --repo /path/to/service runtime init \
+  --agent coding-agent \
   --image registry.example/coding-agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
   -- /usr/local/bin/agent
 ```
+
+`--source-digest` identifies the source or build input used for that image; it
+is deliberately not invented by Vouch. Start the repository-local development
+daemon in one terminal:
+
+```sh
+vouch --repo /path/to/service daemon
+```
+
+In another terminal, diagnose the selected integration and run it:
+
+```sh
+vouch --repo /path/to/service doctor --agent coding-agent
+
+vouch --repo /path/to/service run \
+  --intent "Fix authentication without changing public behavior" \
+  --agent coding-agent
+```
+
+Doctor warnings, such as an intentionally stopped daemon or omitting
+`--agent`, do not make the command fail. A selected missing image, invalid
+profile, unavailable OCI engine or unready existing daemon does.
 
 For a developer, the integration contract is deliberately small:
 
@@ -154,12 +196,11 @@ cd /workspace
 exec /opt/my-agent --task-file "$VOUCH_TASK_PATH"
 ```
 
-For repeatable integrations, define a strict, repository-owned
-`.vouch/agent-profiles.json` and select it by name:
+`vouch runtime init` writes the strict, repository-owned
+`.vouch/agent-profiles.json`. Select that profile by name:
 
 ```sh
 vouch --repo /path/to/service run \
-  --socket /tmp/vouch-service/vouchd.sock \
   --intent "Fix authentication without changing public behavior" \
   --agent coding-agent
 ```
@@ -181,7 +222,6 @@ credential never enters the agent container:
 ```sh
 # No model authority: network=none and no model credential in the container.
 vouch --repo /path/to/service run \
-  --socket /tmp/vouch-service/vouchd.sock \
   --intent "Apply the deterministic migration" \
   --agent migration-agent
 
@@ -189,7 +229,6 @@ vouch --repo /path/to/service run \
 # reachable. OPENAI_API_KEY is a transaction-scoped broker token, not the
 # provider credential.
 vouch --repo /path/to/service run \
-  --socket /tmp/vouch-service/vouchd.sock \
   --intent "Fix the failing authentication test" \
   --agent coding-agent \
   --model-provider openai
@@ -202,10 +241,10 @@ grant, or an ungranted model provider fails before any broker or agent
 container starts.
 
 For concrete scenarios rather than placeholders, see
-[Real-world Runtime examples](docs/EXAMPLES.md). It includes a fully runnable
-authentication-hotfix repository and agent image, a production
-model-assisted coding flow, a networkless migration generator, and an explicit
-description of which enterprise connector examples are not implemented yet.
+[Runtime examples](docs/EXAMPLES.md). It includes a runnable deterministic
+authentication-hotfix fixture, illustrative model-assisted and networkless
+deployment patterns, and an explicit description of which enterprise
+connector examples are not implemented.
 
 `vouch run` then creates the isolated worktree, runs the agent, freezes its Git
 effects, and performs deterministic sequence validation. Inspect the result
@@ -213,15 +252,13 @@ with:
 
 ```sh
 vouch --repo /path/to/service status <transaction-id> \
-  --socket /tmp/vouch-service/vouchd.sock
+  --namespace local
 
 # Advanced compatibility surface:
 vouch --repo /path/to/service tx effects \
-  --socket /tmp/vouch-service/vouchd.sock \
   --namespace local --id <transaction-id>
 
 vouch --repo /path/to/service tx events \
-  --socket /tmp/vouch-service/vouchd.sock \
   --namespace local --id <transaction-id>
 ```
 
