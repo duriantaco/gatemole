@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 )
 
 type transactionClient interface {
+	AdmitTask(context.Context, string, admission.Request) (admission.Result, error)
 	CreateTransaction(context.Context, model.TransactionEvent) (transactionreducer.Projection, error)
 	GetTransaction(context.Context, string, string) (transactionreducer.Projection, error)
 	ListTransactions(context.Context, string) ([]model.AgentTransaction, error)
@@ -27,7 +29,7 @@ type transactionClient interface {
 	CreateTransactionWorktree(context.Context, string, string, int64, string, model.Principal) (kernelclient.TransactionWorktreeResult, error)
 	StartAgentExecution(context.Context, string, string, int64, string, string, string, string, string, string, model.Principal) (transactionreducer.Projection, error)
 	FinishAgentExecution(context.Context, string, string, int64, string, model.AgentExecutionStatus, *int, string, string, model.Principal) (transactionreducer.Projection, error)
-	RunTransactionAgent(context.Context, string, string, int64, string, string, []string, int64, model.Principal) (kernelclient.TransactionAgentRunResult, error)
+	RunTransactionAgent(context.Context, string, string, int64, string, []string, int64, model.Principal) (kernelclient.TransactionAgentRunResult, error)
 	StageTransaction(context.Context, string, string, int64, model.Principal) (kernelclient.TransactionStageResult, error)
 	ValidateTransaction(context.Context, string, string, int64, model.Principal) (kernelclient.TransactionValidationResult, error)
 	RecordTransactionVerification(context.Context, string, string, int64, string, model.VerificationStatus, string, string, string, []model.ArtifactRef, string, model.Principal) (kernelclient.TransactionVerificationRecordResult, error)

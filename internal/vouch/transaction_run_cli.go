@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
@@ -121,6 +122,11 @@ func transactionRunNamed(
 	runID := flags.String("run", "", "participating agent run ID; generated when omitted")
 	revision := flags.String("revision", "HEAD", "base Git revision")
 	timeout := flags.Duration("timeout", 30*time.Minute, "maximum agent execution duration")
+	modelProvider := flags.String(
+		"model-provider",
+		"",
+		"allow model egress only through the daemon broker for this provider",
+	)
 	runtimeClass := flags.String("runtime", "oci", "execution runtime: oci or host")
 	image := flags.String("image", "", "digest-pinned OCI image")
 	agent := flags.String("agent", "", "named agent profile from the strict repo profile document")
@@ -139,6 +145,14 @@ func transactionRunNamed(
 	}
 	if *runtimeClass != "oci" && *runtimeClass != "host" {
 		fmt.Fprintf(stderr, "%s --runtime must be oci or host\n", commandName)
+		return 2
+	}
+	if *modelProvider != "" && !model.IsIdentifier(*modelProvider) {
+		fmt.Fprintf(stderr, "%s --model-provider must be an identifier\n", commandName)
+		return 2
+	}
+	if *modelProvider != "" && *runtimeClass != "oci" {
+		fmt.Fprintf(stderr, "%s --model-provider requires --runtime oci\n", commandName)
 		return 2
 	}
 	if *agent == "" && len(command) == 0 {
@@ -211,53 +225,64 @@ func transactionRunNamed(
 		*runID = "run:" + *id
 	}
 	actor := model.Principal{ID: *actorID, Kind: model.PrincipalKind(*actorKind)}
-	now := time.Now().UTC()
 	profileBinding, err := selectedProfile.binding()
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	task, err := model.NewAgentTask(
-		transactionTaskID(*id),
-		*id,
+	maxWallTimeSeconds := int64(*timeout / time.Second)
+	resources := []model.ContractResource{{
+		ID: "workspace",
+		Selector: model.ResourceSelector{
+			Kind:    "filesystem",
+			Pattern: "workspace/**",
+		},
+		Operations: []string{"filesystem.read", "filesystem.write"},
+		Conditions: model.CapabilityConditions{
+			WorkspaceRoot: "workspace",
+		},
+	}}
+	if *modelProvider != "" {
+		resources = append(resources, model.ContractResource{
+			ID: "model-egress",
+			Selector: model.ResourceSelector{
+				Kind:    "model",
+				Pattern: *modelProvider + "/*",
+			},
+			Operations: []string{"model.invoke"},
+		})
+	}
+	admissionRequest := admission.Request{
+		Version:        admission.RequestVersion,
+		IdempotencyKey: *id,
+		TransactionID:  *id,
+		RunID:          *runID,
+		Intent:         string(intentBytes),
+		AgentProfile:   profileBinding,
+		Sponsor: model.Principal{
+			ID:   *sponsorID,
+			Kind: model.PrincipalKind(*sponsorKind),
+		},
+		Actor: actor,
+		Contract: admission.ContractSpec{
+			Risk:      "high",
+			Resources: resources,
+			Budgets: model.BudgetLimits{
+				MaxWallTimeSeconds: &maxWallTimeSeconds,
+			},
+		},
+	}
+	client := newClient(*socket)
+	admitted, err := client.AdmitTask(
+		context.Background(),
 		*namespace,
-		*runID,
-		string(intentBytes),
-		profileBinding,
-		now,
+		admissionRequest,
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	transaction := model.AgentTransaction{
-		Version:                model.AgentTransactionVersion,
-		ID:                     *id,
-		Namespace:              *namespace,
-		IntentDigest:           task.IntentDigest,
-		Sponsor:                model.Principal{ID: *sponsorID, Kind: model.PrincipalKind(*sponsorKind)},
-		AgentRunIDs:            []string{*runID},
-		Task:                   &task,
-		StageBindings:          []model.StageBinding{},
-		State:                  model.TransactionCreated,
-		EffectIDs:              []string{},
-		VerificationResultIDs:  []string{},
-		OutstandingApprovalIDs: []string{},
-		EventSequence:          1,
-		CreatedAt:              now,
-		UpdatedAt:              now,
-	}
-	creation, err := transactionreducer.CreationEvent(transaction, actor)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	client := newClient(*socket)
-	projection, err := client.CreateTransaction(context.Background(), creation)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
+	projection := admitted.Transaction
 	projection, err = client.StartTransaction(
 		context.Background(), *namespace, *id,
 		projection.Transaction.EventSequence, actor,
@@ -287,7 +312,7 @@ func transactionRunNamed(
 			processContext,
 			*namespace, *id,
 			worktree.Projection.Transaction.EventSequence,
-			*runID, *image, command, int64(*timeout/time.Second), actor,
+			*image, command, 0, actor,
 		)
 		if executeErr != nil {
 			fmt.Fprintln(stderr, executeErr)
@@ -405,11 +430,6 @@ func generateTransactionID(now time.Time) (string, error) {
 		now.UTC().Format("20060102T150405Z"),
 		hex.EncodeToString(random),
 	), nil
-}
-
-func transactionTaskID(transactionID string) string {
-	sum := sha256.Sum256([]byte(transactionID))
-	return "task:" + hex.EncodeToString(sum[:16])
 }
 
 func digestCommand(command []string) (string, error) {

@@ -15,6 +15,16 @@
     "namespace": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
     "intent_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
     "task": { "$ref": "vouch.agent_task.v0.schema.json" },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_digest", "run_id", "contract_digest"],
+      "properties": {
+        "task_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "contract_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" }
+      }
+    },
     "sponsor": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" },
     "agent_run_ids": {
       "type": "array",

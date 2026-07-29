@@ -13,7 +13,7 @@ event recovery across a real daemon restart. Keeping the harnesses separate
 prevents the new kernel claim from weakening or silently changing the existing
 114-assertion release-gate acceptance floor.
 
-Agent Transaction Control has a third, independent acceptance harness:
+The Vouch Runtime transaction path has a third, independent acceptance harness:
 
 ```sh
 scripts/vouchtransactionbench.sh

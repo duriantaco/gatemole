@@ -194,6 +194,10 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.ready)
+	mux.HandleFunc(
+		"POST /v0/namespaces/{namespace}/task-admissions",
+		s.admitTask,
+	)
 	mux.HandleFunc("POST /v0/runs", s.requireLegacyHostRuntime(s.createRun))
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/runs", s.listRuns)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/runs/{runID}", s.getRun)
@@ -210,7 +214,10 @@ func (s *Server) Handler() http.Handler {
 		"POST /v0/namespaces/{namespace}/runs/{runID}/actions",
 		s.requireLegacyHostRuntime(s.executeAction),
 	)
-	mux.HandleFunc("POST /v0/transactions", s.createTransaction)
+	mux.HandleFunc(
+		"POST /v0/transactions",
+		s.requireLegacyTransactionCreation(s.createTransaction),
+	)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions", s.listTransactions)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions/{transactionID}", s.getTransaction)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions/{transactionID}/events", s.listTransactionEvents)
@@ -241,6 +248,24 @@ func (s *Server) requireLegacyHostRuntime(next http.HandlerFunc) http.HandlerFun
 				Operation: "legacy_host_runtime",
 				Resource:  r.URL.Path,
 				Message:   "legacy host run and filesystem action APIs are disabled by daemon policy",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) requireLegacyTransactionCreation(
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.executionPolicy.EnforcementProfile ==
+			store.EnforcementProfileProduction {
+			writeError(w, &model.KernelError{
+				Code:      model.ErrorCapabilityDenied,
+				Operation: "legacy_transaction_creation",
+				Resource:  r.URL.Path,
+				Message:   "production transactions require atomic task admission",
 			})
 			return
 		}
@@ -510,7 +535,8 @@ func writeError(w http.ResponseWriter, err error) {
 			status = http.StatusBadRequest
 		case model.ErrorNotFound:
 			status = http.StatusNotFound
-		case model.ErrorConflict, model.ErrorTransactionConflict:
+		case model.ErrorConflict, model.ErrorIdempotencyConflict,
+			model.ErrorTransactionConflict:
 			status = http.StatusConflict
 		case model.ErrorCapabilityDenied, model.ErrorCapabilityExpired, model.ErrorCapabilityRevoked,
 			model.ErrorDelegationExceeded, model.ErrorBudgetExceeded:
