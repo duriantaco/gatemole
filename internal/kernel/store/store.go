@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/reducer"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
@@ -33,6 +34,26 @@ type TransactionStore interface {
 	VerifyTransaction(context.Context, string, string) error
 }
 
+// AdmissionStore atomically creates and retrieves the immutable authority
+// envelope that binds a task, contract, run, capabilities, and transaction.
+type AdmissionStore interface {
+	AdmitTask(context.Context, admission.Prepared) (admission.Result, bool, error)
+	GetTaskAdmission(context.Context, string, string) (admission.Result, string, error)
+	GetExecutionAuthority(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
+	AppendTransactionEventsIfRunCurrent(context.Context, string, int64, int64, string, []model.TransactionEvent) (transactionreducer.Projection, error)
+}
+
+// ExecutionAuthoritySnapshot is the consistently read authority envelope used
+// immediately before execution. The task, contract, and grants are immutable
+// admission outputs; the run and transaction are their current projections.
+type ExecutionAuthoritySnapshot struct {
+	Task        model.AgentTask
+	Contract    model.ExecutionContract
+	Grants      []model.CapabilityGrant
+	Run         reducer.Projection
+	Transaction transactionreducer.Projection
+}
+
 // Store combines the local kernel persistence boundaries with lifecycle
 // management. Implementations must commit an event and its projection in one
 // transaction.
@@ -40,6 +61,7 @@ type Store interface {
 	RunStore
 	EventStore
 	TransactionStore
+	AdmissionStore
 	Health(context.Context) error
 	Close() error
 }

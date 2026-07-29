@@ -61,40 +61,13 @@ func resolveNamedAgentProfile(
 	if err != nil {
 		return resolvedAgentProfile{}, err
 	}
-	document, err := model.DecodeStrict[agentProfileDocument](data)
+	document, err := decodeAgentProfileDocument(data)
 	if err != nil {
-		return resolvedAgentProfile{}, fmt.Errorf("decode agent profiles: %w", err)
+		return resolvedAgentProfile{}, err
 	}
-	if document.Version != agentProfilesVersion {
-		return resolvedAgentProfile{}, fmt.Errorf(
-			"agent profiles version must be %q", agentProfilesVersion,
-		)
-	}
-	if len(document.Profiles) == 0 || len(document.Profiles) > maxAgentProfiles {
-		return resolvedAgentProfile{}, fmt.Errorf(
-			"agent profiles must contain between 1 and %d profiles", maxAgentProfiles,
-		)
-	}
-	seen := make(map[string]struct{}, len(document.Profiles))
 	var selected *agentProfileEntry
 	for index := range document.Profiles {
 		profile := &document.Profiles[index]
-		if !model.IsIdentifier(profile.Name) {
-			return resolvedAgentProfile{}, fmt.Errorf(
-				"agent profile %d has an invalid name", index,
-			)
-		}
-		if _, exists := seen[profile.Name]; exists {
-			return resolvedAgentProfile{}, fmt.Errorf(
-				"agent profile name %q is duplicated", profile.Name,
-			)
-		}
-		seen[profile.Name] = struct{}{}
-		if err := validateAgentProfile(*profile); err != nil {
-			return resolvedAgentProfile{}, fmt.Errorf(
-				"agent profile %q: %w", profile.Name, err,
-			)
-		}
 		if profile.Name == name {
 			selected = profile
 		}
@@ -123,6 +96,42 @@ func resolveNamedAgentProfile(
 		Entrypoint:   selected.Descriptor.Runtime.Entrypoint[0],
 		Command:      command,
 	}, nil
+}
+
+func decodeAgentProfileDocument(data []byte) (agentProfileDocument, error) {
+	document, err := model.DecodeStrict[agentProfileDocument](data)
+	if err != nil {
+		return agentProfileDocument{}, fmt.Errorf("decode agent profiles: %w", err)
+	}
+	if err := validateAgentProfileDocument(document); err != nil {
+		return agentProfileDocument{}, err
+	}
+	return document, nil
+}
+
+func validateAgentProfileDocument(document agentProfileDocument) error {
+	if document.Version != agentProfilesVersion {
+		return fmt.Errorf("agent profiles version must be %q", agentProfilesVersion)
+	}
+	if len(document.Profiles) == 0 || len(document.Profiles) > maxAgentProfiles {
+		return fmt.Errorf(
+			"agent profiles must contain between 1 and %d profiles", maxAgentProfiles,
+		)
+	}
+	seen := make(map[string]struct{}, len(document.Profiles))
+	for index, profile := range document.Profiles {
+		if !model.IsIdentifier(profile.Name) {
+			return fmt.Errorf("agent profile %d has an invalid name", index)
+		}
+		if _, exists := seen[profile.Name]; exists {
+			return fmt.Errorf("agent profile name %q is duplicated", profile.Name)
+		}
+		seen[profile.Name] = struct{}{}
+		if err := validateAgentProfile(profile); err != nil {
+			return fmt.Errorf("agent profile %q: %w", profile.Name, err)
+		}
+	}
+	return nil
 }
 
 func validateAgentProfile(profile agentProfileEntry) error {

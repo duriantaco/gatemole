@@ -43,7 +43,7 @@ func (s *Server) identityMiddleware(next http.Handler) http.Handler {
 			writeIdentityError(w, http.StatusForbidden, "identity role does not authorize this operation")
 			return
 		}
-		namespace := namespaceFromPath(r.URL.Path)
+		namespace := namespaceFromPath(r.URL.EscapedPath())
 		var body []byte
 		if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			body, err = io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))

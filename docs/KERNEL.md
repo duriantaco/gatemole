@@ -1,13 +1,11 @@
 # Local Agent Kernel
 
-Vouch includes a single-machine agent control plane. This document describes
-the lower-level run/action kernel; the production transaction runtime adds the
-OCI sandbox, OIDC authorization, signed approvals, model broker, verification,
-and Git commit coordinator described in
-[Production Runtime Operations](PRODUCTION.md). The kernel is the durable
-process and authority substrate beneath
-[Agent Transaction Control](../AGENT_TRANSACTION_EXECUTION_PLAN.md), not a
-claim that the full operating system is finished.
+Vouch Runtime includes a single-machine `vouchd` authority kernel. This
+document describes its lower-level run/action substrate; the supported
+production Runtime path adds the OCI sandbox, OIDC authorization, signed
+approvals, model broker, verification and Git commit coordinator described in
+[Production Runtime Operations](PRODUCTION.md). This subsystem is not a claim
+that the complete Vouch Agent OS is finished.
 
 The implemented path is:
 
@@ -16,7 +14,7 @@ ExecutionContract
   -> time-bounded CapabilityGrant
   -> ActionRequest
   -> durable request and authorization events
-  -> rooted filesystem driver
+  -> rooted filesystem connector driver
   -> committed | failed | unknown receipt
 ```
 
@@ -31,8 +29,10 @@ their existing CLI behavior.
 - SQLite transactions, optimistic event cursors, namespace predicates, and
   restart recovery.
 - `vouchd` over a mode-`0600` Unix socket and `vouch daemon` as a convenience.
-- Run create, inspect, list, event, pause, resume, cancel, and capability
-  installation commands.
+- Run create, inspect, list, event, pause, resume, cancel and capability
+  installation commands. Pause, resume and cancel currently transition only
+  the lower-level run record; they do not control a running production OCI
+  workload.
 - Execution-contract compilation into stable, expiring capability grants.
 - Typed filesystem read/write actions with output limits and workspace
   containment.
@@ -43,7 +43,8 @@ their existing CLI behavior.
 
 Filesystem access uses Go's [`os.Root`](https://pkg.go.dev/os#Root) API. Operations are resolved beneath an
 already-open repository and workspace root, including symlink traversal checks.
-The driver writes through a synced temporary file and an in-root atomic rename.
+The connector driver writes through a synced temporary file and an in-root
+atomic rename.
 
 ## Local walkthrough
 
@@ -110,15 +111,15 @@ projection and event history before and after restart.
 
 This lower-level run/action slice mediates only actions submitted to its
 filesystem broker. It cannot stop a process that also has direct host
-filesystem access. Use the production transaction runtime for untrusted agent
-execution: it launches the agent in the daemon-owned OCI boundary, authenticates
-operator requests, and removes direct model credentials.
+filesystem access. Use the production Vouch Runtime path for untrusted agent
+execution: it launches the agent in the daemon-owned OCI boundary,
+authenticates operator requests and removes direct model credentials.
 
 Not yet implemented:
 
-- MCP, GitHub API, database, or cloud action drivers.
+- MCP, GitHub API, database or cloud connector drivers.
 - OIDC discovery/JWKS refresh, identity lifecycle provisioning, or a
-  multi-tenant network control plane.
+  multi-tenant Runtime API.
 - Capability revocation events.
 - Leases, schedulers, or distributed stores.
 - Portable canonical JSON signatures; the current event digest is a local v0

@@ -1,16 +1,21 @@
-name: CI
+name: Full validation
 
 on:
-  pull_request:
   push:
     branches:
       - main
+  schedule:
+    - cron: "17 3 * * *"
+  release:
+    types:
+      - published
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: full-validation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

@@ -1,257 +1,346 @@
-# Vouch Runtime Roadmap
+# Vouch Agent OS Roadmap
 
-## Product direction
+## Direction
 
-Vouch Runtime is the transaction runtime for autonomous agents. The current
-product is not the older release-contract compiler, and it is not yet a complete
-Agent OS.
+**Vouch Agent OS** is the complete architecture: the organization-wide Control
+Plane, a fleet of customer-side Vouch Runtimes, the transaction protocol and
+connector model. It is not a separate daemon.
 
-The product hierarchy is:
+**Vouch Runtime** is the deployable enforcement boundary. The trusted
+**`vouchd` kernel** lives inside each Runtime and owns authority, durable
+transaction state, policy decisions, approvals and commit coordination.
 
-| Layer | Role | Status |
+One kernel supports two product experiences:
+
+| Experience | User promise | Current truth |
 | --- | --- | --- |
-| Vouch Runtime | Isolate, stage, verify, authorize, commit and recover an agent task | Current product |
-| `vouchd` | Trusted transaction kernel and local enforcement point | Implemented |
-| Vouch Contracts | Optional contract-to-obligation verification module | Implemented beta module |
-| Vouch Control Plane | Fleet, policy, approvals, audit, connectors and enterprise administration | Future commercial layer |
-| Agent OS | Non-bypassable transaction boundary across the important resources in an agent workflow | Long-term north star |
+| **Vouch Developer Runtime** | Run an existing agent locally with bounded authority, isolated effects, review and recovery. | A manually operated local-Git path plus profile initialization and diagnostics exists. Packaging, maintained adapters, live supervision and review UX need product work. |
+| **Vouch Agent OS** | Govern consequential agent actions across customer systems and a fleet of Runtimes. | Enterprise experience and full target architecture only. The action protocol, remote connectors, cross-run policy and Control Plane are planned. |
 
-The immediate technical category remains **Agent Transaction Control**. Vouch
-should earn the Agent OS description through enforcement coverage rather than
-adopt it as a premature marketing claim.
+The experiences are different packaging and operations around the same
+enforcement semantics, not separate kernels. The honest current external
+product message is:
+
+> **Vouch Runtime — stateful transaction and outcome integrity for local Git
+> actions proposed by autonomous agents.**
+
+The market problem is real, but generic identity, policy gateways, durable
+agent runtimes, workflow orchestration and fleet control planes are already
+crowded categories. The reasoning and competitive evidence are recorded in
+[Product Validation](docs/PRODUCT_VALIDATION.md).
 
 ## Product thesis
 
-Agents will receive useful authority only when organizations can control the
-complete task, not merely approve isolated tool calls after the fact.
+An agent should be able to propose useful work without possessing ambient
+production authority.
 
 ```text
-human intent
-  -> admitted agent execution
-  -> staged, normalized effects
-  -> exact-state verification
-  -> outcome-oriented approval
-  -> ordered commit and receipts
-  -> postconditions and recovery
+admit exact intent and delegated authority
+  -> execute an untrusted agent inside a bounded Runtime
+  -> turn attempted actions into typed proposed effects
+  -> evaluate individual actions and the composed task
+  -> stage or hold effects where possible
+  -> verify exact preconditions, invariants and postconditions
+  -> obtain approval for the frozen outcome when required
+  -> commit in dependency order
+  -> reconcile, compensate or require manual recovery
 ```
 
-Vouch succeeds when a team grants an agent permission to complete work it
-previously allowed the agent only to suggest.
+Vouch succeeds when a customer safely grants an agent authority to complete a
+task it previously allowed the agent only to suggest.
 
-## Implemented foundation
+## Current state
 
-The repository already contains:
+The repository contains a substantial foundation:
 
-- Strict versioned resources for agent images, execution contracts, runs,
-  capabilities, actions, transactions, effects, verifications, approvals,
-  commit plans, checkpoints and events.
-- Deterministic reducers and append-only hash-chained histories.
-- SQLite event/projection persistence, optimistic concurrency and restart
-  recovery.
-- `vouchd` over a mode-`0600` Unix socket.
-- Daemon-owned OCI execution with non-root identities, read-only roots,
-  resource limits and bounded output.
-- Transaction-specific model brokering with provider credential isolation,
-  model/tool policy, token budgets and durable receipts.
-- Detached Git worktrees, bounded raw staging, immutable tree revisions and
-  exact read-only verifier materializations.
-- Normalized effect ledgers and initial sequence/separation policy.
-- OIDC role and namespace enforcement.
-- Immutable approval packages, signed independent approvals and a distinct
-  release identity.
-- Compare-and-swap publication to allowed local Git refs and crash
+- strict resources for tasks, images, contracts, runs, capabilities, actions,
+  transactions, effects, verifications, approvals and commit plans;
+- deterministic reducers and hash-chained event histories;
+- SQLite persistence, optimistic concurrency and restart recovery;
+- daemon-owned OCI agent and verifier execution;
+- isolated Git worktrees, immutable tree staging and exact verifier
+  materialization;
+- model credential isolation, token limits and receipts;
+- OIDC operator identity and signed, independent approvals;
+- sequence findings, compare-and-swap local Git publication and crash
   reconciliation.
-- Readiness checks and separate kernel, transaction, runtime, Contracts and
-  production acceptance harnesses.
-- The optional Vouch Contracts compiler, obligation IR, evidence import and
-  release-policy module.
 
-## Current supported profile
+The supported profile remains one node, one security tenant and publication to
+an allowed local Git ref. It does not yet control a remote enterprise system.
+Its developer integration is also low-level: the user must operate the daemon,
+provide a digest-pinned OCI image and use transaction-oriented inspection
+commands.
 
-The supported runtime profile is deliberately narrow:
+### Next architecture gap
 
-- One node, one security tenant and one trusted host/VM.
-- One non-root daemon boundary using SQLite and local storage.
-- Preloaded digest-pinned agent, verifier and broker images.
-- Daemon-owned mandatory verifiers.
-- OIDC operator identity, signed approvals and separation of duties.
-- Publication to an allowed local Git branch ref.
+The production `vouch run` path now uses one daemon-owned, idempotent admission
+operation to persist the exact `AgentTask`, content-bound
+`ExecutionContract`, real `AgentRun`, initial capability grants and
+`AgentTransaction` in one SQLite transaction.
 
-The profile does not include remote push or pull-request merge, deployment,
-database effects, submodules, multi-tenancy, a network control API, distributed
-scheduling or HA. Stable versioned binary packaging and upgrade compatibility
-are still pending. The complete requirements remain in
-[docs/PRODUCTION.md](docs/PRODUCTION.md).
+Immediately before OCI launch, `vouchd` now reloads a consistent live snapshot
+of those resources and compiles a fail-closed execution plan. Caller-supplied
+image and command material must match admitted digests; only full-workspace
+read/write and explicitly granted provider-scoped model brokering are
+currently supported. Expired, terminal, narrowed or otherwise unsupported
+authority starts no workload.
 
-## Execution order
+Before any broker or agent workload starts, `vouchd` now atomically verifies
+that both snapshot heads are still current and records execution start in the
+transaction ledger. A concurrent run or transaction change therefore starts
+no workload. Execution is not yet one paired lifecycle: the OCI workload
+advances the transaction without advancing the admitted run, and usage is not
+yet durably charged to run budgets. OS-3 must next pair execution start,
+settlement and recovery across both ledgers before remote connectors are
+added. The older brokered `ActionRequest` endpoints remain disabled by the
+production profile.
 
-### Phase 0: Coherent developer surface
+## Execution principles
 
-Make the implemented runtime understandable and usable without exposing its
-internal state-machine choreography.
+1. **One authority path.** Task, run, contract, capabilities, transaction and
+   release scope are admitted atomically.
+2. **Kernel before driver.** Connector behavior is implemented behind one
+   conformance-tested interface, not inside GitHub-specific API handlers.
+3. **No ambient credentials.** Agents never receive downstream production
+   credentials or unrestricted egress.
+4. **External truth before retry.** An ambiguous non-idempotent action is
+   reconciled; it is never retried blindly.
+5. **Exact approval.** Any material change to authority, effects, verification,
+   policy or release target invalidates approval.
+6. **Connector-specific recovery.** Reversible, compensatable and irreversible
+   effects remain distinct.
+7. **Integrate standards.** Use existing identity, policy and orchestration
+   systems rather than rebuilding them.
+8. **Commercial evidence gates breadth.** A merged feature is not product
+   validation.
 
-- Implemented: task execution is the primary top-level `vouch run` workflow;
-  `status`, `approve` and `release` are product-facing commands; the older run
-  kernel is under `vouch kernel`; and the compiler/evidence surface is grouped
-  under `vouch contracts`.
-- Add `watch`, product-level `effects`, `events`, `cancel` and
-  `doctor` experiences around one transaction ID.
-- Add a strict versioned runtime configuration file.
-- Ship stable binary/container installation and a service definition.
-- Publish an explicit CLI and schema compatibility policy.
+## Execution workstreams
 
-Exit criteria:
+Each item is a bounded workstream delivered through short, independently
+reviewable pull requests. Status describes the current repository, not market
+validation.
 
-- A developer can install Vouch, start a local runtime, run a supported coding
-  agent and understand the next required action from one quick start.
-- Normal use does not require manually authoring event envelopes, digests or
-  sequence cursors.
+| Change | Status | Deliverable | Required acceptance |
+| --- | --- | --- | --- |
+| **OS-0: architecture truth** | Complete | README architecture and glossary; evidence-backed product validation; this executable roadmap; terminology cleanup in kernel docs. | Every architecture box maps to implemented code or is clearly marked planned or external. Documentation makes no unsupported production claim. |
+| **OS-1: focused validation lanes** | Complete | At most three required PR lanes: Go checks, affected acceptance and documentation when changed. Run the full race, vulnerability and benchmark collections on `main`, nightly and release. Retain production OCI acceptance for security-critical Runtime changes. | Normal PR gate completes in a bounded target such as 12 minutes. Path rules cannot skip production acceptance when kernel, sandbox, identity, approval, release or connector code changes. |
+| **OS-2: atomic task admission** | Complete | One daemon-owned, idempotent endpoint persists the exact task, `ExecutionContract`, real `AgentRun`, initial capability grants and `AgentTransaction` in one database transaction. The server authors authoritative events and digests. | Fault injection after every persistence step creates no orphan resources. Identical idempotency retry returns the same admission; a changed retry conflicts. Every transaction references a digest-matching run and contract. |
+| **OS-3: bind execution authority and data boundaries** | In progress | OCI execution transitions the admitted `AgentRun`. Identity, sponsor and parent lineage, contract, capabilities, deadline, allowed resources, data classes, model egress and budgets become authoritative. Task limits may narrow daemon ceilings but never widen them. | Run and transaction state cannot diverge after success, failure or injected crash. Expired authority prevents start. Time, model, tool and cost limits fail closed and are durably charged across restart. Denied mounts, connector reads, resource classes and model-egress destinations are inaccessible rather than merely recorded. |
+| **OS-4: durable supervisor and circuit breaker** | Planned | Asynchronous workload start, durable desired state and execution lease; functional `watch`, `cancel`, kill and revocation. “Pause” means stop at a declared safe boundary, not arbitrary process snapshotting. | Repeated start creates one workload. Cancel terminates the agent and broker within a bounded interval and prevents release. No new effect executes after revocation. Restart produces one reconciled outcome. |
+| **DX-1: Developer Runtime onboarding** | In progress | Runtime-aware project setup and diagnostics, a versioned CLI release, one maintained coding-agent profile and local daemon setup. Keep generated configuration explicit and repository-owned. | On a clean supported machine, a developer can install Vouch, initialize a repository, diagnose prerequisites and start one maintained agent without hand-authoring kernel configuration. |
+| **DX-2: Developer review shell** | Planned | Readable status and diff plus explicit apply/reject, preserving the exact underlying transaction and evidence IDs. Reuse OS-4 for `watch` and real cancellation. | A developer can inspect the exact diff and evidence, then apply or reject it without low-level `tx` commands or database access. |
+| **OS-5: connector interface and transaction coordinator** | Planned | Introduce `Plan → Stage/Hold → Inspect → Verify → Commit → Reconcile → Compensate`; add a connector registry plus a durable dependency-ordered coordinator. Each connector persists preparation state, commit state and receipts. Unknown results stop dependent work; restart performs reconciliation before retry or compensation. Move local Git behind the interface only after the generic harness passes. | Two fake connectors prove dependency-ordered prepare/commit, stop-on-unknown, restart recovery, reverse compensation and manual-recovery escalation. Faults are injected before dispatch, during dispatch and after an external effect but before its receipt. Connectors cannot mint authority. Existing local-Git production acceptance remains behaviorally unchanged. |
+| **OS-6: versioned Runtime action protocol and broker** | Planned | Replace or converge the legacy broker behind a supported `ActionRequest → decision/approval → receipt` protocol. A transaction-scoped workload credential binds sandbox transport, task, run, transaction, delegated identity, capability, deadline and idempotency key. Publish stable status/event cursors, error semantics and one maintained Go client. Direct private-worktree mutation remains an explicitly contained, stageable boundary. | Local transport rejects forged, cross-run, expired and replayed credentials. Approval resumes only the exact immutable request after restart. A fake connector proves allow, deny, approval, expiry and revocation without exposing its credential. N/N-1 protocol and adapter-conformance fixtures pass; every attempted external effect is attributable. |
+| **OS-7: lineage-aware temporal policy** | Planned | Persist immutable identity, delegation, action and effect facts across runs and transactions. Evaluate bounded temporal and separation-of-duties rules across sessions, systems, child agents and a shared sponsor lineage. Ordinary stateless decisions may use an ACS/Cedar/OPA adapter, but Vouch remains authoritative for history and commit. | An AP-style fixture spanning separate sessions and delegated identities is denied for the composed sequence while individually valid actions remain allowed. Restart yields the same decision. Retention and query bounds are explicit, and the policy adapter cannot authorize or commit an effect outside the Runtime transaction. |
+| **GH-1: GitHub ref driver** | Planned | After OS-5 and OS-6, add daemon-owned GitHub App authentication, installation/repository allowlist, exact-base branch publication and reconciliation. No pull request or merge yet. | Credentials never enter the task, sandbox, events or logs. Retry is idempotent, stale base fails, and a simulated timeout after remote mutation reconciles to the exact commit without another mutation. |
+| **GH-2: protected PR driver** | Planned | Idempotent create/update, transaction marker, exact head/base binding and a concise reviewer summary. Material updates invalidate prepared authority. | Retry creates no duplicate PR. Foreign or stale heads fail closed. Summary explains intent, material effects, verification, risk and required authority without dumping the internal ledger. |
+| **GH-3: exact-SHA merge** | Planned | Recheck head SHA, required checks, review policy, approval package and releaser separation immediately before merge; reconcile ambiguous outcomes. | Mutated head, failed check, expired approval and approver-as-releaser fail. Injected timeout yields at most one merge. Receipt identifies the exact reviewed and merged SHA. |
+| **OPS-1: release, API and evidence** | Planned | Versioned Runtime configuration and local API contract, daemon container/service definition, audit-bundle export and compatibility/upgrade policy. | A clean supported VM completes the documented transaction. N/N-1 API/config compatibility, restart, backup and restore pass. JSON and Markdown evidence replay to the authoritative projection. |
+| **CP-1: pilot Vouch Control Plane** | Planned | Runtime enrollment and health, signed policy distribution, approval routing, central receipt collection and fleet kill/revocation. Build only after paid-pilot evidence. | Vouch Control Plane loss cannot duplicate effects or erase local receipts. Cached-policy behavior is explicit and fails safely. One partner operates multiple Runtimes. |
 
-### Phase 1: Public runtime API and agent protocol
+## Product milestones
 
-Turn the internal foundation into an embeddable product.
+### Milestone A: Vouch Developer Runtime preview
 
-- Publish public versioned API resource packages and an OpenAPI document.
-- Publish a supported Go client; add another SDK only after the API stabilizes.
-- Add idempotent task creation and mutation requests.
-- Add bounded event/status streaming and pagination.
-- Implemented locally: strict named profiles make `AgentImage` executable with
-  a pinned OCI reference and fixed entrypoint.
-- Implemented locally: `vouch.agent_task.v0` durably retains and digest-binds
-  exact intent, transaction/run/profile/image/command identity and is mounted
-  read-only at `/vouch/task.json`. External encrypted artifact storage remains
-  control-plane work.
-- Wire execution contracts, budgets, verifier profiles and release targets into
-  transaction creation.
-- Provide a generic command adapter and one polished coding-agent adapter.
-
-Exit criteria:
-
-- An external application can submit and observe a transaction without
-  importing `internal/` packages or reproducing CLI orchestration.
-- The exact task, agent image, runtime policy and verifier set are immutable and
-  attributable.
-
-### Phase 2: Deep remote-Git workflow
-
-Build the first complete customer workflow rather than many shallow connectors.
-
-- GitHub App installation and short-lived credential brokering.
-- Staged branch and pull-request creation/update with idempotency and receipts.
-- Exact commit/status/check bindings.
-- Reviewer-facing approval package and decision UX.
-- Merge/reconciliation semantics that expose conflicts and unknown outcomes.
-- Audit bundle export for one transaction.
-
-Exit criteria:
-
-- A design partner lets an agent open or update a protected change through
-  Vouch that it would not let the agent publish directly.
-- No GitHub effect becomes real outside the frozen policy, verification and
-  approval package.
-
-### Phase 3: Vouch Control Plane
-
-Build the future commercial layer around self-hosted runtime data planes.
-
-- Runtime registration, health and fleet inventory.
-- Organization policy distribution and versioning.
-- SSO/RBAC, approval routing and delegation.
-- Audit retention, search, export and SIEM integration.
-- Usage, model-cost and budget visibility.
-- Connector and verifier profile management.
-- Remote revocation and incident controls.
-- Managed or enterprise-supported deployment options.
-
-The commercial boundary is management and assurance at organization scale.
-The local runtime should remain useful on its own. Likely charging units are
-controlled agent transactions or active agents, with infrastructure/model
-compute accounted for separately; pricing must be validated with paid pilots.
+Complete **OS-0 through OS-4**, **DX-1** and **DX-2**. OS-5 through OS-7 are
+required for the enterprise connector path, not for an honest local developer
+preview.
 
 Exit criteria:
 
-- One paid design partner manages multiple runtime workers through the control
-  plane.
-- Control-plane loss does not cause acknowledged effects to be duplicated or
-  authoritative local receipts to disappear.
+- one maintained agent integration runs through the documented local setup;
+- one task creates one durable chain through run, Git effects, verification,
+  approval and local-ref outcome;
+- expiry and cancellation affect the real workload;
+- the developer can inspect the exact diff and evidence, then explicitly apply
+  or reject it without database surgery;
+- the documentation names the single-node, local-Git and full-workspace limits.
 
-### Phase 4: Multi-system transaction packs
+At this point Vouch may describe the deliverable as a **Vouch Developer Runtime
+preview**, not a complete Vouch Agent OS.
 
-Expand only through connectors with explicit stage, commit, reconciliation and
-recovery semantics.
+### Milestone B: Vouch Runtime GitHub pilot
 
-Priority order:
+Complete **OS-5**, **OS-6**, **GH-1 through GH-3** and **OPS-1**. Complete
+**OS-7** before the multi-system production pilot; it may proceed in parallel
+with the first GitHub connector proof.
 
-1. Kubernetes deployment, canary health and rollback.
-2. PostgreSQL migration staging, invariants and compensation metadata.
-3. A combined GitHub + Kubernetes + PostgreSQL transaction.
+GitHub is a technical proving ground, not an assumed standalone market. Native
+GitHub agent controls already provide isolated execution, safe write outputs,
+protected branches and human merge. The proof must demonstrate Vouch-specific
+properties: task authority, exact outcome binding, connector receipts and
+ambiguous-effect reconciliation.
 
-Every connector must classify effects as read-only, stageable, reversible,
-compensatable or irreversible. Unknown non-idempotent effects are reconciled,
-never retried blindly.
+Exit criteria:
 
-### Phase 5: Distributed runtime
+- every GitHub mutation belongs to an admitted Vouch transaction;
+- the agent receives no GitHub write credential;
+- mutation after approval invalidates release;
+- restart and injected timeouts create no duplicate branch, PR or merge;
+- one operator can install and complete the supported transaction without
+  database surgery.
 
-Broaden the deployment claim only after the single-node semantics remain stable.
+### Milestone C: Vouch Runtime multi-system production pilot
 
-- PostgreSQL and object-storage persistence.
-- Leases, scheduling, quotas, priorities and admission control.
-- Multi-tenant network API and data-plane authentication.
-- HA, failover, upgrade and disaster-recovery procedures.
-- Data-residency and retention controls.
-- Multiple runtime and agent adapters.
+Add deep connectors in this order:
 
-Only after these paths are non-bypassable should Vouch describe the deployed
-system as an Agent OS.
+1. Kubernetes deployment, canary health, traffic progression and rollback.
+2. PostgreSQL migration dry-run, invariants, native transaction where possible
+   and compensation/recovery metadata otherwise.
+3. One combined GitHub + Kubernetes + PostgreSQL transaction.
 
-## Vouch Contracts roadmap
+Exit criteria:
 
-Vouch Contracts remains an optional verification module, not a parallel product
-identity. Its priorities should support runtime authority:
+- connector credentials and network paths are non-bypassable;
+- commit dependencies and receipts span all three systems;
+- fault injection after every release boundary produces `committed`,
+  `rolled_back`, `partially_committed` or `manual_recovery_required` truthfully;
+- unknown non-idempotent work is never duplicated.
 
-- Compile obligations into daemon-owned verifier requirements.
-- Bind obligation coverage and evidence provenance into approval packages.
-- Import SARIF, coverage, deployment, metrics and rollback evidence.
-- Publish schemas and compatibility tests for compiler artifacts.
-- Add scoped signer and exception policy.
-- Improve source diagnostics and authoring only where real runtime pilots show
-  contract-maintenance cost.
+This milestone validates the Runtime enforcement layer. It does not by itself
+complete the Vouch Agent OS architecture.
 
-The Contracts module does not inspect arbitrary diffs and pronounce code
-correct. AI verifiers may contribute evidence but cannot be the sole authority
-for high-impact effects.
+### Milestone D: Vouch Control Plane pilot
+
+Build **CP-1** only after the commercial gates pass. Expand it incrementally
+with organization policy simulation, SSO/RBAC, approval delegation, audit
+retention/search/SIEM, connector configuration and usage/cost visibility.
+
+The local Runtime remains authoritative for effects and receipts. A Control
+Plane outage may stop new authority according to policy, but must never cause a
+known effect to be duplicated or an acknowledged receipt to disappear.
+
+Exit criteria:
+
+- one paid partner manages at least two Runtimes through the Control Plane;
+- signed policy and revocation reach each enrolled Runtime;
+- approval routing and central receipt collection preserve local authority;
+- Control Plane loss follows the declared cached-policy behavior without
+  duplicating an effect.
+
+After this exit, the complete system may be presented as a **Vouch Agent OS
+private preview**. Production enterprise claims still require the distributed
+operations in Milestone E.
+
+### Milestone E: distributed Runtime and vertical packs
+
+After single-node semantics and paid usage are stable:
+
+- PostgreSQL and object-storage persistence;
+- leases, scheduling, quotas, priorities and admission control;
+- multi-tenant network API and Runtime workload authentication;
+- HA, failover, upgrades, disaster recovery, residency and retention;
+- finance/ERP, cloud operations and customer-operations transaction packs.
+
+Finance packs should interoperate with existing ERP segregation-of-duties
+controls and payment standards such as AP2. They must prove a cross-system or
+delegation-lineage gap rather than duplicate native SAP controls.
 
 ## Commercial validation
 
-Find teams considering coding or operations agents with write access and ask
-for the last workflow they refused to automate. Do not broaden the product
-until:
+Engineering and customer discovery run in parallel.
 
-- Three organizations provide a real workflow and its policy constraints.
-- Two permit monitor-mode or local-runtime integration.
-- One agrees to a paid control-plane or enterprise pilot.
-- The buyer values task-level control beyond logs and raw tool approvals.
-- Vouch produces measurable permission expansion.
+### Problem gate
 
-Primary metrics:
+- Interview 20 enterprises with live agent pilots.
+- Pass only if at least 8 describe consequential write authority as a top-three
+  blocker, 5 provide a recent refused workflow and 3 accept a scoped pilot.
 
-- Transactions and material effects mediated before release.
-- Permission-expansion events.
-- Automatic, focused-approval, revise and block rates.
-- False-block rate and approval latency.
-- Verification coverage of declared postconditions.
-- Unknown, partial-commit, compensation-failure and manual-recovery rates.
-- Duplicate non-idempotent effects; target zero.
-- Replay mismatch or unattributed effect; target zero.
+### Existing-controls gate
 
-## Non-goals
+For each workflow, model the strongest solution using the customer's existing
+identity provider, cloud/API gateway, native application controls and
+Camunda/Temporal or equivalent workflow engine.
 
-Vouch should not claim to:
+Continue only when customers identify a material composed-effect,
+exact-outcome or recovery gap that existing controls cannot cover acceptably.
 
-- Be a general-purpose coding agent or reasoning framework.
-- Be an identity provider or credential vault.
-- Be only an MCP gateway or per-call policy proxy.
-- Prove arbitrary code correct.
-- Replace production security review or incident response.
-- Offer universal rollback or fictional cross-system ACID semantics.
-- Provide production multi-tenancy or HA before those paths exist.
+### Non-bypassability gate
+
+At least 3 pilot customers must be willing to remove scoped credentials from
+the agent and route every relevant write through a Vouch Runtime. Otherwise the
+product is advisory middleware.
+
+### Permission-expansion and recovery gate
+
+Each pilot must complete at least 20 real transactions, including 5 tasks the
+customer previously restricted to humans, with:
+
+- zero unauthorized, duplicate or unattributed material effects;
+- zero replay mismatches;
+- explicit reconciliation for every ambiguous external result;
+- measured false-block rate and approval latency.
+
+### Commercial gate
+
+Obtain two paid pilots, not only free design partnerships, before building the
+Vouch Control Plane.
+
+Stop or reposition if customers are satisfied by native controls, refuse
+non-bypassable mediation, cannot name a material cross-action gap or value
+receipts and recovery only as optional compliance evidence.
+
+## Validation strategy
+
+Required pull-request validation should stay proportionate:
+
+1. **Go checks:** formatting, module consistency, vet and unit tests.
+2. **Affected acceptance:** the smallest kernel, Runtime, connector or
+   Contracts scenario that proves the changed invariant.
+3. **Documentation:** strict documentation build only when documentation or
+   public schemas change.
+
+Full race, vulnerability, all-benchmark and production matrices run on
+`main`, nightly and releases, with path-sensitive production acceptance still
+required for security-critical changes. A new feature should add one focused
+acceptance scenario rather than another overlapping benchmark family.
+
+## Vouch Contracts
+
+Vouch Contracts remains an optional verification module. Its Runtime priorities
+are:
+
+- bind obligation and evidence requirements into atomic task admission;
+- run required verification under daemon-owned profiles;
+- bind exact coverage and evidence provenance into approval packages;
+- add formats only when a real connector or pilot requires them.
+
+Do not expand Contracts into a parallel product, generic AI reviewer or
+unbounded authoring project.
+
+## Explicit deferrals
+
+- A new identity provider, credential vault or agent directory.
+- A new generic policy language or competing guardrail standard.
+- A general workflow/process orchestration engine.
+- Broad MCP passthrough without typed effects and recovery semantics.
+- SAP, Salesforce, email and broad cloud connectors before the heterogeneous
+  software transaction works.
+- Cross-session finance policies before identity lineage and effect history are
+  authoritative.
+- Universal rollback or fictional cross-system ACID guarantees.
+- Arbitrary process snapshot/resume.
+- Multi-node scheduling, production multi-tenancy and HA before paid evidence.
+- A large dashboard, marketplace or multiple SDKs before the public API and
+  connector contract stabilize.
+- Further generic observability and evaluation features.
+
+## Metrics
+
+Technical invariants:
+
+- duplicate non-idempotent effects: **zero**;
+- unattributed material effects: **zero**;
+- replay/projection mismatch: **zero**;
+- authority exercised after expiry or revocation: **zero**;
+- unknown outcome automatically retried: **zero**.
+
+Product metrics:
+
+- permission-expansion events;
+- transactions and material effects mediated;
+- automatic, approval, revise and block rates;
+- false-block rate and approval latency;
+- postcondition verification coverage;
+- unknown, partial-commit, compensation-failure and manual-recovery rates;
+- pilot conversion and paid renewal.

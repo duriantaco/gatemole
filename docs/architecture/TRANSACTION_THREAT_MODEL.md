@@ -39,10 +39,16 @@ Initial required scenarios:
 
 ```text
 change security control -> change its test -> release
-create vendor -> change bank details -> initiate payment
+create vendor in one system -> change bank details in another
+  -> initiate payment under the same delegated lineage
 modify migration -> delete protected data -> deploy
 grant permission -> consume newly granted permission in the same transaction
 ```
+
+ERP products already provide native segregation-of-duties controls for common
+same-user vendor and payment conflicts. The finance scenario tests correlation
+across systems, sessions, agents or a shared delegation lineage; it must not be
+used to imply that native ERP controls do not exist.
 
 ## Stage escape and hidden effects
 
@@ -53,9 +59,9 @@ endpoint while Vouch records only the staged copy.
 
 Controls:
 
-- Remove ambient production credentials from the runtime.
-- Give the runtime access to transaction-scoped worktrees, clones, namespaces,
-  and credentials only.
+- Remove ambient production credentials from the agent sandbox.
+- Give Vouch Runtime connector drivers access only to transaction-scoped
+  worktrees, clones, namespaces and credentials.
 - Restrict egress to broker endpoints and explicit read-only sources.
 - Compare staged resources and broker receipts to expected effect inventory.
 - Mark deployments without complete mediation as monitor-only.
@@ -132,7 +138,8 @@ released before verification and approval.
 
 Controls:
 
-- Irreversible drivers implement prepare/hold and explicit release operations.
+- Connector drivers handling irreversible effects implement prepare/hold and
+  explicit release operations.
 - The transaction coordinator rejects irreversible effects whose connector
   cannot provide a reliable hold boundary.
 - Release requires a fresh approval-package digest and commit authorization.

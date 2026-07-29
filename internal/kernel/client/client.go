@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/duriantaco/vouch/internal/kernel/admission"
 	"github.com/duriantaco/vouch/internal/kernel/broker"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/reducer"
@@ -132,6 +133,17 @@ func (c *Client) CreateTransaction(ctx context.Context, event model.TransactionE
 	var projection transactionreducer.Projection
 	err := c.do(ctx, http.MethodPost, "/v0/transactions", event, &projection)
 	return projection, err
+}
+
+func (c *Client) AdmitTask(
+	ctx context.Context,
+	namespace string,
+	request admission.Request,
+) (admission.Result, error) {
+	var result admission.Result
+	path := "/v0/namespaces/" + url.PathEscape(namespace) + "/task-admissions"
+	err := c.do(ctx, http.MethodPost, path, request, &result)
+	return result, err
 }
 
 // CreateTaskTransaction is the product-level creation path for a single
@@ -344,7 +356,7 @@ func (c *Client) RunTransactionAgent(
 	ctx context.Context,
 	namespace, transactionID string,
 	expectedSequence int64,
-	runID, image string,
+	image string,
 	command []string,
 	timeoutSeconds int64,
 	actor model.Principal,
@@ -352,21 +364,24 @@ func (c *Client) RunTransactionAgent(
 	request := struct {
 		ExpectedSequence int64           `json:"expected_sequence"`
 		Actor            model.Principal `json:"actor"`
-		RunID            string          `json:"run_id"`
 		Image            string          `json:"image"`
 		Command          []string        `json:"command"`
-		TimeoutSeconds   int64           `json:"timeout_seconds"`
+		TimeoutSeconds   int64           `json:"timeout_seconds,omitempty"`
 	}{
 		ExpectedSequence: expectedSequence,
 		Actor:            actor,
-		RunID:            runID,
 		Image:            image,
 		Command:          append([]string(nil), command...),
 		TimeoutSeconds:   timeoutSeconds,
 	}
 	var result TransactionAgentRunResult
 	longHTTP := *c.http
-	longHTTP.Timeout = time.Duration(timeoutSeconds)*time.Second + 30*time.Second
+	if timeoutSeconds > 0 {
+		longHTTP.Timeout =
+			time.Duration(timeoutSeconds)*time.Second + 30*time.Second
+	} else {
+		longHTTP.Timeout = 0
+	}
 	longClient := &Client{http: &longHTTP, bearerToken: c.bearerToken}
 	err := longClient.do(
 		ctx, http.MethodPost,

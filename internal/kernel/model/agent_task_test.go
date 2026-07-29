@@ -38,16 +38,7 @@ func TestAgentTaskRetainsAndBindsExactIntentAndProfile(t *testing.T) {
 
 func TestAgentTransactionTaskCrossBindingIsOptionalButStrict(t *testing.T) {
 	t.Parallel()
-	task := validAgentTask(t)
-	transaction := AgentTransaction{
-		Version: AgentTransactionVersion, ID: task.TransactionID,
-		Namespace: task.Namespace, IntentDigest: task.IntentDigest, Task: &task,
-		Sponsor:     Principal{ID: "human:sponsor", Kind: PrincipalHuman},
-		AgentRunIDs: []string{task.RunID}, StageBindings: []StageBinding{},
-		State: TransactionCreated, EffectIDs: []string{},
-		VerificationResultIDs: []string{}, OutstandingApprovalIDs: []string{},
-		EventSequence: 1, CreatedAt: task.CreatedAt, UpdatedAt: task.CreatedAt,
-	}
+	transaction := validAgentTaskTransaction(t)
 	if err := transaction.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +53,88 @@ func TestAgentTransactionTaskCrossBindingIsOptionalButStrict(t *testing.T) {
 	mismatched.IntentDigest = "sha256:" + strings.Repeat("0", 64)
 	if err := mismatched.Validate(); err == nil {
 		t.Fatal("transaction accepted a task bound to a different intent")
+	}
+}
+
+func TestAgentTransactionAdmissionBindingIsOptionalButStrict(t *testing.T) {
+	t.Parallel()
+	transaction := validAgentTaskTransaction(t)
+	transaction.Admission = &TransactionAdmissionBinding{
+		TaskDigest:     transaction.Task.Digest,
+		RunID:          transaction.Task.RunID,
+		ContractDigest: "sha256:" + strings.Repeat("d", 64),
+	}
+	if err := transaction.Validate(); err != nil {
+		t.Fatalf("valid admission binding: %v", err)
+	}
+
+	legacy := transaction
+	legacy.Admission = nil
+	if err := legacy.Validate(); err != nil {
+		t.Fatalf("transaction without an admission binding was broken: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*AgentTransaction)
+	}{
+		{
+			name: "missing task",
+			edit: func(value *AgentTransaction) {
+				value.Task = nil
+			},
+		},
+		{
+			name: "different task digest",
+			edit: func(value *AgentTransaction) {
+				value.Admission.TaskDigest = "sha256:" + strings.Repeat("e", 64)
+			},
+		},
+		{
+			name: "different task run",
+			edit: func(value *AgentTransaction) {
+				value.Admission.RunID = "run:different"
+				value.AgentRunIDs = append(value.AgentRunIDs, value.Admission.RunID)
+			},
+		},
+		{
+			name: "run not attached",
+			edit: func(value *AgentTransaction) {
+				value.AgentRunIDs = []string{}
+			},
+		},
+		{
+			name: "invalid contract digest",
+			edit: func(value *AgentTransaction) {
+				value.Admission.ContractDigest = "not-a-digest"
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			mutated := transaction
+			binding := *transaction.Admission
+			mutated.Admission = &binding
+			test.edit(&mutated)
+			if err := mutated.Validate(); err == nil {
+				t.Fatal("transaction accepted an invalid admission binding")
+			}
+		})
+	}
+}
+
+func validAgentTaskTransaction(t *testing.T) AgentTransaction {
+	t.Helper()
+	task := validAgentTask(t)
+	return AgentTransaction{
+		Version: AgentTransactionVersion, ID: task.TransactionID,
+		Namespace: task.Namespace, IntentDigest: task.IntentDigest, Task: &task,
+		Sponsor:     Principal{ID: "human:sponsor", Kind: PrincipalHuman},
+		AgentRunIDs: []string{task.RunID}, StageBindings: []StageBinding{},
+		State: TransactionCreated, EffectIDs: []string{},
+		VerificationResultIDs: []string{}, OutstandingApprovalIDs: []string{},
+		EventSequence: 1, CreatedAt: task.CreatedAt, UpdatedAt: task.CreatedAt,
 	}
 }
 
