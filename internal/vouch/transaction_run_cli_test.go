@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -453,12 +454,42 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	if result.Projection.Transaction.Task == nil {
 		t.Fatal("OCI transaction did not retain its task envelope")
 	}
+	if result.Projection.Transaction.Admission == nil {
+		t.Fatal("OCI transaction did not retain its atomic admission binding")
+	}
 	if result.Execution.Status != model.AgentExecutionSucceeded ||
 		result.Execution.TaskDigest != result.Projection.Transaction.Task.Digest {
 		t.Fatalf("execution was not bound to the persisted task: %#v", result.Execution)
 	}
 	if len(result.Projection.Effects) != 1 {
 		t.Fatalf("effects=%d, want one task-driven source change", len(result.Projection.Effects))
+	}
+	admitted, requestDigest, err := kernelStore.GetTaskAdmission(
+		context.Background(), "payments", "tx:task-envelope-oci",
+	)
+	if err != nil {
+		t.Fatalf("load atomic task admission: %v", err)
+	}
+	if requestDigest != admitted.RequestDigest ||
+		admitted.Transaction.Transaction.Admission == nil ||
+		admitted.Transaction.Transaction.Admission.TaskDigest != admitted.Task.Digest ||
+		admitted.Transaction.Transaction.Admission.ContractDigest != admitted.Contract.Digest ||
+		admitted.Run.Run.ContractDigest != admitted.Contract.Digest ||
+		admitted.Run.Run.State != model.RunAdmitted ||
+		admitted.Run.Run.EventSequence != 3 ||
+		len(admitted.Grants) != 1 ||
+		len(admitted.Run.Run.CapabilityIDs) != 1 ||
+		admitted.Grants[0].ID != admitted.Run.Run.CapabilityIDs[0] {
+		t.Fatalf("atomic admission bindings are incomplete: %#v", admitted)
+	}
+	runEvents, err := kernelStore.Events(
+		context.Background(), "payments", "run:task-envelope-oci", 0,
+	)
+	if err != nil {
+		t.Fatalf("load admitted run events: %v", err)
+	}
+	if len(runEvents) != 3 {
+		t.Fatalf("admitted run events=%d, want 3", len(runEvents))
 	}
 }
 
@@ -561,15 +592,12 @@ func TestProductionRuntimePolicyRejectsHostExecution(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, string(model.ErrorCapabilityDenied)) {
 		t.Fatalf("host execution was not rejected: code=%d stderr=%s", code, stderr)
 	}
-	projection, err := newClient("").GetTransaction(
+	_, err = newClient("").GetTransaction(
 		context.Background(), "payments", "tx:production-host-denied",
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(projection.Executions) != 0 ||
-		projection.Transaction.State != model.TransactionRunning {
-		t.Fatalf("rejected host execution changed authority: %#v", projection)
+	var kernelErr *model.KernelError
+	if !errors.As(err, &kernelErr) || kernelErr.Code != model.ErrorNotFound {
+		t.Fatalf("rejected host admission persisted partial authority: %v", err)
 	}
 }
 

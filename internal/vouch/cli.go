@@ -39,6 +39,10 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 	switch rest[0] {
 	case "daemon":
 		return daemonCommand(absRepo, rest[1:], stdout, stderr)
+	case "runtime":
+		return runtimeCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "doctor":
+		return runtimeDoctorCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "run":
 		return runtimeRunCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "status":
@@ -554,6 +558,9 @@ func parseCommonArgs(args []string) (commonArgs, []string, error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--":
+			rest = append(rest, args[i:]...)
+			return common, rest, nil
 		case arg == "--json":
 			common.json = true
 		case arg == "--repo" || arg == "--manifest":
@@ -868,6 +875,8 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "commands:")
 	fmt.Fprintln(out, "  daemon [--db FILE] [--socket FILE]")
+	fmt.Fprintln(out, "  runtime init --agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]")
+	fmt.Fprintln(out, "  doctor [--agent NAME] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) (--agent NAME [-- AGENT_ARG...] | --image IMAGE -- COMMAND [ARG...])")
 	fmt.Fprintln(out, "  status ID [--namespace NS]")
 	fmt.Fprintln(out, "  approve ID [--namespace NS] --key FILE --key-id ID --approver ID --class CLASS")

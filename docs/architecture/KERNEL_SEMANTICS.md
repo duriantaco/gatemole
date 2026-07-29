@@ -40,6 +40,49 @@ Rules:
 - A reason is required when entering `blocked`, `failed`, or `cancelled`.
 - Every transition uses the next contiguous run-event sequence.
 
+## Task admission
+
+`POST /v0/namespaces/{namespace}/task-admissions` is the production authority
+creation boundary. The request contains caller-owned intent, sponsor, agent
+profile, contract limits and an idempotency key; it cannot contain event
+envelopes, lifecycle state, timestamps or authoritative digests.
+
+For a new admission, `vouchd` derives and persists the exact `AgentTask`,
+content-digest `ExecutionContract`, `AgentRun`, initial capability grants and
+`AgentTransaction` in one database transaction. It authors
+`run.created`, `capabilities.granted`, `run.state_changed` to `admitted`, and
+`transaction.created`.
+
+The idempotency key is scoped to its namespace. Retrying the same immutable
+input returns the original admission representation, including after restart
+or later lifecycle progress. Reusing the key with changed authority fails with
+`KERNEL_IDEMPOTENCY_CONFLICT`. A failed persistence step leaves none of the
+admission resources behind.
+
+## Live execution authority
+
+Before daemon-owned OCI execution performs workspace ownership changes, starts
+a model broker or launches a container, `vouchd` reads one consistent
+transaction-keyed authority snapshot. It verifies the complete run and
+transaction event histories, then compiles an execution plan from the current
+task, contract, admitted run, grants and transaction.
+
+The image reference and command remain untrusted executable material: their
+digests must match the persisted task. The caller may narrow the timeout but
+cannot widen the live deadline. The current profile supports exactly
+`workspace/**` read/write and optional `model` `<provider>/*` `model.invoke`
+authority through the configured daemon broker. Narrower mounts, unsupported
+conditions and unimplemented budgets fail before workload creation.
+
+After preflight and non-workload preparation, launch is claimed in one SQLite
+transaction: the admitted run head and transaction head must still match the
+snapshot while `agent_execution.started` is appended. The authority deadline
+also bounds model-broker startup. A stale or expired plan therefore starts no
+broker or agent container.
+
+The claim does not yet advance and settle both lifecycle ledgers. That paired
+run/transaction mutation and durable usage charging are the next OS-3 step.
+
 ## Action lifecycle
 
 ```text
@@ -57,7 +100,8 @@ Rules:
 
 - `denied`, `rejected`, `expired`, `committed`, and `failed` are terminal.
 - `unknown` is not success or failure. It means an effect may have occurred and
-  requires driver reconciliation or human resolution.
+  requires connector-specific reconciliation coordinated by `vouchd` or human
+  resolution.
 - Authorization is persisted before `executing`.
 - `committed` requires a validated receipt.
 - A request's normalized argument digest is immutable. A changed request needs
@@ -102,7 +146,8 @@ field. Human text may improve without changing the code.
 | `KERNEL_CHECKPOINT_INCOMPATIBLE` | Checkpoint cannot resume under current versions. |
 | `KERNEL_NOT_FOUND` | Requested kernel resource does not exist in the caller's namespace. |
 | `KERNEL_CONFLICT` | Optimistic concurrency or lease ownership failed. |
-| `KERNEL_DRIVER_UNAVAILABLE` | Required resource driver cannot accept work. |
+| `KERNEL_IDEMPOTENCY_CONFLICT` | An idempotency key is already bound to different immutable admission input. |
+| `KERNEL_DRIVER_UNAVAILABLE` | Required connector driver cannot accept work. |
 | `KERNEL_INTERNAL` | Unexpected trusted-kernel failure. |
 
 Unknown or internal errors fail closed at admission and action boundaries.

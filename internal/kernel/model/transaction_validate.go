@@ -66,6 +66,30 @@ func (transaction AgentTransaction) Validate() error {
 			return invalid(resource, "task.run_id", "task run must be attached to the transaction")
 		}
 	}
+	if transaction.Admission != nil {
+		admission := transaction.Admission
+		if err := validateDigest(resource, "admission.task_digest", admission.TaskDigest); err != nil {
+			return err
+		}
+		if err := validateIdentifier(resource, "admission.run_id", admission.RunID); err != nil {
+			return err
+		}
+		if err := validateDigest(resource, "admission.contract_digest", admission.ContractDigest); err != nil {
+			return err
+		}
+		if transaction.Task == nil {
+			return invalid(resource, "admission.task_digest", "admission requires the bound task")
+		}
+		if admission.TaskDigest != transaction.Task.Digest {
+			return invalid(resource, "admission.task_digest", "admission task digest does not match the transaction task")
+		}
+		if admission.RunID != transaction.Task.RunID {
+			return invalid(resource, "admission.run_id", "admission run does not match the transaction task")
+		}
+		if !slices.Contains(transaction.AgentRunIDs, admission.RunID) {
+			return invalid(resource, "admission.run_id", "admission run must be attached to the transaction")
+		}
+	}
 	if err := validatePrincipal(resource, "sponsor", transaction.Sponsor); err != nil {
 		return err
 	}

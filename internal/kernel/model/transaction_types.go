@@ -163,28 +163,38 @@ type ModelBrokerExecution struct {
 	OutputTokens        int64  `json:"output_tokens"`
 }
 
+// TransactionAdmissionBinding pins the task, run, and execution contract that
+// were admitted together. It is optional so transaction projections created
+// before atomic task admission remain readable.
+type TransactionAdmissionBinding struct {
+	TaskDigest     string `json:"task_digest"`
+	RunID          string `json:"run_id"`
+	ContractDigest string `json:"contract_digest"`
+}
+
 type AgentTransaction struct {
-	Version                string           `json:"version"`
-	ID                     string           `json:"id"`
-	Namespace              string           `json:"namespace"`
-	IntentDigest           string           `json:"intent_digest"`
-	Task                   *AgentTask       `json:"task,omitempty"`
-	Sponsor                Principal        `json:"sponsor"`
-	AgentRunIDs            []string         `json:"agent_run_ids"`
-	StageBindings          []StageBinding   `json:"stage_bindings"`
-	State                  TransactionState `json:"state"`
-	StateReason            string           `json:"state_reason,omitempty"`
-	EffectIDs              []string         `json:"effect_ids"`
-	VerificationResultIDs  []string         `json:"verification_result_ids"`
-	OutstandingApprovalIDs []string         `json:"outstanding_approval_ids"`
-	StagedStateDigest      string           `json:"staged_state_digest,omitempty"`
-	EffectSetDigest        string           `json:"effect_set_digest,omitempty"`
-	ApprovalPackageDigest  string           `json:"approval_package_digest,omitempty"`
-	CommitPlanDigest       string           `json:"commit_plan_digest,omitempty"`
-	EventSequence          int64            `json:"event_sequence"`
-	CreatedAt              time.Time        `json:"created_at"`
-	UpdatedAt              time.Time        `json:"updated_at"`
-	CompletedAt            *time.Time       `json:"completed_at,omitempty"`
+	Version                string                       `json:"version"`
+	ID                     string                       `json:"id"`
+	Namespace              string                       `json:"namespace"`
+	IntentDigest           string                       `json:"intent_digest"`
+	Task                   *AgentTask                   `json:"task,omitempty"`
+	Admission              *TransactionAdmissionBinding `json:"admission,omitempty"`
+	Sponsor                Principal                    `json:"sponsor"`
+	AgentRunIDs            []string                     `json:"agent_run_ids"`
+	StageBindings          []StageBinding               `json:"stage_bindings"`
+	State                  TransactionState             `json:"state"`
+	StateReason            string                       `json:"state_reason,omitempty"`
+	EffectIDs              []string                     `json:"effect_ids"`
+	VerificationResultIDs  []string                     `json:"verification_result_ids"`
+	OutstandingApprovalIDs []string                     `json:"outstanding_approval_ids"`
+	StagedStateDigest      string                       `json:"staged_state_digest,omitempty"`
+	EffectSetDigest        string                       `json:"effect_set_digest,omitempty"`
+	ApprovalPackageDigest  string                       `json:"approval_package_digest,omitempty"`
+	CommitPlanDigest       string                       `json:"commit_plan_digest,omitempty"`
+	EventSequence          int64                        `json:"event_sequence"`
+	CreatedAt              time.Time                    `json:"created_at"`
+	UpdatedAt              time.Time                    `json:"updated_at"`
+	CompletedAt            *time.Time                   `json:"completed_at,omitempty"`
 }
 
 // StageBinding records an isolated resource boundary owned by a transaction.

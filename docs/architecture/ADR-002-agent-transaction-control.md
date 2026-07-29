@@ -65,9 +65,12 @@ engine, or universal rollback mechanism. It consumes identity and credentials
 from existing systems, governs agents from existing runtimes, and represents
 partial failure honestly.
 
-The immediate category name is **Agent Transaction Control**. “Agent OS” is the
-long-term system description only when Vouch owns a non-bypassable transaction
-boundary across the important resources in a workflow.
+The first sellable product is **Vouch Runtime — transaction and outcome control
+for autonomous-agent actions**. **Vouch Agent OS** names the complete
+architecture: a Control Plane plus a fleet of customer-side Runtimes, the
+transaction protocol and the connector model. An external complete-enterprise
+claim requires both non-bypassable multi-system Runtime enforcement and
+demonstrated fleet-level Control Plane operation.
 
 ## Resource boundaries
 
