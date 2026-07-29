@@ -1,12 +1,30 @@
-# Agent Kernel North-Star Demonstration
+# Vouch Runtime Kernel North-Star Demonstration
 
-## Claim
+## Status
 
-Vouch can durably govern one untrusted coding agent through a complete action,
-approval, restart, evidence, and release path.
+This is a **target acceptance scenario**, not one currently executable path.
 
-The demonstration validates control-plane behavior. It does not claim that the
-agent's implementation is correct or that Vouch can infer arbitrary intent.
+The supported transaction path now atomically admits its task,
+`ExecutionContract`, `AgentRun`, initial capabilities and transaction before it
+runs an OCI agent. It then stages immutable local Git effects, validates their
+sequence, runs daemon-owned verification, binds signed approvals and publishes
+to an allowed local ref.
+
+The OCI workload does not yet advance that admitted run or consume its
+capabilities through the lower-level brokered action path. The roadmap's OS-3
+through OS-7 work closes that execution, supervision, connector and temporal
+policy gap before this document becomes an executable end-to-end acceptance
+test.
+
+## Target claim
+
+Vouch Runtime will durably govern one untrusted coding agent through a complete
+action, approval, restart, evidence and release path.
+
+The demonstration validates kernel authority and transaction behavior. It does
+not validate the future organization-wide Vouch Control Plane, claim that the
+agent's implementation is correct or claim that Vouch can infer arbitrary
+intent.
 
 ## Fixture
 
@@ -74,6 +92,8 @@ The fixture contains:
 
 ## Delivery sequence
 
-The scenario remains checked in before all steps are executable. Each kernel
-milestone converts another section from `pending` to an automated assertion.
-The final scenario is not replaced by easier component-only demonstrations.
+The scenario remains checked in before all steps are executable. Each
+kernel/Runtime milestone converts another section from target to an automated
+assertion. The final scenario is not replaced by easier component-only
+demonstrations, and the README and production guide must not present target
+steps as implemented.

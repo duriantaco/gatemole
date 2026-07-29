@@ -124,6 +124,9 @@ func ledgerHasEntries(ctx context.Context, tx *sql.Tx) (bool, error) {
 		UNION ALL SELECT 1 FROM events
 		UNION ALL SELECT 1 FROM agent_transactions
 		UNION ALL SELECT 1 FROM transaction_events
+		UNION ALL SELECT 1 FROM execution_contracts
+		UNION ALL SELECT 1 FROM agent_tasks
+		UNION ALL SELECT 1 FROM task_admissions
 	)`).Scan(&nonempty)
 	if err != nil {
 		return false, enforcementProfileError(model.ErrorInternal, "inspect ledger contents", err)
