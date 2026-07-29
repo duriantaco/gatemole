@@ -77,11 +77,80 @@ func (s *SQLiteStore) AppendTransactionEvents(
 	expectedSequence int64,
 	events []model.TransactionEvent,
 ) (transactionreducer.Projection, error) {
+	return s.appendTransactionEvents(
+		ctx,
+		namespace,
+		expectedSequence,
+		events,
+		"append_transaction_events",
+		nil,
+	)
+}
+
+// AppendTransactionEventsIfRunCurrent atomically claims launch in the
+// transaction ledger only while the run admitted with that transaction still
+// has the exact event head verified by the caller's authority snapshot.
+func (s *SQLiteStore) AppendTransactionEventsIfRunCurrent(
+	ctx context.Context,
+	namespace string,
+	expectedTransactionSequence int64,
+	expectedRunSequence int64,
+	expectedRunDigest string,
+	events []model.TransactionEvent,
+) (transactionreducer.Projection, error) {
+	const operation = "append_transaction_events_if_run_current"
+	if expectedTransactionSequence < 1 ||
+		expectedRunSequence < 1 ||
+		!digestPattern.MatchString(expectedRunDigest) {
+		return transactionreducer.Projection{}, storeError(
+			model.ErrorSchemaInvalid,
+			operation,
+			"",
+			"expected transaction and run heads are invalid",
+			nil,
+		)
+	}
+	if len(events) != 1 ||
+		events[0].Type != transactionreducer.EventAgentExecutionStarted {
+		return transactionreducer.Projection{}, storeError(
+			model.ErrorSchemaInvalid,
+			operation,
+			"",
+			"guarded run-head append requires one agent execution start event",
+			nil,
+		)
+	}
+	return s.appendTransactionEvents(
+		ctx,
+		namespace,
+		expectedTransactionSequence,
+		events,
+		operation,
+		&expectedRunHead{
+			sequence: expectedRunSequence,
+			digest:   expectedRunDigest,
+		},
+	)
+}
+
+type expectedRunHead struct {
+	sequence int64
+	digest   string
+}
+
+func (s *SQLiteStore) appendTransactionEvents(
+	ctx context.Context,
+	namespace string,
+	expectedSequence int64,
+	events []model.TransactionEvent,
+	operation string,
+	runHead *expectedRunHead,
+) (transactionreducer.Projection, error) {
 	if err := validateNamespace(namespace); err != nil {
 		return transactionreducer.Projection{}, err
 	}
 	if len(events) == 0 {
-		return transactionreducer.Projection{}, storeError(model.ErrorSchemaInvalid, "append_transaction_events", "", "at least one event is required", nil)
+		return transactionreducer.Projection{}, storeError(model.ErrorSchemaInvalid, operation, "", "at least one event is required", nil)
 	}
 	for _, event := range events {
 		if err := verifyTransactionEventDigest(event); err != nil {
@@ -90,7 +159,7 @@ func (s *SQLiteStore) AppendTransactionEvents(
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return transactionreducer.Projection{}, storeError(model.ErrorInternal, "append_transaction_events", events[0].TransactionID, "begin transaction", err)
+		return transactionreducer.Projection{}, storeError(model.ErrorInternal, operation, events[0].TransactionID, "begin transaction", err)
 	}
 	defer tx.Rollback()
 	current, err := loadTransactionProjection(ctx, tx, namespace, events[0].TransactionID)
@@ -99,17 +168,29 @@ func (s *SQLiteStore) AppendTransactionEvents(
 	}
 	if current.Transaction.EventSequence != expectedSequence {
 		return transactionreducer.Projection{}, conflict(
-			"append_transaction_events",
+			operation,
 			events[0].TransactionID,
 			fmt.Sprintf("expected transaction sequence %d, current sequence is %d", expectedSequence, current.Transaction.EventSequence),
 			nil,
 		)
 	}
+	if runHead != nil {
+		if err := verifyAdmittedRunHead(
+			ctx,
+			tx,
+			namespace,
+			current,
+			*runHead,
+			operation,
+		); err != nil {
+			return transactionreducer.Projection{}, err
+		}
+	}
 	next := current
 	eventJSON := make([][]byte, len(events))
 	for i, event := range events {
 		if event.TransactionID != current.Transaction.ID {
-			return transactionreducer.Projection{}, storeError(model.ErrorEventSequence, "append_transaction_events", event.ID, "batch contains another transaction", nil)
+			return transactionreducer.Projection{}, storeError(model.ErrorEventSequence, operation, event.ID, "batch contains another transaction", nil)
 		}
 		next, err = transactionreducer.Apply(&next, event)
 		if err != nil {
@@ -117,7 +198,7 @@ func (s *SQLiteStore) AppendTransactionEvents(
 		}
 		eventJSON[i], err = json.Marshal(event)
 		if err != nil {
-			return transactionreducer.Projection{}, storeError(model.ErrorInternal, "append_transaction_events", event.ID, "encode event", err)
+			return transactionreducer.Projection{}, storeError(model.ErrorInternal, operation, event.ID, "encode event", err)
 		}
 	}
 	if err := next.Validate(); err != nil {
@@ -125,12 +206,13 @@ func (s *SQLiteStore) AppendTransactionEvents(
 	}
 	projectionJSON, err := json.Marshal(next)
 	if err != nil {
-		return transactionreducer.Projection{}, storeError(model.ErrorInternal, "append_transaction_events", current.Transaction.ID, "encode projection", err)
+		return transactionreducer.Projection{}, storeError(model.ErrorInternal, operation, current.Transaction.ID, "encode projection", err)
 	}
 	result, err := tx.ExecContext(ctx,
 		`UPDATE agent_transactions
 		 SET event_sequence = ?, last_event_digest = ?, projection_json = ?, updated_at = ?
-		 WHERE namespace = ? AND transaction_id = ? AND event_sequence = ?`,
+		 WHERE namespace = ? AND transaction_id = ?
+		   AND event_sequence = ? AND last_event_digest = ?`,
 		next.Transaction.EventSequence,
 		next.LastEventDigest,
 		projectionJSON,
@@ -138,16 +220,17 @@ func (s *SQLiteStore) AppendTransactionEvents(
 		namespace,
 		current.Transaction.ID,
 		expectedSequence,
+		current.LastEventDigest,
 	)
 	if err != nil {
-		return transactionreducer.Projection{}, classifyWriteError("append_transaction_events", current.Transaction.ID, err)
+		return transactionreducer.Projection{}, classifyWriteError(operation, current.Transaction.ID, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return transactionreducer.Projection{}, storeError(model.ErrorInternal, "append_transaction_events", current.Transaction.ID, "read update result", err)
+		return transactionreducer.Projection{}, storeError(model.ErrorInternal, operation, current.Transaction.ID, "read update result", err)
 	}
 	if rows != 1 {
-		return transactionreducer.Projection{}, conflict("append_transaction_events", current.Transaction.ID, "transaction changed during append", nil)
+		return transactionreducer.Projection{}, conflict(operation, current.Transaction.ID, "transaction changed during append", nil)
 	}
 	for i, event := range events {
 		if err := insertTransactionEvent(ctx, tx, namespace, event, eventJSON[i]); err != nil {
@@ -155,9 +238,73 @@ func (s *SQLiteStore) AppendTransactionEvents(
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return transactionreducer.Projection{}, classifyWriteError("append_transaction_events", current.Transaction.ID, err)
+		return transactionreducer.Projection{}, classifyWriteError(operation, current.Transaction.ID, err)
 	}
 	return next, nil
+}
+
+func verifyAdmittedRunHead(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespace string,
+	transaction transactionreducer.Projection,
+	expected expectedRunHead,
+	operation string,
+) error {
+	transactionID := transaction.Transaction.ID
+	var runID, lastDigest string
+	var sequence int64
+	err := tx.QueryRowContext(
+		ctx,
+		`SELECT a.run_id, r.event_sequence, r.last_event_digest
+		 FROM task_admissions AS a
+		 JOIN runs AS r
+		   ON r.namespace = a.namespace AND r.run_id = a.run_id
+		 WHERE a.namespace = ? AND a.transaction_id = ?`,
+		namespace,
+		transactionID,
+	).Scan(&runID, &sequence, &lastDigest)
+	if errors.Is(err, sql.ErrNoRows) {
+		return storeError(
+			model.ErrorNotFound,
+			operation,
+			transactionID,
+			"transaction has no admitted run in namespace",
+			err,
+		)
+	}
+	if err != nil {
+		return storeError(
+			model.ErrorInternal,
+			operation,
+			transactionID,
+			"query admitted run head",
+			err,
+		)
+	}
+	binding := transaction.Transaction.Admission
+	if binding == nil ||
+		binding.RunID != runID ||
+		!identifierPattern.MatchString(runID) ||
+		sequence < 1 ||
+		!digestPattern.MatchString(lastDigest) {
+		return storeError(
+			model.ErrorEventChain,
+			operation,
+			transactionID,
+			"admitted run binding or event head is invalid",
+			nil,
+		)
+	}
+	if sequence != expected.sequence || lastDigest != expected.digest {
+		return conflict(
+			operation,
+			runID,
+			"admitted run changed after execution authority was loaded",
+			nil,
+		)
+	}
+	return nil
 }
 
 func (s *SQLiteStore) GetTransaction(ctx context.Context, namespace, transactionID string) (transactionreducer.Projection, error) {
@@ -320,12 +467,14 @@ func loadTransactionProjection(
 	namespace, transactionID string,
 ) (transactionreducer.Projection, error) {
 	var data []byte
+	var sequence int64
 	var lastDigest string
 	err := query.QueryRowContext(ctx,
-		`SELECT projection_json, last_event_digest FROM agent_transactions WHERE namespace = ? AND transaction_id = ?`,
+		`SELECT projection_json, event_sequence, last_event_digest
+		 FROM agent_transactions WHERE namespace = ? AND transaction_id = ?`,
 		namespace,
 		transactionID,
-	).Scan(&data, &lastDigest)
+	).Scan(&data, &sequence, &lastDigest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return transactionreducer.Projection{}, storeError(model.ErrorNotFound, "get_transaction", transactionID, "transaction not found in namespace", err)
 	}
@@ -339,8 +488,11 @@ func loadTransactionProjection(
 	if err := projection.Validate(); err != nil {
 		return transactionreducer.Projection{}, storeError(model.ErrorEventChain, "get_transaction", transactionID, "stored projection failed validation", err)
 	}
-	if projection.Transaction.Namespace != namespace || projection.Transaction.ID != transactionID || projection.LastEventDigest != lastDigest {
-		return transactionreducer.Projection{}, storeError(model.ErrorEventChain, "get_transaction", transactionID, "stored projection identity or digest is invalid", nil)
+	if projection.Transaction.Namespace != namespace ||
+		projection.Transaction.ID != transactionID ||
+		projection.Transaction.EventSequence != sequence ||
+		projection.LastEventDigest != lastDigest {
+		return transactionreducer.Projection{}, storeError(model.ErrorEventChain, "get_transaction", transactionID, "stored projection identity or event head is invalid", nil)
 	}
 	return projection, nil
 }

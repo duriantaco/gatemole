@@ -4,7 +4,7 @@ Vouch Runtime provides the executable transaction path. Its development
 profile supports local exploration; its supported enforcement profile is
 deliberately limited to a single-node, single-tenant local-Git runtime.
 
-The complete implemented lifecycle is:
+The implemented local-Git transaction path is:
 
 ```text
 human intent + selected agent profile
@@ -22,6 +22,14 @@ human intent + selected agent profile
   -> compare-and-swap update of an allowed local Git ref
 ```
 
+This is the transaction-ledger path, not yet one fully paired execution
+lifecycle. Admission creates the associated `AgentRun`, and launch revalidates
+its live authority and atomically pins both ledger heads. The OCI workload
+currently advances and settles only the transaction ledger; the run lifecycle
+and durable budget usage are not yet advanced with it. A metadata cancellation
+before launch can prevent launch, but Vouch does not yet provide a supervisor
+that interrupts an already-running production workload.
+
 Vouch can create and publish the prepared commit to an allowed local Git ref.
 It does not push to a remote, merge a pull request, deploy software, or execute
 a production-database effect. Those connectors remain outside the implemented
@@ -29,22 +37,34 @@ profile.
 
 ## Walkthrough
 
-Start the local daemon. Its transaction root must be outside the repository:
+Create a strict profile for a digest-pinned image that is already loaded in the
+local OCI engine:
 
 ```sh
-vouch --repo /path/to/service daemon \
-  --transaction-root /tmp/vouch-service-transactions
+vouch --repo /path/to/service runtime init \
+  --agent coding-agent \
+  --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  -- /usr/local/bin/agent
 ```
 
-Run a task through the primary runtime surface:
+Start the local daemon. The convenience command keeps its transaction root
+outside the repository:
 
 ```sh
+vouch --repo /path/to/service daemon
+```
+
+In another terminal, diagnose the selected profile and run a task through the
+primary Runtime surface:
+
+```sh
+vouch --repo /path/to/service doctor --agent coding-agent
+
 vouch --repo /path/to/service run \
   --namespace payments \
   --intent "Upgrade the service without changing authentication behavior" \
-  --runtime oci \
-  --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
-  -- /usr/local/bin/agent
+  --agent coding-agent
 ```
 
 `vouch run` creates and starts the transaction, creates its isolated worktree,
@@ -62,9 +82,8 @@ vouch --repo /path/to/service tx events \
   --namespace payments --id <transaction-id>
 ```
 
-For repeatable agent integrations, define `.vouch/agent-profiles.json` using
-the [public profile schema](../schemas/vouch.agent_profiles.v0.schema.json) and
-run with `--agent NAME` instead of supplying a raw image and command. The
+`vouch runtime init` writes `.vouch/agent-profiles.json` using the
+[public profile schema](../schemas/vouch.agent_profiles.v0.schema.json). The
 [checked-in fixture](../schemas/fixtures/runtime/valid/agent_profiles.json)
 shows the complete document shape.
 
@@ -81,6 +100,98 @@ VOUCH_TASK_DIGEST=<sha256 digest>
 The agent should read the task from `VOUCH_TASK_PATH`. Do not put credentials
 or other secrets in task intent; the envelope is intentionally retained in the
 durable transaction history.
+
+## Agent integration contract
+
+An existing coding agent does not need to adopt a Vouch SDK. Its OCI entrypoint
+receives:
+
+```text
+/workspace                 writable detached Git worktree
+/vouch/task.json           read-only admitted AgentTask
+VOUCH_TASK_PATH            /vouch/task.json
+VOUCH_TASK_DIGEST          digest of that exact task
+VOUCH_TRANSACTION_ID       kernel transaction identity
+VOUCH_RUN_ID               kernel run identity
+VOUCH_RUNTIME_ROLE         agent
+```
+
+The process edits `/workspace` and exits. It must not receive the source
+repository, the `vouchd` socket, Git hosting credentials or downstream
+production credentials. Vouch re-inspects the worktree, freezes the exact
+effects and records the daemon-authored process receipt.
+
+Example entrypoint:
+
+```sh
+#!/bin/sh
+set -eu
+test "$VOUCH_RUNTIME_ROLE" = agent
+test -r "$VOUCH_TASK_PATH"
+cd /workspace
+exec /opt/acme-agent --task-file "$VOUCH_TASK_PATH"
+```
+
+### No model access
+
+Without `--model-provider`, the agent starts with `network=none`; model broker
+variables are absent:
+
+```sh
+vouch --repo /path/to/service run \
+  --namespace payments \
+  --intent "Apply the checked-in deterministic migration" \
+  --agent migration-agent
+```
+
+### Explicit model access
+
+If the daemon has a pinned broker image and policy for `openai`, request that
+provider in task admission:
+
+```sh
+vouch --repo /path/to/service run \
+  --namespace payments \
+  --intent "Fix the failing idempotency test" \
+  --agent coding-agent \
+  --model-provider openai
+```
+
+The agent then receives `OPENAI_BASE_URL` and a transaction-scoped
+`OPENAI_API_KEY` that authenticate only to the internal broker. The real
+provider credential remains in `vouchd`. The broker enforces the configured
+origin, model allowlist and request/token ceilings and writes a hash-chained
+receipt ledger.
+
+```python
+import json
+import os
+import urllib.request
+
+request = urllib.request.Request(
+    os.environ["OPENAI_BASE_URL"] + "/responses",
+    data=json.dumps({
+        "model": "policy-allowed-model",
+        "input": "Review the current worktree change.",
+        "store": False,
+    }).encode(),
+    headers={
+        "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"],
+        "Content-Type": "application/json",
+    },
+)
+with urllib.request.urlopen(request, timeout=30) as response:
+    result = json.load(response)
+```
+
+The model name must also be allowed by daemon policy. Selecting an unconfigured
+provider, changing the admitted image or command, launching after expiry, or a
+terminal run transition that wins the atomic launch claim fails before any
+broker or agent workload starts.
+
+The [Runtime examples guide](EXAMPLES.md) contains a runnable deterministic
+authentication-hotfix fixture plus illustrative coding-agent and networkless
+migration deployment patterns.
 
 Verification, preparation and authority remain explicit operations:
 
@@ -115,7 +226,8 @@ development profile. Existing-transaction operations such as
 `start|worktree|stage|validate` remain available for connector development,
 recovery and debugging. They do not replace the primary task-oriented path,
 and production transaction creation requires atomic task admission. Abort
-discards an unreleased isolated worktree:
+discards an unreleased isolated worktree after execution; it is not a live
+workload-cancellation command:
 
 ```sh
 vouch --repo /path/to/service tx abort \

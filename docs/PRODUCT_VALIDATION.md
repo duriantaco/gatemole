@@ -18,12 +18,24 @@ is not yet commercially validated.
 
 The strongest current positioning is:
 
-> **Vouch Runtime provides stateful transaction and outcome integrity for
-> actions proposed by autonomous agents.**
+> **Vouch Runtime provides stateful transaction and outcome integrity for local
+> Git actions proposed by autonomous agents.**
 
 “Vouch Agent OS” describes the complete architecture. It is not a
 differentiated market category by itself and should not be the primary external
 claim yet.
+
+One kernel can still support two experiences:
+
+- **Vouch Developer Runtime:** local isolation, exact Git effects and controlled
+  release for developers integrating an existing agent. This is the shortest
+  route to real usage and kernel feedback.
+- **Vouch Agent OS:** the enterprise experience with non-bypassable remote
+  connectors, cross-run policy and fleet administration. This remains
+  conditional on connector proof and paid design-partner evidence.
+
+Developer adoption validates usability and transaction semantics; it does not
+by itself validate the enterprise buying hypothesis.
 
 ## The customer problem
 
@@ -180,19 +192,21 @@ The repository proves meaningful ingredients:
 
 It does not yet prove the intended Runtime enforcement boundary:
 
-- atomic admission now binds the retained task, a content-digest
+- atomic admission binds the retained task, a content-digest
   `ExecutionContract`, a durable `AgentRun`, initial capability grants and the
-  transaction, but production OCI execution does not yet transition that run
-  or consume those grants;
-- budgets, lineage, data boundaries and release scope are therefore not yet
-  enforced as one synchronized execution lifecycle;
+  transaction; production OCI launch now reloads that authority and atomically
+  pins the run and transaction heads, but it does not yet advance the run
+  lifecycle or durably charge budget usage;
+- lineage, durable budgets, narrower data boundaries and release scope are not
+  yet enforced as one synchronized execution lifecycle;
 - lifecycle controls do not yet interrupt a running production OCI workload;
 - there is no connector driver interface or external production connector;
 - sequence policy does not span transactions, sessions or identity lineage;
 - there is no Runtime fleet or Vouch Control Plane.
 
-The current implementation is therefore a strong local mechanism prototype,
-not yet evidence that customers will adopt or pay for the broader system.
+The current implementation is therefore a strong local enforcement slice and
+mechanism proof, not yet evidence that customers will adopt or pay for the
+broader system.
 
 ## Falsifiable product hypotheses
 
@@ -215,12 +229,13 @@ or treat the receipts and recovery guarantees as compliance nice-to-haves.
 Proceed with:
 
 1. one coherent, stateful Runtime kernel path;
-2. an authenticated agent action protocol and durable connector coordinator;
-3. lineage-aware policy across runs, transactions and systems;
-4. GitHub as the first technical driver, not an assumed standalone market;
-5. rapid Kubernetes and PostgreSQL follow-through toward one cross-system
+2. a low-friction Developer Runtime shell around that same kernel;
+3. an authenticated agent action protocol and durable connector coordinator;
+4. lineage-aware policy across runs, transactions and systems;
+5. GitHub as the first technical driver, not an assumed standalone market;
+6. rapid Kubernetes and PostgreSQL follow-through toward one cross-system
    release transaction;
-6. customer discovery and paid-pilot tests in parallel.
+7. customer discovery and paid-pilot tests in parallel.
 
 Do not build the Vouch Control Plane, a new identity system, a new generic
 policy language, a workflow engine or a connector marketplace until the paid

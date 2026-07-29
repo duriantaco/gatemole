@@ -4,10 +4,10 @@ Thanks for helping build Vouch Runtime.
 
 ## Product first principle
 
-Vouch Runtime provides transaction and outcome control for autonomous-agent
-actions. A contribution should strengthen the controlled path from task intent
-to isolated execution, staged effects, exact-state verification, authority,
-commit and recovery.
+The current Vouch Runtime provides transaction and outcome control inside a
+narrow local-Git boundary. A contribution should strengthen the controlled path
+from task intent to isolated execution, staged effects, exact-state
+verification, authority, commit and recovery.
 
 Keep the hierarchy clear:
 
@@ -16,6 +16,8 @@ Keep the hierarchy clear:
   fleet, transaction protocol and connector model.
 - Vouch Runtime is the first sellable product and customer-side enforcement
   boundary.
+- Vouch Developer Runtime is the local experience around one Runtime, using the
+  same kernel rather than a separate developer-only enforcement path.
 - `vouchd` is the trusted transaction kernel inside each Runtime.
 - Vouch Contracts is an optional verification module.
 - Vouch Control Plane is the future central fleet, policy, approval and audit

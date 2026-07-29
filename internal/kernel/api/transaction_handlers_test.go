@@ -101,18 +101,6 @@ func TestPersistedTaskAuthorizesExactAgentProfileAndMaterializesReadOnly(t *test
 	); err != nil {
 		t.Fatal(err)
 	}
-	if err := taskAuthorizesDaemonExecution(
-		&task, task.RunID, "oci", imageDigest, commandDigest,
-	); err != nil {
-		t.Fatal(err)
-	}
-	err = taskAuthorizesDaemonExecution(
-		nil, task.RunID, "oci", imageDigest, commandDigest,
-	)
-	kernelErr, ok := err.(*model.KernelError)
-	if !ok || kernelErr.Code != model.ErrorCapabilityDenied {
-		t.Fatalf("taskless daemon execution was not denied: %v", err)
-	}
 	if err := taskAuthorizesExecution(
 		&task, task.RunID, "oci", imageDigest, testDigest("f"),
 	); err == nil {

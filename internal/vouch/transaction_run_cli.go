@@ -122,6 +122,11 @@ func transactionRunNamed(
 	runID := flags.String("run", "", "participating agent run ID; generated when omitted")
 	revision := flags.String("revision", "HEAD", "base Git revision")
 	timeout := flags.Duration("timeout", 30*time.Minute, "maximum agent execution duration")
+	modelProvider := flags.String(
+		"model-provider",
+		"",
+		"allow model egress only through the daemon broker for this provider",
+	)
 	runtimeClass := flags.String("runtime", "oci", "execution runtime: oci or host")
 	image := flags.String("image", "", "digest-pinned OCI image")
 	agent := flags.String("agent", "", "named agent profile from the strict repo profile document")
@@ -140,6 +145,14 @@ func transactionRunNamed(
 	}
 	if *runtimeClass != "oci" && *runtimeClass != "host" {
 		fmt.Fprintf(stderr, "%s --runtime must be oci or host\n", commandName)
+		return 2
+	}
+	if *modelProvider != "" && !model.IsIdentifier(*modelProvider) {
+		fmt.Fprintf(stderr, "%s --model-provider must be an identifier\n", commandName)
+		return 2
+	}
+	if *modelProvider != "" && *runtimeClass != "oci" {
+		fmt.Fprintf(stderr, "%s --model-provider requires --runtime oci\n", commandName)
 		return 2
 	}
 	if *agent == "" && len(command) == 0 {
@@ -218,6 +231,27 @@ func transactionRunNamed(
 		return 1
 	}
 	maxWallTimeSeconds := int64(*timeout / time.Second)
+	resources := []model.ContractResource{{
+		ID: "workspace",
+		Selector: model.ResourceSelector{
+			Kind:    "filesystem",
+			Pattern: "workspace/**",
+		},
+		Operations: []string{"filesystem.read", "filesystem.write"},
+		Conditions: model.CapabilityConditions{
+			WorkspaceRoot: "workspace",
+		},
+	}}
+	if *modelProvider != "" {
+		resources = append(resources, model.ContractResource{
+			ID: "model-egress",
+			Selector: model.ResourceSelector{
+				Kind:    "model",
+				Pattern: *modelProvider + "/*",
+			},
+			Operations: []string{"model.invoke"},
+		})
+	}
 	admissionRequest := admission.Request{
 		Version:        admission.RequestVersion,
 		IdempotencyKey: *id,
@@ -231,18 +265,8 @@ func transactionRunNamed(
 		},
 		Actor: actor,
 		Contract: admission.ContractSpec{
-			Risk: "high",
-			Resources: []model.ContractResource{{
-				ID: "workspace",
-				Selector: model.ResourceSelector{
-					Kind:    "filesystem",
-					Pattern: "workspace/**",
-				},
-				Operations: []string{"filesystem.read", "filesystem.write"},
-				Conditions: model.CapabilityConditions{
-					WorkspaceRoot: "workspace",
-				},
-			}},
+			Risk:      "high",
+			Resources: resources,
 			Budgets: model.BudgetLimits{
 				MaxWallTimeSeconds: &maxWallTimeSeconds,
 			},
@@ -288,7 +312,7 @@ func transactionRunNamed(
 			processContext,
 			*namespace, *id,
 			worktree.Projection.Transaction.EventSequence,
-			*runID, *image, command, int64(*timeout/time.Second), actor,
+			*image, command, 0, actor,
 		)
 		if executeErr != nil {
 			fmt.Fprintln(stderr, executeErr)
