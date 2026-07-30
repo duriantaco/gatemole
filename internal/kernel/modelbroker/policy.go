@@ -1,6 +1,7 @@
 package modelbroker
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +12,9 @@ import (
 	"strings"
 )
 
-const PolicyVersion = "vouch.model_broker_policy.v0"
+const PolicyVersion = "gatemole.model_broker_policy.v0"
+
+const maxPolicyBytes = 2 << 20
 
 type Policy struct {
 	Version                   string            `json:"version"`
@@ -128,14 +131,34 @@ func LoadPolicy(path string, production bool) (Policy, error) {
 	if err != nil {
 		return Policy{}, fmt.Errorf("stat model broker policy: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Size() > 2<<20 {
+	if !info.Mode().IsRegular() || info.Size() > maxPolicyBytes {
 		return Policy{}, errors.New("model broker policy must be a regular file no larger than 2 MiB")
 	}
-	decoder := json.NewDecoder(io.LimitReader(file, 2<<20))
+	data, err := io.ReadAll(io.LimitReader(file, maxPolicyBytes+1))
+	if err != nil {
+		return Policy{}, fmt.Errorf("read model broker policy: %w", err)
+	}
+	if len(data) > maxPolicyBytes {
+		return Policy{}, errors.New("model broker policy must be a regular file no larger than 2 MiB")
+	}
+	policy, err := ParsePolicy(data, production)
+	if err != nil {
+		return Policy{}, fmt.Errorf("decode model broker policy: %w", err)
+	}
+	return policy, nil
+}
+
+// ParsePolicy validates one already-bounded model-broker policy snapshot.
+// Callers that also record a digest must hash these exact bytes.
+func ParsePolicy(data []byte, production bool) (Policy, error) {
+	if len(data) > maxPolicyBytes {
+		return Policy{}, errors.New("model broker policy must be no larger than 2 MiB")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var policy Policy
 	if err := decoder.Decode(&policy); err != nil {
-		return Policy{}, fmt.Errorf("decode model broker policy: %w", err)
+		return Policy{}, err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {

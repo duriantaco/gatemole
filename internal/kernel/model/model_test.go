@@ -134,25 +134,25 @@ func TestDriverDefinedObjectsMustStillBeSingleJSONObjects(t *testing.T) {
 func TestKernelResourceSchemasDeclareStrictVersionedObjects(t *testing.T) {
 	t.Parallel()
 	expected := map[string]string{
-		"vouch.agent_image.v0.schema.json":         AgentImageVersion,
-		"vouch.execution_contract.v0.schema.json":  ExecutionContractVersion,
-		"vouch.agent_run.v0.schema.json":           AgentRunVersion,
-		"vouch.capability_grant.v0.schema.json":    CapabilityGrantVersion,
-		"vouch.action_request.v0.schema.json":      ActionRequestVersion,
-		"vouch.run_event.v0.schema.json":           RunEventVersion,
-		"vouch.checkpoint.v0.schema.json":          CheckpointVersion,
-		"vouch.policy_decision.v0.schema.json":     PolicyDecisionVersion,
-		"vouch.agent_task.v0.schema.json":          AgentTaskVersion,
-		"vouch.agent_transaction.v0.schema.json":   AgentTransactionVersion,
-		"vouch.effect.v0.schema.json":              EffectVersion,
-		"vouch.verification_result.v0.schema.json": VerificationResultVersion,
-		"vouch.approval_package.v0.schema.json":    ApprovalPackageVersion,
-		"vouch.approval_decision.v0.schema.json":   ApprovalDecisionVersion,
-		"vouch.commit_plan.v0.schema.json":         CommitPlanVersion,
-		"vouch.transaction_event.v0.schema.json":   TransactionEventVersion,
-		"vouch.agent_execution.v0.schema.json":     AgentExecutionVersion,
+		"gatemole.agent_image.v0.schema.json":         AgentImageVersion,
+		"gatemole.execution_contract.v0.schema.json":  ExecutionContractVersion,
+		"gatemole.agent_run.v0.schema.json":           AgentRunVersion,
+		"gatemole.capability_grant.v0.schema.json":    CapabilityGrantVersion,
+		"gatemole.action_request.v0.schema.json":      ActionRequestVersion,
+		"gatemole.run_event.v0.schema.json":           RunEventVersion,
+		"gatemole.checkpoint.v0.schema.json":          CheckpointVersion,
+		"gatemole.policy_decision.v0.schema.json":     PolicyDecisionVersion,
+		"gatemole.agent_task.v0.schema.json":          AgentTaskVersion,
+		"gatemole.agent_transaction.v0.schema.json":   AgentTransactionVersion,
+		"gatemole.effect.v0.schema.json":              EffectVersion,
+		"gatemole.verification_result.v0.schema.json": VerificationResultVersion,
+		"gatemole.approval_package.v0.schema.json":    ApprovalPackageVersion,
+		"gatemole.approval_decision.v0.schema.json":   ApprovalDecisionVersion,
+		"gatemole.commit_plan.v0.schema.json":         CommitPlanVersion,
+		"gatemole.transaction_event.v0.schema.json":   TransactionEventVersion,
+		"gatemole.agent_execution.v0.schema.json":     AgentExecutionVersion,
 	}
-	files, err := filepath.Glob(filepath.Join(schemaRoot(t), "vouch.*.schema.json"))
+	files, err := filepath.Glob(filepath.Join(schemaRoot(t), "gatemole.*.schema.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

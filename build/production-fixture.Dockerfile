@@ -1,5 +1,5 @@
 FROM scratch
 
-COPY vouch-production-fixture /vouch-production-fixture
+COPY gatemole-production-fixture /gatemole-production-fixture
 
-ENTRYPOINT ["/vouch-production-fixture"]
+ENTRYPOINT ["/gatemole-production-fixture"]

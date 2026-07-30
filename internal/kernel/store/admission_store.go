@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (
@@ -82,6 +82,17 @@ func (s *SQLiteStore) AdmitTask(
 		)
 	}
 	defer tx.Rollback()
+	if err := requireStoredRuntimeBinding(
+		ctx,
+		tx,
+		prepared.Result.RuntimeID,
+		prepared.Result.EnforcementProfile,
+		false,
+		admitTaskOperation,
+		prepared.IdempotencyKey,
+	); err != nil {
+		return admission.Result{}, false, err
+	}
 
 	existing, requestDigest, err := loadTaskAdmission(
 		ctx,
@@ -454,6 +465,17 @@ func loadTaskAdmission(
 		resultJSON, idempotencyKey, "admission result",
 	)
 	if err != nil {
+		return admission.Result{}, "", err
+	}
+	if err := requireStoredRuntimeBinding(
+		ctx,
+		query,
+		result.RuntimeID,
+		result.EnforcementProfile,
+		result.Version == admission.LegacyResultVersion,
+		"get_task_admission",
+		idempotencyKey,
+	); err != nil {
 		return admission.Result{}, "", err
 	}
 	task, err := decodeAdmissionJSON[model.AgentTask](taskJSON, taskID, "task")

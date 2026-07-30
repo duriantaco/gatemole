@@ -11,18 +11,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/approval"
-	"github.com/duriantaco/vouch/internal/kernel/broker"
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/eventlog"
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	kernelmodelbroker "github.com/duriantaco/vouch/internal/kernel/modelbroker"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/approval"
+	"github.com/duriantaco/gatemole/internal/kernel/broker"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/eventlog"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 const maxRequestBytes = 2 << 20
@@ -40,6 +41,7 @@ type Server struct {
 	gitStage              *gitstage.Manager
 	transactionRepository string
 	transactionStaging    string
+	runtimeID             string
 	sequencePolicy        transactionreducer.SequencePolicy
 	executionPolicy       ExecutionRuntimePolicy
 	approvalTrust         *approval.TrustStore
@@ -69,23 +71,24 @@ type ExecutionRuntimePolicy struct {
 	// AllowedImageDigests is retained for development/test compatibility.
 	// Production daemon configuration populates AllowedAgentImageDigests and
 	// uses VerifierProfiles for the independent verifier trust domain.
-	AllowedImageDigests        map[string]struct{}
-	VerifierProfiles           *verification.ProfileSet
-	RequireVerifierProfiles    bool
-	EnforcementProfile         string
-	IdentityTrustDigest        string
-	ApprovalTrustDigest        string
-	EnginePath                 string
-	VerifierUID                int
-	VerifierGID                int
-	VerifierMemoryBytes        int64
-	VerifierCPUMillis          int64
-	VerifierPIDsLimit          int64
-	VerifierTmpfsBytes         int64
-	MaxVerificationTimeoutSecs int64
-	MaxAgentTimeoutSecs        int64
-	MaxConcurrentWorkloads     int
-	ModelBroker                *ModelBrokerRuntimePolicy
+	AllowedImageDigests          map[string]struct{}
+	VerifierProfiles             *verification.ProfileSet
+	VerifierProfilesSourceDigest string
+	RequireVerifierProfiles      bool
+	EnforcementProfile           string
+	IdentityTrustDigest          string
+	ApprovalTrustDigest          string
+	EnginePath                   string
+	VerifierUID                  int
+	VerifierGID                  int
+	VerifierMemoryBytes          int64
+	VerifierCPUMillis            int64
+	VerifierPIDsLimit            int64
+	VerifierTmpfsBytes           int64
+	MaxVerificationTimeoutSecs   int64
+	MaxAgentTimeoutSecs          int64
+	MaxConcurrentWorkloads       int
+	ModelBroker                  *ModelBrokerRuntimePolicy
 }
 
 func (policy ExecutionRuntimePolicy) agentImageAllowed(digest string) bool {
@@ -94,7 +97,8 @@ func (policy ExecutionRuntimePolicy) agentImageAllowed(digest string) bool {
 		allowed = policy.AllowedImageDigests
 	}
 	if len(allowed) == 0 {
-		return true
+		return policy.EnforcementProfile !=
+			store.EnforcementProfileProduction
 	}
 	_, ok := allowed[digest]
 	return ok
@@ -102,7 +106,7 @@ func (policy ExecutionRuntimePolicy) agentImageAllowed(digest string) bool {
 
 type ModelBrokerRuntimePolicy struct {
 	Image               string
-	PolicyPath          string
+	PolicyData          []byte
 	PolicyDigest        string
 	Policy              kernelmodelbroker.Policy
 	ProviderBearerToken string
@@ -142,8 +146,39 @@ func WithTransactionRuntime(manager *gitstage.Manager, repositoryRoot, stagingRo
 	}
 }
 
+// WithRuntimeIdentity binds API admissions and preflight responses to the
+// stable local Runtime instance that owns the daemon ledger.
+func WithRuntimeIdentity(runtimeID string) Option {
+	return func(server *Server) {
+		server.runtimeID = runtimeID
+	}
+}
+
 func WithExecutionRuntimePolicy(policy ExecutionRuntimePolicy) Option {
 	return func(server *Server) {
+		if policy.ModelBroker != nil {
+			broker := *policy.ModelBroker
+			broker.PolicyData = append([]byte(nil), broker.PolicyData...)
+			broker.Policy.AllowedModels = append(
+				[]string(nil),
+				broker.Policy.AllowedModels...,
+			)
+			broker.Policy.AllowedToolTypes = append(
+				[]string(nil),
+				broker.Policy.AllowedToolTypes...,
+			)
+			if broker.Policy.ProviderHeaders != nil {
+				headers := make(
+					map[string]string,
+					len(broker.Policy.ProviderHeaders),
+				)
+				for name, value := range broker.Policy.ProviderHeaders {
+					headers[name] = value
+				}
+				broker.Policy.ProviderHeaders = headers
+			}
+			policy.ModelBroker = &broker
+		}
 		server.executionPolicy = policy
 	}
 }
@@ -195,10 +230,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.ready)
 	mux.HandleFunc(
+		"POST /v0/namespaces/{namespace}/runtime/preflight",
+		s.preflightRuntime,
+	)
+	mux.HandleFunc(
 		"POST /v0/namespaces/{namespace}/task-admissions",
 		s.admitTask,
 	)
-	mux.HandleFunc("POST /v0/runs", s.requireLegacyHostRuntime(s.createRun))
+	mux.HandleFunc(
+		"POST /v0/runs",
+		s.requireLegacyRunCreation(s.requireLegacyHostRuntime(s.createRun)),
+	)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/runs", s.listRuns)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/runs/{runID}", s.getRun)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/runs/{runID}/events", s.listEvents)
@@ -208,7 +250,9 @@ func (s *Server) Handler() http.Handler {
 	)
 	mux.HandleFunc(
 		"POST /v0/namespaces/{namespace}/runs/{runID}/capabilities",
-		s.requireLegacyHostRuntime(s.compileCapabilities),
+		s.requireLegacyCapabilityCompilation(
+			s.requireLegacyHostRuntime(s.compileCapabilities),
+		),
 	)
 	mux.HandleFunc(
 		"POST /v0/namespaces/{namespace}/runs/{runID}/actions",
@@ -234,10 +278,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/approvals", s.resolveTransactionApproval)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/release", s.releaseTransaction)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/abort", s.abortTransaction)
+	var handler http.Handler = s.requireRuntimeHeader(mux)
 	if s.identityVerifier != nil {
-		return s.identityMiddleware(mux)
+		return s.identityMiddleware(handler)
 	}
-	return mux
+	return handler
 }
 
 func (s *Server) requireLegacyHostRuntime(next http.HandlerFunc) http.HandlerFunc {
@@ -255,17 +300,56 @@ func (s *Server) requireLegacyHostRuntime(next http.HandlerFunc) http.HandlerFun
 	}
 }
 
+func (s *Server) requireLegacyRunCreation(
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if runtimeidentity.IsRuntimeID(s.runtimeID) {
+			writeError(w, &model.KernelError{
+				Code:      model.ErrorCapabilityDenied,
+				Operation: "legacy_run_creation",
+				Resource:  r.URL.Path,
+				Message:   "configured Runtime runs require atomic task admission",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) requireLegacyCapabilityCompilation(
+	next http.HandlerFunc,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if runtimeidentity.IsRuntimeID(s.runtimeID) {
+			writeError(w, &model.KernelError{
+				Code:      model.ErrorCapabilityDenied,
+				Operation: "legacy_capability_compilation",
+				Resource:  r.URL.Path,
+				Message:   "configured Runtime capabilities are installed atomically by task admission",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
 func (s *Server) requireLegacyTransactionCreation(
 	next http.HandlerFunc,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.executionPolicy.EnforcementProfile ==
-			store.EnforcementProfileProduction {
+		if runtimeidentity.IsRuntimeID(s.runtimeID) ||
+			s.executionPolicy.EnforcementProfile ==
+				store.EnforcementProfileProduction {
+			message := "production transactions require atomic task admission"
+			if runtimeidentity.IsRuntimeID(s.runtimeID) {
+				message = "configured Runtime transactions require atomic task admission"
+			}
 			writeError(w, &model.KernelError{
 				Code:      model.ErrorCapabilityDenied,
 				Operation: "legacy_transaction_creation",
 				Resource:  r.URL.Path,
-				Message:   "production transactions require atomic task admission",
+				Message:   message,
 			})
 			return
 		}
@@ -375,6 +459,14 @@ func (s *Server) appendEvent(w http.ResponseWriter, r *http.Request) {
 	lock := s.runLock(r.PathValue("namespace"), r.PathValue("runID"))
 	lock.Lock()
 	defer lock.Unlock()
+	if err := s.requireCurrentRuntimeRunAuthority(
+		r.Context(),
+		r.PathValue("namespace"),
+		request.Event.RunID,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
 	projection, err := s.store.AppendEvent(
 		r.Context(),
 		r.PathValue("namespace"),
@@ -410,6 +502,14 @@ func (s *Server) compileCapabilities(w http.ResponseWriter, r *http.Request) {
 	lock := s.runLock(namespace, runID)
 	lock.Lock()
 	defer lock.Unlock()
+	if err := s.requireCurrentRuntimeRunAuthority(
+		r.Context(),
+		namespace,
+		runID,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
 	projection, err := s.store.GetRun(r.Context(), namespace, runID)
 	if err != nil {
 		writeError(w, err)
@@ -469,6 +569,14 @@ func (s *Server) executeAction(w http.ResponseWriter, r *http.Request) {
 	lock := s.runLock(namespace, r.PathValue("runID"))
 	lock.Lock()
 	defer lock.Unlock()
+	if err := s.requireCurrentRuntimeRunAuthority(
+		r.Context(),
+		namespace,
+		request.Action.RunID,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
 	outcome, err := s.broker.Execute(r.Context(), namespace, request)
 	if err != nil {
 		writeError(w, err)
@@ -536,7 +644,8 @@ func writeError(w http.ResponseWriter, err error) {
 		case model.ErrorNotFound:
 			status = http.StatusNotFound
 		case model.ErrorConflict, model.ErrorIdempotencyConflict,
-			model.ErrorTransactionConflict:
+			model.ErrorTransactionConflict,
+			model.ErrorCheckpointIncompatible:
 			status = http.StatusConflict
 		case model.ErrorCapabilityDenied, model.ErrorCapabilityExpired, model.ErrorCapabilityRevoked,
 			model.ErrorDelegationExceeded, model.ErrorBudgetExceeded:

@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_run.v0",
+  "version": "gatemole.agent_run.v0",
   "id": "run:demo-001",
   "namespace": "fixture",
   "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -7,7 +7,7 @@
   "principal": {
     "id": "run:demo-001",
     "kind": "run",
-    "issuer": "vouchd"
+    "issuer": "gatemoled"
   },
   "delegation_chain": [
     {

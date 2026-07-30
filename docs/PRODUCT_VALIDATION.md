@@ -1,4 +1,4 @@
-# Product Validation: Is Vouch Solving a Real Problem?
+# Product Validation: Is Gatemole Solving a Real Problem?
 
 Checked against public evidence and competing products on **2026-07-26**.
 
@@ -13,24 +13,24 @@ is not yet commercially validated.
 | Is withheld consequential write authority a top-three buying blocker? | **Unproven.** That is the customer-discovery hypothesis H1 below, not a conclusion from public research. |
 | Are identity, per-call authorization, observability and generic agent control planes still open categories? | **No.** Large vendors and open-source projects already cover them. |
 | Is task-scoped transaction and outcome control a plausible remaining gap? | **Yes, but unproven as a standalone market.** Independent research has converged on nearly the same abstraction. |
-| Does the current Vouch implementation solve the enterprise problem? | **Only in a narrow local-Git boundary.** It proves several mechanisms, but it does not yet control an external production workflow. |
-| Should development continue? | **Conditionally.** Converge the kernel, prove deep connector semantics and obtain paid design-partner evidence before building the Vouch Control Plane. |
+| Does the current Gatemole implementation solve the enterprise problem? | **Only in a narrow local-Git boundary.** It proves several mechanisms, but it does not yet control an external production workflow. |
+| Should development continue? | **Conditionally.** Converge the kernel, prove deep connector semantics and obtain paid design-partner evidence before building the Gatemole Control Plane. |
 
 The strongest current positioning is:
 
-> **Vouch Runtime provides stateful transaction and outcome integrity for local
+> **Gatemole Runtime provides stateful transaction and outcome integrity for local
 > Git actions proposed by autonomous agents.**
 
-“Vouch Agent OS” describes the complete architecture. It is not a
+“Gatemole Agent OS” describes the complete architecture. It is not a
 differentiated market category by itself and should not be the primary external
 claim yet.
 
 One kernel can still support two experiences:
 
-- **Vouch Developer Runtime:** local isolation, exact Git effects and controlled
+- **Gatemole Developer Runtime:** local isolation, exact Git effects and controlled
   release for developers integrating an existing agent. This is the shortest
   route to real usage and kernel feedback.
-- **Vouch Agent OS:** the enterprise experience with non-bypassable remote
+- **Gatemole Agent OS:** the enterprise experience with non-bypassable remote
   connectors, cross-run policy and fleet administration. This remains
   conditional on connector proof and paid design-partner evidence.
 
@@ -56,7 +56,7 @@ The remaining problem is narrower:
 > composition, and recover truthfully when an external result is ambiguous or
 > only partly reversible?
 
-Vouch must provide four properties together:
+Gatemole must provide four properties together:
 
 1. **Complete mediation.** The agent has no ambient path or credential that
    bypasses the Runtime.
@@ -102,7 +102,7 @@ Vouch must provide four properties together:
   and
   [May 2026](https://www.gartner.com/en/newsroom/press-releases/2026-05-26-gartner-says-applying-uniform-governance-across-ai-agents-will-lead-to-enterprise-ai-agent-failure).
 
-The conclusion supported by these sources is not “Vouch will win.” It is that
+The conclusion supported by these sources is not “Gatemole will win.” It is that
 organizations need stronger authority and recovery mechanisms before granting
 agents consequential autonomy.
 
@@ -110,14 +110,14 @@ agents consequential autonomy.
 
 The 2026 market has moved beyond an observability-only comparison.
 
-| Category | Examples | What already exists | Implication for Vouch |
+| Category | Examples | What already exists | Implication for Gatemole |
 | --- | --- | --- | --- |
 | Agent identity and lifecycle | [Microsoft Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/), [Okta for AI Agents](https://www.okta.com/newsroom/press-releases/okta-for-ai-agents-core-brings-lifecycle-governance-to-regulated-environments/) | Agent registry, owners and sponsors, lifecycle, Conditional Access, short-lived access and revocation | Integrate these identities; do not build an identity directory. |
 | Inline tool and API policy | [AWS AgentCore Policy](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy.html), [MuleSoft Omni Gateway](https://docs.mulesoft.com/general/agent-fabric-overview), [Galileo Agent Control](https://galileo.ai/blog/announcing-agent-control) | Framework-neutral interception, authorization, rate/cost controls, policy and audit | Per-call allow/deny or a generic gateway is not a differentiator. |
-| Open policy standard/runtime | [Microsoft Agent Control Specification](https://microsoft.github.io/agent-governance-toolkit/packages/agent-control-specification/) | Deterministic, fail-closed decisions at agent-loop intervention points, with Rego and Cedar support | Prefer compatibility or contribution over inventing another generic policy language. Vouch Runtime's value must be stateful enforcement and transaction semantics around a policy decision. |
+| Open policy standard/runtime | [Microsoft Agent Control Specification](https://microsoft.github.io/agent-governance-toolkit/packages/agent-control-specification/) | Deterministic, fail-closed decisions at agent-loop intervention points, with Rego and Cedar support | Prefer compatibility or contribution over inventing another generic policy language. Gatemole Runtime's value must be stateful enforcement and transaction semantics around a policy decision. |
 | Fleet governance/control tower | [ServiceNow AI Control Tower](https://www.servicenow.com/uk/products/ai-control-tower.html), [IBM Agentic Control Plane](https://www.ibm.com/products/watsonx-orchestrate/agent-control-plane) | Discovery, inventory, governance, monitoring, policy, cost, audit and kill controls | A dashboard called “Agent Control Plane” is not an open market. |
-| Durable agent runtime | [LangSmith Deployment](https://www.langchain.com/langsmith/deployment) | Durable execution, human approval, fault tolerance, task queues, registry and rollback | Vouch should not compete as a general agent host or scheduler. |
-| Process orchestration | [Camunda agent orchestration](https://camunda.com/orchestrate/agents/) | Vendor-neutral BPMN sequences, tool permissions, durable state, human tasks, audit, retry, compensation and many connectors | This is serious overlap. Vouch must work beneath or beside workflow engines and protect open-ended proposed effects, rather than replace deterministic process orchestration. |
+| Durable agent runtime | [LangSmith Deployment](https://www.langchain.com/langsmith/deployment) | Durable execution, human approval, fault tolerance, task queues, registry and rollback | Gatemole should not compete as a general agent host or scheduler. |
+| Process orchestration | [Camunda agent orchestration](https://camunda.com/orchestrate/agents/) | Vendor-neutral BPMN sequences, tool permissions, durable state, human tasks, audit, retry, compensation and many connectors | This is serious overlap. Gatemole must work beneath or beside workflow engines and protect open-ended proposed effects, rather than replace deterministic process orchestration. |
 | Native coding-agent controls | [GitHub Agentic Workflows](https://docs.github.com/en/enterprise-cloud@latest/copilot/concepts/agents/about-github-agentic-workflows), [Copilot cloud-agent mitigations](https://docs.github.com/en/enterprise-cloud@latest/copilot/concepts/agents/cloud-agent/risks-and-mitigations) | Firewalled agents, read-only defaults, isolated credentials, declared write outputs, protected branches and mandatory human merge | GitHub is a useful connector testbed, but a protected PR alone is not yet a compelling standalone product. |
 | Semantic transaction research | [Cordon](https://arxiv.org/abs/2606.17573), [Mnemosyne](https://arxiv.org/abs/2607.00269) | Task-scoped staged effects, composed-flow validation, authority separation, recovery and compensation | The architecture has strong independent validation, but the concept itself is not a moat. |
 
@@ -129,7 +129,7 @@ they make a generic identity-plus-policy runtime insufficiently distinct.
 
 ## The remaining defensible wedge
 
-Vouch should specialize in **connector-specific outcome integrity for
+Gatemole should specialize in **connector-specific outcome integrity for
 open-ended agent work**:
 
 - evaluate ordered effects across actions, runs, systems and delegated
@@ -142,11 +142,11 @@ open-ended agent work**:
 - coordinate compensation without claiming universal rollback;
 - emit a replayable evidence chain from sponsor intent to committed outcome.
 
-This is narrower than the complete Vouch Agent OS, a gateway or a workflow
+This is narrower than the complete Gatemole Agent OS, a gateway or a workflow
 engine. It is also a claim that must be demonstrated against substitutes rather
 than asserted.
 
-Vouch should integrate instead of replace:
+Gatemole should integrate instead of replace:
 
 - Entra, Okta, OIDC and workload identity for principals;
 - Microsoft ACS, Cedar or OPA for ordinary deterministic policy;
@@ -164,7 +164,7 @@ The dangerous vendor-bank-invoice-payment sequence is a useful illustration of
 composed authority, but it is not proof of an untouched market. SAP already
 documents
 [segregation-of-duties controls for vendor and payment processing](https://help.sap.com/docs/SAP_ACCESS_CONTROL/5cae1bc9a72348389e91183714220e30/4e8cb94820ff0867e10000000a421bc1.html).
-The Vouch hypothesis must instead concern cross-system, cross-session or common
+The Gatemole hypothesis must instead concern cross-system, cross-session or common
 delegation-lineage effects that existing ERP controls cannot correlate. That
 gap needs validation with SAP GRC and finance-control practitioners before AP
 becomes a flagship use case.
@@ -174,7 +174,7 @@ becomes a flagship use case.
 GitHub already isolates coding agents, restricts their branch access, keeps
 credentials outside agent runtimes, and supports
 [required checks and stale-approval dismissal](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets).
-GitHub should initially prove Vouch's connector, receipt and reconciliation
+GitHub should initially prove Gatemole's connector, receipt and reconciliation
 model. It becomes a commercial wedge only if a customer values the additional
 task authority and cross-system evidence enough to pay for it.
 
@@ -202,7 +202,7 @@ It does not yet prove the intended Runtime enforcement boundary:
 - lifecycle controls do not yet interrupt a running production OCI workload;
 - there is no connector driver interface or external production connector;
 - sequence policy does not span transactions, sessions or identity lineage;
-- there is no Runtime fleet or Vouch Control Plane.
+- there is no Runtime fleet or Gatemole Control Plane.
 
 The current implementation is therefore a strong local enforcement slice and
 mechanism proof, not yet evidence that customers will adopt or pay for the
@@ -213,15 +213,15 @@ broader system.
 | Hypothesis | Test | Evidence required to continue |
 | --- | --- | --- |
 | **H1: withheld authority is a top-three blocker.** | Interview 20 enterprises with live agent pilots about the last workflow they refused to automate. Do not pitch first. | At least 8 name consequential write authority as a top-three blocker, 5 produce a recent high-value refused workflow and 3 accept a scoped pilot. |
-| **H2: customers will accept non-bypassable mediation.** | Diagram the required credential and network changes and ask for monitor-mode or sandbox integration. | At least 3 organizations agree to remove scoped credentials from the agent and route the relevant writes through Vouch Runtime; otherwise the enforcement model is operationally unacceptable. |
+| **H2: customers will accept non-bypassable mediation.** | Diagram the required credential and network changes and ask for monitor-mode or sandbox integration. | At least 3 organizations agree to remove scoped credentials from the agent and route the relevant writes through Gatemole Runtime; otherwise the enforcement model is operationally unacceptable. |
 | **H3: transaction control adds value beyond IAM, gateways and workflow engines.** | Reconstruct ten workflows using the customer's existing Entra/Okta, gateway, native application controls and Camunda/Temporal controls. | At least 6 require bespoke stateful glue to cover a material composed-effect, exact-state or recovery gap. |
 | **H4: connector-specific staging and reconciliation are valuable.** | Demonstrate injected failures before dispatch, after external application and before receipt. | The buyer considers duplicate-effect prevention and exact recovery evidence important enough to influence deployment approval. |
-| **H5: Vouch expands permission safely.** | Run a design-partner pilot. | At least 20 real transactions, including 5 tasks the customer previously allowed an agent only to suggest; zero duplicate or unattributed effects. |
-| **H6: native alternatives are insufficient.** | Run side-by-side designs against the relevant GitHub, AWS, MuleSoft, Camunda or ERP controls. | Customers identify a material missing guarantee and choose Vouch despite the additional mediation boundary. |
-| **H7: there is willingness to pay.** | Offer a time-bounded paid pilot before building the Vouch Control Plane. | At least two paid pilots, not only free design partnerships. |
+| **H5: Gatemole expands permission safely.** | Run a design-partner pilot. | At least 20 real transactions, including 5 tasks the customer previously allowed an agent only to suggest; zero duplicate or unattributed effects. |
+| **H6: native alternatives are insufficient.** | Run side-by-side designs against the relevant GitHub, AWS, MuleSoft, Camunda or ERP controls. | Customers identify a material missing guarantee and choose Gatemole despite the additional mediation boundary. |
+| **H7: there is willingness to pay.** | Offer a time-bounded paid pilot before building the Gatemole Control Plane. | At least two paid pilots, not only free design partnerships. |
 
 Stop or reposition if customers are satisfied by native platform controls, will
-not route authority through Vouch, cannot name a material cross-action problem,
+not route authority through Gatemole, cannot name a material cross-action problem,
 or treat the receipts and recovery guarantees as compliance nice-to-haves.
 
 ## Direction decision
@@ -237,6 +237,6 @@ Proceed with:
    release transaction;
 7. customer discovery and paid-pilot tests in parallel.
 
-Do not build the Vouch Control Plane, a new identity system, a new generic
+Do not build the Gatemole Control Plane, a new identity system, a new generic
 policy language, a workflow engine or a connector marketplace until the paid
 evidence exists.

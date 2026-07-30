@@ -1,21 +1,21 @@
-# Vouch Product Operating Brief
+# Gatemole Product Operating Brief
 
 Use this brief when choosing roadmap work, designing features, writing docs or
-describing Vouch.
+describing Gatemole.
 
 ## Product identity
 
-Vouch is the product name. **Vouch Agent OS** is the complete target
-architecture: the Vouch Control Plane plus a fleet of customer-side Vouch
-Runtimes. **Vouch Runtime** is the first sellable product and the enforcement
+Gatemole is the product name. **Gatemole Agent OS** is the complete target
+architecture: the Gatemole Control Plane plus a fleet of customer-side Gatemole
+Runtimes. **Gatemole Runtime** is the first sellable product and the enforcement
 boundary for autonomous-agent actions.
 
-One `vouchd` kernel supports two experiences:
+One `gatemoled` kernel supports two experiences:
 
-- **Vouch Developer Runtime** is the local developer experience around one
+- **Gatemole Developer Runtime** is the local developer experience around one
   Runtime: initialize a real agent profile, execute it in a bounded Git
   transaction, inspect the exact outcome and explicitly accept or reject it.
-- **Vouch Agent OS** is the enterprise experience and complete target:
+- **Gatemole Agent OS** is the enterprise experience and complete target:
   non-bypassable connectors, cross-run policy and fleet management around the
   same Runtime kernel.
 
@@ -38,28 +38,28 @@ own the agent's planning, prompting or reasoning loop.
 
 Keep these names distinct:
 
-- **Vouch Agent OS**: the complete architecture containing the Control Plane,
+- **Gatemole Agent OS**: the complete architecture containing the Control Plane,
   Runtime fleet, transaction protocol and connector model. It is an umbrella,
   not a process.
-- **Vouch Control Plane**: the future central manager for Runtime fleets,
+- **Gatemole Control Plane**: the future central manager for Runtime fleets,
   organization policy, approval routing, audit and incident response. It
   manages connector configuration but does not execute downstream actions.
-- **Vouch Runtime**: the current product and customer-side enforcement
+- **Gatemole Runtime**: the current product and customer-side enforcement
   boundary.
-- **Vouch Developer Runtime**: the local product experience around one Runtime,
+- **Gatemole Developer Runtime**: the local product experience around one Runtime,
   not a separate or weaker engine.
-- **`vouchd` kernel**: the trusted authority and transaction engine inside each
+- **`gatemoled` kernel**: the trusted authority and transaction engine inside each
   Runtime.
-- **Vouch Contracts**: an optional module that compiles release intent into
+- **Gatemole Contracts**: an optional module that compiles release intent into
   verification obligations and maps evidence to them.
 
-Never describe Vouch Contracts as the whole product. Never describe the current
-Vouch Runtime as a complete Vouch Agent OS or a production multi-tenant Vouch
+Never describe Gatemole Contracts as the whole product. Never describe the current
+Gatemole Runtime as a complete Gatemole Agent OS or a production multi-tenant Gatemole
 Control Plane.
 
 ## Runtime boundary
 
-Vouch owns:
+Gatemole owns:
 
 - Task-scoped transaction and effect state.
 - Isolated runtime admission and resource limits.
@@ -70,7 +70,7 @@ Vouch owns:
 - Commit receipts, reconciliation and truthful partial failure.
 - An authoritative replayable event history.
 
-Vouch integrates with, but does not replace:
+Gatemole integrates with, but does not replace:
 
 - Coding agents and agent frameworks.
 - OCI containers, microVMs and host operating systems.
@@ -79,7 +79,7 @@ Vouch integrates with, but does not replace:
 - Model providers and tool protocols.
 
 Complete mediation matters. If an agent retains direct credentials, unrestricted
-egress or access around Vouch, the runtime cannot claim authority over those
+egress or access around Gatemole, the runtime cannot claim authority over those
 paths.
 
 ## Current supported profile
@@ -111,10 +111,10 @@ Prefer work that strengthens the runtime path:
 - Operator status, watch, logs, approval and recovery UX.
 - Runtime configuration, diagnostics, packaging and upgrades.
 - Policy simulation, provenance, audit export and compatibility guarantees.
-- Real pilots where Vouch lets a team grant an agent authority it previously
+- Real pilots where Gatemole lets a team grant an agent authority it previously
   withheld.
 
-For Vouch Contracts, prefer work that makes runtime verification stronger:
+For Gatemole Contracts, prefer work that makes runtime verification stronger:
 
 - Contract-to-verifier compilation.
 - Obligation IDs included in transaction verification and approval packages.
@@ -126,7 +126,7 @@ For Vouch Contracts, prefer work that makes runtime verification stronger:
 
 Avoid:
 
-- Turning Vouch into another coding-agent framework.
+- Turning Gatemole into another coding-agent framework.
 - Generic AI code review, style comments or unsupported correctness claims.
 - Treating logs or dashboards as an enforcement boundary.
 - Treating a per-tool allow/deny proxy as sufficient transaction control.
@@ -140,17 +140,17 @@ Avoid:
 
 Use:
 
-- “Vouch Runtime — transaction and outcome control for autonomous-agent
+- “Gatemole Runtime — transaction and outcome control for autonomous-agent
   actions”
-- “Vouch Developer Runtime” for the local developer experience around the same
+- “Gatemole Developer Runtime” for the local developer experience around the same
   kernel
 - “the controlled boundary between an agent proposal and a real effect”
-- “`vouchd` kernel” for the trusted authority and transaction engine
+- “`gatemoled` kernel” for the trusted authority and transaction engine
 - “isolated, verified and authorized agent execution”
-- “Vouch Runtime”
-- “Vouch Agent OS” for the complete Control Plane plus Runtime-fleet
+- “Gatemole Runtime”
+- “Gatemole Agent OS” for the complete Control Plane plus Runtime-fleet
   architecture
-- “Vouch Contracts” when referring specifically to the optional compiler
+- “Gatemole Contracts” when referring specifically to the optional compiler
 
 Use carefully:
 
@@ -188,12 +188,12 @@ it.
 ## Near-term order
 
 1. Pair the admitted run and transaction lifecycle and durably charge budgets.
-2. Complete the Vouch Developer Runtime shell: maintained adapter, supervision,
+2. Complete the Gatemole Developer Runtime shell: maintained adapter, supervision,
    watch/cancel, diff and explicit apply/reject.
 3. Stabilize the authenticated action protocol and connector coordinator.
 4. Deliver one deep remote-Git/GitHub connector and approval experience.
 5. Prove paid design-partner demand for fleet policy, audit and approvals.
-6. Build the Vouch Control Plane around customer-side Vouch Runtimes.
+6. Build the Gatemole Control Plane around customer-side Gatemole Runtimes.
 7. Add Kubernetes and PostgreSQL transaction packs only after Git release and
    reconciliation are deep.
 

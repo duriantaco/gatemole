@@ -1,5 +1,5 @@
 {
-  "version": "vouch.commit_plan.v0",
+  "version": "gatemole.commit_plan.v0",
   "id": "commit-plan:demo-001",
   "transaction_id": "tx:demo-001",
   "intent_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",

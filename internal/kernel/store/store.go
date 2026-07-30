@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 // RunStore reads durable materialized run projections.
@@ -40,6 +40,7 @@ type AdmissionStore interface {
 	AdmitTask(context.Context, admission.Prepared) (admission.Result, bool, error)
 	GetTaskAdmission(context.Context, string, string) (admission.Result, string, error)
 	GetExecutionAuthority(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
+	GetExecutionAuthorityForRun(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
 	AppendTransactionEventsIfRunCurrent(context.Context, string, int64, int64, string, []model.TransactionEvent) (transactionreducer.Projection, error)
 }
 

@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -10,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
-const pinnedImage = "registry.example.invalid/vouch/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const pinnedImage = "registry.example.invalid/gatemole/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func TestOCIInvocationEnforcesIsolationAndLimits(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "workspace")
@@ -35,7 +36,7 @@ func TestOCIInvocationEnforcesIsolationAndLimits(t *testing.T) {
 		"--user=1000:1000",
 		"--workdir=/workspace",
 		"--env=HOME=/tmp",
-		"--env=VOUCH_RUNTIME_ROLE=agent",
+		"--env=GATEMOLE_RUNTIME_ROLE=agent",
 		"--tmpfs=/tmp:rw,nosuid,nodev",
 		"--mount=type=bind,src=" + workspace + ",dst=/workspace",
 	} {
@@ -61,13 +62,13 @@ func TestOCIInvocationEnforcesIsolationAndLimits(t *testing.T) {
 
 func TestOCIInvocationOverridesImageEntrypointForBoundProfile(t *testing.T) {
 	config := validOCIConfig(filepath.Join(t.TempDir(), "workspace"))
-	config.Entrypoint = "/opt/vouch-agent"
+	config.Entrypoint = "/opt/gatemole-agent"
 	config.Command = []string{"serve", "--task", "upgrade"}
 	invocation, err := config.Invocation()
 	if err != nil {
 		t.Fatal(err)
 	}
-	entrypointIndex := stringIndex(invocation.Arguments, "--entrypoint=/opt/vouch-agent")
+	entrypointIndex := stringIndex(invocation.Arguments, "--entrypoint=/opt/gatemole-agent")
 	imageIndex := stringIndex(invocation.Arguments, pinnedImage)
 	if entrypointIndex < 0 || entrypointIndex >= imageIndex {
 		t.Fatalf("profile entrypoint is not enforced before the image: %#v", invocation.Arguments)
@@ -196,9 +197,9 @@ func TestOCIInvocationMountsExactTaskEnvelopeReadOnly(t *testing.T) {
 	}
 	joined := strings.Join(invocation.Arguments, "\n")
 	for _, required := range []string{
-		"--env=VOUCH_TASK_PATH=/vouch/task.json",
-		"--env=VOUCH_TASK_DIGEST=" + task.Digest,
-		"--mount=type=bind,src=" + taskDirectory + ",dst=/vouch,readonly",
+		"--env=GATEMOLE_TASK_PATH=/gatemole/task.json",
+		"--env=GATEMOLE_TASK_DIGEST=" + task.Digest,
+		"--mount=type=bind,src=" + taskDirectory + ",dst=/gatemole,readonly",
 	} {
 		if !strings.Contains(joined, required) {
 			t.Errorf("task-aware invocation missing %q:\n%s", required, joined)
@@ -235,9 +236,9 @@ func TestOCIInvocationMountsExactTaskEnvelopeReadOnly(t *testing.T) {
 func TestOCIInvocationUsesOnlyInternalBrokerNetwork(t *testing.T) {
 	config := validOCIConfig(filepath.Join(t.TempDir(), "workspace"))
 	token := "transaction-scoped-token-000000000000000000000000"
-	config.NetworkName = "vouch-net-0123456789abcdef"
+	config.NetworkName = "gatemole-net-0123456789abcdef"
 	config.ModelBroker = &ModelBrokerBinding{
-		URL: "http://vouch-model-broker:8080/v1", Token: token,
+		URL: "http://gatemole-model-broker:8080/v1", Token: token,
 		ImageDigest:  "sha256:" + strings.Repeat("b", 64),
 		PolicyDigest: "sha256:" + strings.Repeat("c", 64),
 		TokenDigest:  digestValue([]byte(token)),
@@ -249,9 +250,9 @@ func TestOCIInvocationUsesOnlyInternalBrokerNetwork(t *testing.T) {
 	joined := strings.Join(invocation.Arguments, "\n")
 	for _, required := range []string{
 		"--network=" + config.NetworkName,
-		"--env=OPENAI_BASE_URL=http://vouch-model-broker:8080/v1",
+		"--env=OPENAI_BASE_URL=http://gatemole-model-broker:8080/v1",
 		"--env=OPENAI_API_KEY=" + token,
-		"--env=VOUCH_MODEL_BROKER_URL=http://vouch-model-broker:8080/v1",
+		"--env=GATEMOLE_MODEL_BROKER_URL=http://gatemole-model-broker:8080/v1",
 	} {
 		if !strings.Contains(joined, required) {
 			t.Errorf("brokered invocation missing %q:\n%s", required, joined)
@@ -280,7 +281,7 @@ func TestModelBrokerSidecarUsesTwoNetworkBoundaryAndSecretEnvFile(t *testing.T) 
 	logPath := filepath.Join(root, "engine.log")
 	engine := filepath.Join(root, "fake-engine")
 	script := `#!/bin/sh
-printf '%s\n' "$*" >> "$VOUCH_FAKE_ENGINE_LOG"
+printf '%s\n' "$*" >> "$GATEMOLE_FAKE_ENGINE_LOG"
 if [ "$1" = "rm" ]; then
   echo "No such container" >&2
   exit 1
@@ -292,9 +293,9 @@ fi
 if [ "$1" = "run" ]; then
   for argument in "$@"; do
     case "$argument" in
-      --mount=type=bind,src=*,dst=/var/lib/vouch)
+      --mount=type=bind,src=*,dst=/var/lib/gatemole)
         directory=${argument#--mount=type=bind,src=}
-        directory=${directory%,dst=/var/lib/vouch}
+        directory=${directory%,dst=/var/lib/gatemole}
         printf 'ready\n' > "$directory/ready"
         ;;
     esac
@@ -306,22 +307,33 @@ exit 0
 	if err := os.WriteFile(engine, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_FAKE_ENGINE_LOG", logPath)
+	t.Setenv("GATEMOLE_FAKE_ENGINE_LOG", logPath)
 	policyPath := filepath.Join(root, "policy.json")
 	policyData := []byte(`{"version":"test"}`)
 	if err := os.WriteFile(policyPath, policyData, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	policySnapshot, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	config := ModelBrokerConfig{
 		EnginePath: engine,
 		Image:      "broker@sha256:" + strings.Repeat("b", 64),
-		PolicyPath: policyPath, PolicyDigest: digestValue(policyData),
+		PolicyData: policySnapshot, PolicyDigest: digestValue(policySnapshot),
 		ReceiptDirectory: filepath.Join(root, "receipts"),
 		TransactionID:    "tx:broker-sidecar", RunID: "run:broker-sidecar",
 		AgentToken:          "agent-token-000000000000000000000000000000",
 		ProviderBearerToken: "provider-secret-never-in-engine-arguments",
 		UID:                 1000, GID: 1000, MemoryBytes: 512 << 20,
 		CPUMillis: 1000, PIDsLimit: 64, TmpfsBytes: 64 << 20,
+	}
+	if err := os.WriteFile(
+		policyPath,
+		[]byte(`{"version":"replaced-after-snapshot"}`),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
 	}
 	session, err := StartModelBroker(context.Background(), config)
 	if err != nil {
@@ -340,7 +352,7 @@ exit 0
 		"network create --internal",
 		"run --detach --rm",
 		"--network=bridge",
-		"network connect --alias vouch-model-broker",
+		"network connect --alias gatemole-model-broker",
 	} {
 		if !strings.Contains(logged, required) {
 			t.Errorf("engine log missing %q:\n%s", required, logged)
@@ -348,6 +360,20 @@ exit 0
 	}
 	if strings.Contains(logged, config.ProviderBearerToken) {
 		t.Fatal("provider credential leaked into engine process arguments")
+	}
+	frozenPolicy, err := os.ReadFile(filepath.Join(
+		config.ReceiptDirectory,
+		"model-policy.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frozenPolicy, policySnapshot) {
+		t.Fatalf(
+			"frozen policy=%s, want original snapshot=%s",
+			frozenPolicy,
+			policySnapshot,
+		)
 	}
 	if _, err := os.Stat(filepath.Join(config.ReceiptDirectory, "broker.env")); !os.IsNotExist(err) {
 		t.Fatalf("broker secret environment file was retained: %v", err)
@@ -390,8 +416,8 @@ func TestPrepareWorkspaceOwnershipRejectsUnsafeInputs(t *testing.T) {
 
 func TestContainerDoesNotExistDetection(t *testing.T) {
 	for _, output := range []string{
-		"Error response from daemon: No such container: vouch-demo",
-		"no container with name or ID vouch-demo found",
+		"Error response from daemon: No such container: gatemole-demo",
+		"no container with name or ID gatemole-demo found",
 		"container not found",
 	} {
 		if !containerDoesNotExist([]byte(output)) {
@@ -417,7 +443,7 @@ func validOCIConfig(workspace string) OCIConfig {
 		CPUMillis:     2000,
 		PIDsLimit:     256,
 		TmpfsBytes:    1 << 30,
-		ContainerName: "vouch-runtime",
+		ContainerName: "gatemole-runtime",
 		Role:          "agent",
 		WorkspaceMode: "transaction_rw",
 	}

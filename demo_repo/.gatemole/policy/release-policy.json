@@ -1,0 +1,92 @@
+{
+  "version": "gatemole.policy.v0",
+  "rules": [
+    {
+      "id": "block_invalid_spec_or_manifest",
+      "description": "Block when specs or the manifest are invalid.",
+      "when": {
+        "fact": "has_invalid_spec_or_manifest"
+      },
+      "decision": "block",
+      "reasons": [
+        "invalid specs or manifest"
+      ],
+      "stop": true
+    },
+    {
+      "id": "block_verifier_findings",
+      "description": "Block on verifier findings that request a block decision.",
+      "when": {
+        "fact": "has_blocking_findings"
+      },
+      "decision": "block",
+      "reason_source": "blocking_finding_claims",
+      "stop": true
+    },
+    {
+      "id": "high_risk_canary",
+      "description": "Allow high and critical risk changes only as canaries when evidence passes.",
+      "when": {
+        "all": [
+          {
+            "fact": "no_policy_blockers"
+          },
+          {
+            "risk_at_least": "high"
+          },
+          {
+            "fact": "canary_enabled"
+          }
+        ]
+      },
+      "decision": "canary",
+      "reasons": [
+        "high-risk change has passing evidence and canary enabled"
+      ],
+      "stop": true
+    },
+    {
+      "id": "high_risk_without_canary",
+      "description": "Escalate high and critical risk changes when evidence passes but canary is absent.",
+      "when": {
+        "all": [
+          {
+            "fact": "no_policy_blockers"
+          },
+          {
+            "risk_at_least": "high"
+          },
+          {
+            "not": {
+              "fact": "canary_enabled"
+            }
+          }
+        ]
+      },
+      "decision": "human_escalation",
+      "reasons": [
+        "high-risk change passed checks but has no canary"
+      ],
+      "stop": true
+    },
+    {
+      "id": "low_medium_auto_merge",
+      "description": "Allow low and medium risk changes when required evidence passes.",
+      "when": {
+        "all": [
+          {
+            "fact": "no_policy_blockers"
+          },
+          {
+            "risk_below": "high"
+          }
+        ]
+      },
+      "decision": "auto_merge",
+      "reasons": [
+        "low/medium risk change passed required evidence"
+      ],
+      "stop": true
+    }
+  ]
+}

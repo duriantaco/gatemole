@@ -16,7 +16,7 @@ import (
 type ModelBrokerConfig struct {
 	EnginePath          string
 	Image               string
-	PolicyPath          string
+	PolicyData          []byte
 	PolicyDigest        string
 	ReceiptDirectory    string
 	TransactionID       string
@@ -48,16 +48,20 @@ func (config ModelBrokerConfig) Validate() error {
 	if _, err := ImageDigest(config.Image); err != nil {
 		return fmt.Errorf("model broker image: %w", err)
 	}
-	for name, value := range map[string]string{
-		"policy path":       config.PolicyPath,
-		"receipt directory": config.ReceiptDirectory,
-	} {
-		if !filepath.IsAbs(value) || strings.ContainsAny(value, ",\x00") {
-			return fmt.Errorf("model broker %s must be an absolute bind-safe path", name)
-		}
+	if !filepath.IsAbs(config.ReceiptDirectory) ||
+		strings.ContainsAny(config.ReceiptDirectory, ",\x00") {
+		return errors.New(
+			"model broker receipt directory must be an absolute bind-safe path",
+		)
 	}
 	if !digestPattern.MatchString(config.PolicyDigest) {
 		return errors.New("model broker policy digest must be sha256")
+	}
+	if len(config.PolicyData) == 0 || len(config.PolicyData) > 2<<20 ||
+		digestValue(config.PolicyData) != config.PolicyDigest {
+		return errors.New(
+			"model broker policy snapshot does not match its digest",
+		)
 	}
 	if config.TransactionID == "" || config.RunID == "" {
 		return errors.New("model broker transaction and run IDs are required")
@@ -84,6 +88,7 @@ func (config ModelBrokerConfig) Validate() error {
 }
 
 func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBrokerSession, error) {
+	config.PolicyData = append([]byte(nil), config.PolicyData...)
 	if err := config.Validate(); err != nil {
 		return ModelBrokerSession{}, err
 	}
@@ -107,13 +112,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 			return ModelBrokerSession{}, fmt.Errorf("assign model broker receipt ownership: %w", err)
 		}
 	}
-	policyData, err := os.ReadFile(config.PolicyPath)
-	if err != nil {
-		return ModelBrokerSession{}, fmt.Errorf("read model broker policy: %w", err)
-	}
-	if len(policyData) > 2<<20 || digestValue(policyData) != config.PolicyDigest {
-		return ModelBrokerSession{}, errors.New("model broker policy changed after its digest was approved")
-	}
+	policyData := config.PolicyData
 	runtimePolicyPath := filepath.Join(config.ReceiptDirectory, "model-policy.json")
 	if existing, err := os.ReadFile(runtimePolicyPath); err == nil {
 		if digestValue(existing) != config.PolicyDigest {
@@ -130,8 +129,8 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 	_ = os.Remove(readyPath)
 	envPath := filepath.Join(config.ReceiptDirectory, "broker.env")
 	envData := []byte(
-		"VOUCH_MODEL_BROKER_TOKEN=" + config.AgentToken + "\n" +
-			"VOUCH_PROVIDER_BEARER_TOKEN=" + config.ProviderBearerToken + "\n",
+		"GATEMOLE_MODEL_BROKER_TOKEN=" + config.AgentToken + "\n" +
+			"GATEMOLE_PROVIDER_BEARER_TOKEN=" + config.ProviderBearerToken + "\n",
 	)
 	if err := os.WriteFile(envPath, envData, 0o600); err != nil {
 		return ModelBrokerSession{}, fmt.Errorf("write model broker secret environment: %w", err)
@@ -144,9 +143,9 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		return ModelBrokerSession{}, fmt.Errorf("remove stale model broker resources: %w", err)
 	}
 	labels := []string{
-		"--label=vouch.managed=true",
-		"--label=vouch.role=model-broker",
-		"--label=vouch.transaction=" + shortResourceLabel(config.TransactionID),
+		"--label=gatemole.managed=true",
+		"--label=gatemole.role=model-broker",
+		"--label=gatemole.transaction=" + shortResourceLabel(config.TransactionID),
 	}
 	networkArguments := append([]string{
 		"network", "create", "--internal",
@@ -159,7 +158,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 	runArguments := []string{
 		"run", "--detach", "--rm",
 		"--name=" + session.ContainerName,
-		"--hostname=vouch-model-broker",
+		"--hostname=gatemole-model-broker",
 		"--network=bridge",
 		"--pull=never",
 		"--read-only",
@@ -172,19 +171,19 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		"--env-file=" + envPath,
 		"--tmpfs=/tmp:rw,nosuid,nodev,size=" + strconv.FormatInt(config.TmpfsBytes, 10) +
 			",uid=" + strconv.Itoa(config.UID) + ",gid=" + strconv.Itoa(config.GID) + ",mode=1777",
-		"--mount=type=bind,src=" + runtimePolicyPath + ",dst=/run/vouch/model-policy.json,readonly",
-		"--mount=type=bind,src=" + config.ReceiptDirectory + ",dst=/var/lib/vouch",
+		"--mount=type=bind,src=" + runtimePolicyPath + ",dst=/run/gatemole/model-policy.json,readonly",
+		"--mount=type=bind,src=" + config.ReceiptDirectory + ",dst=/var/lib/gatemole",
 	}
 	runArguments = append(runArguments, labels...)
 	runArguments = append(
 		runArguments,
 		config.Image,
 		"--listen", "0.0.0.0:8080",
-		"--policy", "/run/vouch/model-policy.json",
-		"--receipts", "/var/lib/vouch/model-calls.jsonl",
+		"--policy", "/run/gatemole/model-policy.json",
+		"--receipts", "/var/lib/gatemole/model-calls.jsonl",
 		"--transaction", config.TransactionID,
 		"--run", config.RunID,
-		"--ready-file", "/var/lib/vouch/ready",
+		"--ready-file", "/var/lib/gatemole/ready",
 		"--production=true",
 	)
 	if _, err := runEngine(ctx, config.EnginePath, runArguments...); err != nil {
@@ -192,7 +191,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		return ModelBrokerSession{}, fmt.Errorf("start model broker sidecar: %w", err)
 	}
 	connectArguments := []string{
-		"network", "connect", "--alias", "vouch-model-broker",
+		"network", "connect", "--alias", "gatemole-model-broker",
 		session.NetworkName, session.ContainerName,
 	}
 	if _, err := runEngine(ctx, config.EnginePath, connectArguments...); err != nil {
@@ -227,11 +226,11 @@ func RemoveModelBroker(
 }
 
 func ModelBrokerNetworkName(transactionID, runID string) string {
-	return "vouch-net-" + resourceSuffix(transactionID, runID)
+	return "gatemole-net-" + resourceSuffix(transactionID, runID)
 }
 
 func ModelBrokerContainerName(transactionID, runID string) string {
-	return "vouch-broker-" + resourceSuffix(transactionID, runID)
+	return "gatemole-broker-" + resourceSuffix(transactionID, runID)
 }
 
 func resourceSuffix(transactionID, runID string) string {

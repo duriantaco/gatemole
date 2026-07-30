@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 type authenticatedIdentityKey struct{}
@@ -290,7 +290,7 @@ func bindAuthenticatedActor(
 
 func writeIdentityError(w http.ResponseWriter, status int, message string) {
 	if status == http.StatusUnauthorized {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="vouchd"`)
+		w.Header().Set("WWW-Authenticate", `Bearer realm="gatemoled"`)
 	}
 	writeJSON(w, status, &model.KernelError{
 		Code: model.ErrorIdentityInvalid, Operation: "authenticate_request",

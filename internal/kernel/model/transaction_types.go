@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	AgentTransactionVersion   = "vouch.agent_transaction.v0"
-	EffectVersion             = "vouch.effect.v0"
-	VerificationResultVersion = "vouch.verification_result.v0"
-	ApprovalPackageVersion    = "vouch.approval_package.v0"
-	ApprovalDecisionVersion   = "vouch.approval_decision.v0"
-	CommitPlanVersion         = "vouch.commit_plan.v0"
-	TransactionEventVersion   = "vouch.transaction_event.v0"
-	AgentExecutionVersion     = "vouch.agent_execution.v0"
+	AgentTransactionVersion   = "gatemole.agent_transaction.v0"
+	EffectVersion             = "gatemole.effect.v0"
+	VerificationResultVersion = "gatemole.verification_result.v0"
+	ApprovalPackageVersion    = "gatemole.approval_package.v0"
+	ApprovalDecisionVersion   = "gatemole.approval_decision.v0"
+	CommitPlanVersion         = "gatemole.commit_plan.v0"
+	TransactionEventVersion   = "gatemole.transaction_event.v0"
+	AgentExecutionVersion     = "gatemole.agent_execution.v0"
 )
 
 type TransactionState string
@@ -167,9 +167,11 @@ type ModelBrokerExecution struct {
 // were admitted together. It is optional so transaction projections created
 // before atomic task admission remain readable.
 type TransactionAdmissionBinding struct {
-	TaskDigest     string `json:"task_digest"`
-	RunID          string `json:"run_id"`
-	ContractDigest string `json:"contract_digest"`
+	RuntimeID          string `json:"runtime_id,omitempty"`
+	EnforcementProfile string `json:"enforcement_profile,omitempty"`
+	TaskDigest         string `json:"task_digest"`
+	RunID              string `json:"run_id"`
+	ContractDigest     string `json:"contract_digest"`
 }
 
 type AgentTransaction struct {

@@ -19,10 +19,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
-const TrustDocumentVersion = "vouch.oidc_trust.v0"
+const TrustDocumentVersion = "gatemole.oidc_trust.v0"
+
+const maxTrustDocumentBytes = 2 << 20
 
 type TrustDocument struct {
 	Version                 string   `json:"version"`
@@ -90,18 +92,38 @@ func LoadTrustFile(path string) (*Verifier, error) {
 	if err != nil {
 		return nil, fmt.Errorf("OIDC trust: stat %s: %w", path, err)
 	}
-	if !info.Mode().IsRegular() || info.Size() > 2<<20 {
+	if !info.Mode().IsRegular() || info.Size() > maxTrustDocumentBytes {
 		return nil, errors.New("OIDC trust must be a regular file no larger than 2 MiB")
 	}
-	decoder := json.NewDecoder(io.LimitReader(file, 2<<20))
+	data, err := io.ReadAll(io.LimitReader(file, maxTrustDocumentBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("OIDC trust: read %s: %w", path, err)
+	}
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("OIDC trust must be a regular file no larger than 2 MiB")
+	}
+	verifier, err := ParseTrustDocument(data)
+	if err != nil {
+		return nil, fmt.Errorf("OIDC trust: decode %s: %w", path, err)
+	}
+	return verifier, nil
+}
+
+// ParseTrustDocument validates one already-bounded OIDC trust snapshot.
+// Callers that also record a digest must hash these exact bytes.
+func ParseTrustDocument(data []byte) (*Verifier, error) {
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("OIDC trust must be no larger than 2 MiB")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var document TrustDocument
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("OIDC trust: decode %s: %w", path, err)
+		return nil, err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, errors.New("OIDC trust: trailing JSON is not allowed")
+		return nil, errors.New("trailing JSON is not allowed")
 	}
 	return NewVerifier(document)
 }
@@ -139,8 +161,8 @@ func NewVerifier(document TrustDocument) (*Verifier, error) {
 		&document.NamespaceClaim, &document.RolesClaim,
 	}
 	defaults := []string{
-		"vouch_principal_id", "vouch_principal_kind",
-		"vouch_namespaces", "vouch_roles",
+		"gatemole_principal_id", "gatemole_principal_kind",
+		"gatemole_namespaces", "gatemole_roles",
 	}
 	for index, claim := range claims {
 		if *claim == "" {
@@ -277,7 +299,7 @@ func (verifier *Verifier) Verify(token string, now time.Time) (Identity, error) 
 	}
 	for _, role := range roles {
 		if role != "viewer" && role != "operator" && role != "approver" && role != "admin" {
-			return Identity{}, errors.New("OIDC token contains an invalid Vouch role")
+			return Identity{}, errors.New("OIDC token contains an invalid Gatemole role")
 		}
 	}
 	payloadDigest := sha256.Sum256(payloadData)

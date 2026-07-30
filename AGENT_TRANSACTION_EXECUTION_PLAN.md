@@ -1,4 +1,4 @@
-# Vouch Agent Transaction Control Execution Plan
+# Gatemole Agent Transaction Control Execution Plan
 
 > Historical engineering plan and milestone record. The dated implementation
 > snapshots below are intentionally preserved; use [`README.md`](./README.md)
@@ -6,19 +6,19 @@
 
 ## Product thesis
 
-Vouch is the transaction and verification layer for autonomous agents:
+Gatemole is the transaction and verification layer for autonomous agents:
 
-> An agent proposes a task-scoped transaction. Vouch stages its effects,
+> An agent proposes a task-scoped transaction. Gatemole stages its effects,
 > evaluates the complete sequence, verifies the intended outcome, obtains any
 > necessary approval, commits the effects, and coordinates recovery when the
 > outcome fails.
 
 This historical plan used **Agent Transaction Control** as a working technical
-category. The canonical current name for the first product is **Vouch
+category. The canonical current name for the first product is **Gatemole
 Runtime**. It is not an identity directory, another agent framework, an
 MCP-only gateway or a generic allow/deny policy proxy.
 
-Under the current hierarchy, **Vouch Agent OS** is the complete Control Plane
+Under the current hierarchy, **Gatemole Agent OS** is the complete Control Plane
 plus Runtime-fleet architecture. See the current README and roadmap for the
 claim boundary.
 
@@ -30,10 +30,10 @@ Implemented locally on 2026-07-23:
   checkpoints, and policy decisions.
 - Deterministic run reducer and append-only, hash-chained event history.
 - Transactional SQLite event/projection persistence and restart recovery.
-- `vouchd` over a mode-`0600` Unix socket.
+- `gatemoled` over a mode-`0600` Unix socket.
 - Capability compilation and traversal-resistant filesystem mediation.
 - Persist-before-execute action audit and unknown-without-retry recovery.
-- VouchKernelBench acceptance coverage.
+- GatemoleKernelBench acceptance coverage.
 
 These remain the process, authority, durability, and mediation substrate for
 the transaction work summarized below.
@@ -45,15 +45,15 @@ Implementation update on 2026-07-23:
   baseline sequence policy are implemented locally.
 - The first Phase T1 vertical is implemented: daemon-owned detached Git
   worktrees, exact diff-to-effect normalization, immutable stage/effect digests,
-  atomic SQLite event batches, restart replay, and `vouch tx` lifecycle CLI.
-- VouchTransactionBench passes 10/10 through the real daemon and Git boundary.
+  atomic SQLite event batches, restart replay, and `gatemole tx` lifecycle CLI.
+- GatemoleTransactionBench passes 10/10 through the real daemon and Git boundary.
 - Isolated verifier execution, authenticated approvals, commit connectors,
   compensation execution, and production non-bypassability are not implemented
   yet.
 
 ## Product boundary
 
-Vouch owns:
+Gatemole owns:
 
 - Signed task intent and constraints.
 - Transaction and effect state machines.
@@ -65,7 +65,7 @@ Vouch owns:
 - Commit ordering, receipts, reconciliation, and compensation.
 - Evidence graph from sponsor to committed outcome.
 
-Vouch integrates:
+Gatemole integrates:
 
 - Entra, Okta, IAM, OIDC, and workload identity.
 - Agent frameworks and coding agents.
@@ -181,11 +181,11 @@ Deliver:
 - Brokered filesystem effects normalized into an effect ledger.
 - Frozen staged-state digest and semantic Git diff.
 - Deterministic temporal policy interface and initial code safety rules.
-- VouchTransactionBench acceptance harness.
+- GatemoleTransactionBench acceptance harness.
 
 Exit criteria:
 
-- A coding agent cannot write outside the transaction worktree through Vouch.
+- A coding agent cannot write outside the transaction worktree through Gatemole.
 - Source changes remain private until an explicit release step.
 - The effect ledger exactly matches the staged diff.
 - A protected control-and-test change triggers focused scrutiny.
@@ -232,11 +232,11 @@ Exit criteria:
   partially-committed, or manual-recovery outcome.
 - No unknown non-idempotent action is automatically repeated.
 
-### Phase T4: Vouch Control Plane
+### Phase T4: Gatemole Control Plane
 
 Deliver:
 
-- Customer-side Vouch Runtime fleet and highly available Vouch Control Plane.
+- Customer-side Gatemole Runtime fleet and highly available Gatemole Control Plane.
 - Entra/Okta/IAM identity adapters, SSO, RBAC, and approval delegation.
 - Policy versioning/simulation, SIEM export, evidence retention, and audit
   bundles.
@@ -247,7 +247,7 @@ Deliver:
 Exit criteria:
 
 - Production paths are non-bypassable under the documented deployment model.
-- Vouch Control Plane failover neither loses acknowledged receipts nor duplicates
+- Gatemole Control Plane failover neither loses acknowledged receipts nor duplicates
   known effects.
 - Operators can recover stuck transactions without database surgery.
 
@@ -273,7 +273,7 @@ only when:
 - Two allow monitor-mode integration.
 - One agrees to a paid pilot.
 - The buyer values task-level verification beyond logs and raw approvals.
-- Vouch unlocks additional agent authority.
+- Gatemole unlocks additional agent authority.
 
 The primary value metric is permission expansion: the customer lets an agent
 safely complete work it previously could only suggest.
@@ -287,10 +287,10 @@ Execute in this order:
 3. Implement isolated Git worktree creation and inspection.
 4. Convert filesystem/Git changes into normalized staged effects.
 5. Persist transaction events and projections beside the run event store.
-6. Expose `vouch tx create|get|effects|validate|abort` locally.
+6. Expose `gatemole tx create|get|effects|validate|abort` locally.
 7. Generate a deterministic approval-package preview.
 8. Add restart, tamper, sequence-attack, partial-commit, and stage-escape tests.
-9. Add VouchTransactionBench without weakening existing suites.
+9. Add GatemoleTransactionBench without weakening existing suites.
 
 No source-repository commit, push, merge, deployment, or irreversible action is
 performed automatically. Those become explicit connector release operations

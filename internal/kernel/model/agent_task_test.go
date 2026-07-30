@@ -60,9 +60,11 @@ func TestAgentTransactionAdmissionBindingIsOptionalButStrict(t *testing.T) {
 	t.Parallel()
 	transaction := validAgentTaskTransaction(t)
 	transaction.Admission = &TransactionAdmissionBinding{
-		TaskDigest:     transaction.Task.Digest,
-		RunID:          transaction.Task.RunID,
-		ContractDigest: "sha256:" + strings.Repeat("d", 64),
+		RuntimeID:          "runtime:" + strings.Repeat("a", 64),
+		EnforcementProfile: "development",
+		TaskDigest:         transaction.Task.Digest,
+		RunID:              transaction.Task.RunID,
+		ContractDigest:     "sha256:" + strings.Repeat("d", 64),
 	}
 	if err := transaction.Validate(); err != nil {
 		t.Fatalf("valid admission binding: %v", err)
@@ -78,6 +80,18 @@ func TestAgentTransactionAdmissionBindingIsOptionalButStrict(t *testing.T) {
 		name string
 		edit func(*AgentTransaction)
 	}{
+		{
+			name: "invalid Runtime ID",
+			edit: func(value *AgentTransaction) {
+				value.Admission.RuntimeID = "runtime:not-canonical"
+			},
+		},
+		{
+			name: "invalid enforcement profile",
+			edit: func(value *AgentTransaction) {
+				value.Admission.EnforcementProfile = "Development"
+			},
+		},
 		{
 			name: "missing task",
 			edit: func(value *AgentTransaction) {
@@ -151,7 +165,7 @@ func validAgentTask(t *testing.T) AgentTask {
 			Digest:        "sha256:" + strings.Repeat("a", 64),
 			RuntimeClass:  "oci",
 			ImageDigest:   "sha256:" + strings.Repeat("b", 64),
-			Entrypoint:    "/opt/vouch-agent",
+			Entrypoint:    "/opt/gatemole-agent",
 			CommandDigest: "sha256:" + strings.Repeat("c", 64),
 		},
 		time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC),

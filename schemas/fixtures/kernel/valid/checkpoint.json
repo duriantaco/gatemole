@@ -1,5 +1,5 @@
 {
-  "version": "vouch.checkpoint.v0",
+  "version": "gatemole.checkpoint.v0",
   "id": "checkpoint:demo-001:12",
   "run_id": "run:demo-001",
   "event_sequence": 12,

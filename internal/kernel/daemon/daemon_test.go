@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -9,30 +10,209 @@ import (
 	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/approval"
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/approval"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
+
+func TestRunRejectsRuntimeMismatchBeforeSocketOrLedgerMutation(t *testing.T) {
+	ctx := context.Background()
+	repository := t.TempDir()
+	initializeDaemonRuntime(t, repository)
+	identity, err := runtimeidentity.Load(ctx, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerRuntimeID := "runtime:" + strings.Repeat("f", 64)
+	if ledgerRuntimeID == identity.RuntimeID {
+		ledgerRuntimeID = "runtime:" + strings.Repeat("e", 64)
+	}
+	databasePath := filepath.Join(repository, ".gatemole", "kernel.db")
+	kernelStore, err := store.OpenSQLiteForRuntime(
+		ctx,
+		databasePath,
+		ledgerRuntimeID,
+		store.EnforcementProfileDevelopment,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := kernelStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before := daemonSQLiteArtifactsSnapshot(t, databasePath)
+
+	// A dedicated Runtime lock directory keeps this regression independent of
+	// host-global daemon state. The database process lock is intentionally not
+	// part of the ledger artifact snapshot.
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	socketDirectory := filepath.Join(repository, "socket-must-not-exist")
+	socketPath := filepath.Join(socketDirectory, "gatemoled.sock")
+	if _, err := os.Lstat(socketDirectory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("socket directory exists before daemon startup: %v", err)
+	}
+
+	err = Run(ctx, Config{
+		DatabasePath:    databasePath,
+		SocketPath:      socketPath,
+		RepositoryRoot:  repository,
+		TransactionRoot: filepath.Join(t.TempDir(), "transactions"),
+		RuntimeEngine:   filepath.Join(repository, "missing-oci-engine"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "different Runtime instance") {
+		t.Fatalf("daemon accepted a ledger bound to another Runtime: %v", err)
+	}
+	if _, statErr := os.Lstat(socketDirectory); !errors.Is(
+		statErr,
+		os.ErrNotExist,
+	) {
+		t.Fatalf(
+			"Runtime mismatch created a socket directory or listener: %v",
+			statErr,
+		)
+	}
+	after := daemonSQLiteArtifactsSnapshot(t, databasePath)
+	if !equalDaemonSQLiteArtifactSnapshots(before, after) {
+		t.Fatal("Runtime mismatch changed ledger bytes or sidecars")
+	}
+}
+
+func TestRunRejectsLegacyVouchStateBeforeSocketOrLedgerMutation(t *testing.T) {
+	ctx := context.Background()
+	repository := t.TempDir()
+	initializeDaemonRuntime(t, repository)
+	identityPath := filepath.Join(
+		repository,
+		filepath.FromSlash(runtimeidentity.IdentityRelativePath),
+	)
+	identityBefore, err := os.ReadFile(identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacyDirectory := filepath.Join(
+		repository,
+		runtimeidentity.LegacyControlDirectory,
+	)
+	if err := os.Mkdir(legacyDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacySentinel := filepath.Join(legacyDirectory, "sentinel")
+	if err := os.WriteFile(
+		legacySentinel,
+		[]byte("do not rewrite"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	databasePath := filepath.Join(
+		repository,
+		runtimeidentity.ControlDirectory,
+		"kernel.db",
+	)
+	socketDirectory := filepath.Join(repository, "socket-must-not-exist")
+	socketPath := filepath.Join(socketDirectory, "gatemoled.sock")
+	err = Run(ctx, Config{
+		DatabasePath:    databasePath,
+		SocketPath:      socketPath,
+		RepositoryRoot:  repository,
+		TransactionRoot: filepath.Join(t.TempDir(), "transactions"),
+		RuntimeEngine:   filepath.Join(repository, "missing-oci-engine"),
+	})
+	if err == nil ||
+		!strings.Contains(err.Error(), "legacy Vouch control state") {
+		t.Fatalf("daemon did not reject legacy state: %v", err)
+	}
+	if _, statErr := os.Lstat(databasePath); !errors.Is(
+		statErr,
+		os.ErrNotExist,
+	) {
+		t.Fatalf("legacy rejection created a ledger: %v", statErr)
+	}
+	if _, statErr := os.Lstat(socketDirectory); !errors.Is(
+		statErr,
+		os.ErrNotExist,
+	) {
+		t.Fatalf("legacy rejection created a socket directory: %v", statErr)
+	}
+	identityAfter, err := os.ReadFile(identityPath)
+	if err != nil || !bytes.Equal(identityBefore, identityAfter) {
+		t.Fatalf("legacy rejection changed Runtime identity: err=%v", err)
+	}
+	legacyAfter, err := os.ReadFile(legacySentinel)
+	if err != nil || string(legacyAfter) != "do not rewrite" {
+		t.Fatalf("legacy rejection changed legacy state: data=%q err=%v", legacyAfter, err)
+	}
+}
+
+func daemonSQLiteArtifactsSnapshot(
+	t *testing.T,
+	databasePath string,
+) map[string][]byte {
+	t.Helper()
+	databaseDirectory := filepath.Dir(databasePath)
+	databaseName := filepath.Base(databasePath)
+	entries, err := os.ReadDir(databaseDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := make(map[string][]byte)
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == databaseName+".lock" ||
+			(name != databaseName &&
+				!strings.HasPrefix(name, databaseName+"-")) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(databaseDirectory, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot[name] = data
+	}
+	return snapshot
+}
+
+func equalDaemonSQLiteArtifactSnapshots(
+	left map[string][]byte,
+	right map[string][]byte,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for name, leftData := range left {
+		rightData, exists := right[name]
+		if !exists || !bytes.Equal(leftData, rightData) {
+			return false
+		}
+	}
+	return true
+}
 
 func TestRunRefusesAndPreservesExistingSocketPath(t *testing.T) {
 	dir := t.TempDir()
-	socket := filepath.Join(dir, "vouchd.sock")
+	initializeDaemonRuntime(t, dir)
+	socket := filepath.Join(dir, "gatemoled.sock")
 	if err := os.WriteFile(socket, []byte("owned by another process"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	err := Run(context.Background(), Config{
 		DatabasePath:    filepath.Join(dir, "kernel.db"),
 		SocketPath:      socket,
-		TransactionRoot: filepath.Join(dir, "transactions"),
+		RepositoryRoot:  dir,
+		TransactionRoot: filepath.Join(t.TempDir(), "transactions"),
 	})
 	if err == nil || !strings.Contains(err.Error(), "exists and is not a socket") {
 		t.Fatalf("expected existing socket error, got %v", err)
@@ -43,6 +223,162 @@ func TestRunRefusesAndPreservesExistingSocketPath(t *testing.T) {
 	}
 	if string(data) != "owned by another process" {
 		t.Fatalf("existing socket path was modified: %q", data)
+	}
+}
+
+func TestPeerAuthenticatedUnixListenerAcceptsOnlyDaemonUID(t *testing.T) {
+	socket := shortSocketPath(t, "peer-auth.sock")
+	listener, err := net.ListenUnix(
+		"unix",
+		&net.UnixAddr{Name: socket, Net: "unix"},
+	)
+	if err != nil {
+		t.Skipf("sandbox does not permit Unix sockets: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	authenticated := &peerAuthenticatedUnixListener{
+		UnixListener: listener,
+		expectedUID:  uint32(os.Geteuid()),
+	}
+	accepted := make(chan net.Conn, 1)
+	acceptErr := make(chan error, 1)
+	go func() {
+		connection, err := authenticated.Accept()
+		if err != nil {
+			acceptErr <- err
+			return
+		}
+		accepted <- connection
+	}()
+
+	client, err := net.DialUnix(
+		"unix",
+		nil,
+		&net.UnixAddr{Name: socket, Net: "unix"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	select {
+	case connection := <-accepted:
+		_ = connection.Close()
+	case err := <-acceptErr:
+		t.Fatal(err)
+	case <-time.After(time.Second):
+		t.Fatal("same-UID Unix client was not accepted")
+	}
+
+	rejectSocket := shortSocketPath(t, "peer-reject.sock")
+	rejectListener, err := net.ListenUnix(
+		"unix",
+		&net.UnixAddr{Name: rejectSocket, Net: "unix"},
+	)
+	if err != nil {
+		t.Skipf("sandbox does not permit Unix sockets: %v", err)
+	}
+	t.Cleanup(func() { _ = rejectListener.Close() })
+	if err := rejectListener.SetDeadline(
+		time.Now().Add(250 * time.Millisecond),
+	); err != nil {
+		t.Fatal(err)
+	}
+	rejecting := &peerAuthenticatedUnixListener{
+		UnixListener: rejectListener,
+		expectedUID:  uint32(os.Geteuid()) + 1,
+	}
+	rejected := make(chan error, 1)
+	go func() {
+		connection, err := rejecting.Accept()
+		if connection != nil {
+			_ = connection.Close()
+			rejected <- errors.New("wrong-UID client reached the HTTP listener")
+			return
+		}
+		rejected <- err
+	}()
+	wrongClient, err := net.DialUnix(
+		"unix",
+		nil,
+		&net.UnixAddr{Name: rejectSocket, Net: "unix"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = wrongClient.Close()
+	if err := <-rejected; err == nil {
+		t.Fatal("wrong-UID Unix client was accepted")
+	} else {
+		var networkErr net.Error
+		if !errors.As(err, &networkErr) || !networkErr.Timeout() {
+			t.Fatalf("wrong-UID rejection ended unexpectedly: %v", err)
+		}
+	}
+}
+
+func TestEnsurePrivateSocketDirectoryRejectsUnsafePaths(t *testing.T) {
+	safeDirectory := filepath.Join(t.TempDir(), "safe")
+	if err := ensurePrivateSocketDirectory(
+		filepath.Join(safeDirectory, "gatemoled.sock"),
+	); err != nil {
+		t.Fatalf("private socket directory was rejected: %v", err)
+	}
+	info, err := os.Lstat(safeDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
+		t.Fatalf("created socket directory is unsafe: %v", info.Mode())
+	}
+
+	writableDirectory := filepath.Join(t.TempDir(), "writable")
+	if err := os.Mkdir(writableDirectory, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(writableDirectory, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePrivateSocketDirectory(
+		filepath.Join(writableDirectory, "gatemoled.sock"),
+	); err == nil || !strings.Contains(err.Error(), "group- or world-writable") {
+		t.Fatalf("writable socket directory was accepted: %v", err)
+	}
+
+	target := t.TempDir()
+	symlinkDirectory := filepath.Join(t.TempDir(), "socket-link")
+	if err := os.Symlink(target, symlinkDirectory); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePrivateSocketDirectory(
+		filepath.Join(symlinkDirectory, "gatemoled.sock"),
+	); err == nil || !strings.Contains(err.Error(), "real directory") {
+		t.Fatalf("symlink socket directory was accepted: %v", err)
+	}
+}
+
+func initializeDaemonRuntime(t *testing.T, repository string) {
+	t.Helper()
+	command := exec.Command("git", "-C", repository, "init", "--quiet")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	excludePath := filepath.Join(repository, ".git", "info", "exclude")
+	file, err := os.OpenFile(excludePath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString("\n/.gatemole/runtime.json\n"); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runtimeidentity.CreateOrLoad(
+		context.Background(),
+		repository,
+	); err != nil {
+		t.Fatalf("create Runtime identity: %v", err)
 	}
 }
 
@@ -154,7 +490,7 @@ func TestOwnedSocketCleanupPreservesReplacementPath(t *testing.T) {
 
 func shortSocketPath(t *testing.T, name string) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "vouch-daemon-")
+	dir, err := os.MkdirTemp("/tmp", "gatemole-daemon-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +548,7 @@ func TestProductionWorkloadIdentityMustMatchNonRootDaemon(t *testing.T) {
 	}
 }
 
-func TestProductionConfigFilesRejectSymlinkAndWritableTrust(t *testing.T) {
+func TestProductionConfigSnapshotsRejectSymlinkAndWritableTrust(t *testing.T) {
 	dir := t.TempDir()
 	writable := filepath.Join(dir, "writable.json")
 	if err := os.WriteFile(writable, []byte("{}"), 0o666); err != nil {
@@ -221,7 +557,11 @@ func TestProductionConfigFilesRejectSymlinkAndWritableTrust(t *testing.T) {
 	if err := os.Chmod(writable, 0o666); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateProductionConfigFile(writable, "trust"); err == nil {
+	if _, err := readConfigFileSnapshot(
+		writable,
+		"trust",
+		true,
+	); err == nil {
 		t.Fatal("production accepted a group/world-writable trust file")
 	}
 	secure := filepath.Join(dir, "secure.json")
@@ -232,10 +572,14 @@ func TestProductionConfigFilesRejectSymlinkAndWritableTrust(t *testing.T) {
 	if err := os.Symlink(secure, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateProductionConfigFile(link, "trust"); err == nil {
+	if _, err := readConfigFileSnapshot(link, "trust", true); err == nil {
 		t.Fatal("production accepted a symlinked trust file")
 	}
-	if err := validateProductionConfigFile(secure, "trust"); err != nil {
+	if _, err := readConfigFileSnapshot(
+		secure,
+		"trust",
+		true,
+	); err != nil {
 		t.Fatalf("production rejected a secure regular trust file: %v", err)
 	}
 }
@@ -254,7 +598,7 @@ func TestProductionProfileRejectsUnsafeHostExecution(t *testing.T) {
 	dir := t.TempDir()
 	err := Run(context.Background(), Config{
 		DatabasePath:             filepath.Join(dir, "kernel.db"),
-		SocketPath:               filepath.Join(dir, "vouchd.sock"),
+		SocketPath:               filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:          filepath.Join(dir, "transactions"),
 		RuntimeProfile:           "production",
 		AllowUnsafeHostExecution: true,
@@ -272,7 +616,7 @@ func TestProductionProfileRequiresApprovalTrust(t *testing.T) {
 	workloadUID, workloadGID := testProductionWorkloadIdentity()
 	err := Run(context.Background(), Config{
 		DatabasePath:    filepath.Join(dir, "kernel.db"),
-		SocketPath:      filepath.Join(dir, "vouchd.sock"),
+		SocketPath:      filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot: filepath.Join(dir, "transactions"),
 		RuntimeProfile:  "production",
 		VerifierUID:     workloadUID,
@@ -312,7 +656,7 @@ func TestProductionProfileRequiresOIDCIdentityTrust(t *testing.T) {
 	}
 	err = Run(context.Background(), Config{
 		DatabasePath:      filepath.Join(dir, "kernel.db"),
-		SocketPath:        filepath.Join(dir, "vouchd.sock"),
+		SocketPath:        filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:   filepath.Join(dir, "transactions"),
 		RuntimeProfile:    "production",
 		VerifierUID:       workloadUID,
@@ -359,7 +703,7 @@ func TestProductionProfileRequiresDaemonOwnedVerifierProfiles(t *testing.T) {
 	identityData, err := json.Marshal(identity.TrustDocument{
 		Version:                 identity.TrustDocumentVersion,
 		Issuer:                  "https://identity.example.invalid/",
-		Audiences:               []string{"vouch-production"},
+		Audiences:               []string{"gatemole-production"},
 		MaxTokenLifetimeSeconds: 3600,
 		JWKS:                    identity.JWKS{Keys: []identity.JWK{jwk}},
 	})
@@ -376,7 +720,7 @@ func TestProductionProfileRequiresDaemonOwnedVerifierProfiles(t *testing.T) {
 	}
 	err = Run(context.Background(), Config{
 		DatabasePath:      filepath.Join(dir, "kernel.db"),
-		SocketPath:        filepath.Join(dir, "vouchd.sock"),
+		SocketPath:        filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:   filepath.Join(dir, "transactions"),
 		RuntimeProfile:    "production",
 		RuntimeEngine:     runtimeEngine,
@@ -532,6 +876,135 @@ func TestProcessLockRejectsASecondDaemonForTheSameDatabase(t *testing.T) {
 	}
 	if err := second.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRuntimeLockRejectsSameRuntimeAcrossDifferentLedgers(t *testing.T) {
+	repository := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repository, ".gatemole"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runtimeID := "runtime:" + strings.Repeat("8", 64)
+	first, err := acquireRuntimeLock(repository, runtimeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = first.Close() })
+
+	// Environment-dependent process state and separate database paths must not
+	// change the single lock identity of this repository Runtime.
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("TMPDIR", t.TempDir())
+	firstDatabaseLock, err := acquireProcessLock(
+		filepath.Join(t.TempDir(), "first.db"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = firstDatabaseLock.Close() })
+	secondDatabaseLock, err := acquireProcessLock(
+		filepath.Join(t.TempDir(), "second.db"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = secondDatabaseLock.Close() })
+
+	if _, err := acquireRuntimeLock(repository, runtimeID); err == nil ||
+		!strings.Contains(err.Error(), "already owned") {
+		t.Fatalf("second ledger reused a live Runtime identity: %v", err)
+	}
+	info, err := os.Lstat(filepath.Join(repository, ".gatemole", "runtime.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("repository Runtime lock is unsafe: %v", info.Mode())
+	}
+	other, err := acquireRuntimeLock(
+		repository,
+		"runtime:"+strings.Repeat("9", 64),
+	)
+	if err == nil || !strings.Contains(err.Error(), "already owned") {
+		if other != nil {
+			_ = other.Close()
+		}
+		t.Fatalf(
+			"same repository acquired a second Runtime identity lock: %v",
+			err,
+		)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := acquireRuntimeLock(repository, runtimeID)
+	if err != nil {
+		t.Fatalf("released Runtime identity could not restart: %v", err)
+	}
+	if err := restarted.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimeLockDirectoryRejectsUnsafeOwnershipAndPermissions(t *testing.T) {
+	directory := t.TempDir()
+	info, err := os.Lstat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRuntimeLockDirectory(
+		info,
+		uint32(os.Geteuid()),
+	); err != nil {
+		t.Fatalf("daemon-owned Runtime lock directory was rejected: %v", err)
+	}
+	otherUID := uint32(os.Geteuid()) + 1
+	if err := validateRuntimeLockDirectory(info, otherUID); err == nil ||
+		!strings.Contains(err.Error(), "not owned") {
+		t.Fatalf("foreign-owned Runtime lock directory was accepted: %v", err)
+	}
+
+	if err := os.Chmod(directory, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Lstat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRuntimeLockDirectory(
+		info,
+		uint32(os.Geteuid()),
+	); err == nil || !strings.Contains(err.Error(), "group- or world-writable") {
+		t.Fatalf("group-writable Runtime lock directory was accepted: %v", err)
+	}
+
+	if err := os.Chmod(directory, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Lstat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRuntimeLockDirectory(
+		info,
+		uint32(os.Geteuid()),
+	); err == nil || !strings.Contains(err.Error(), "writable and searchable") {
+		t.Fatalf("unwritable Runtime lock directory was accepted: %v", err)
+	}
+
+	regularFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(regularFile, []byte("not a lock directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err = os.Lstat(regularFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRuntimeLockDirectory(
+		info,
+		uint32(os.Geteuid()),
+	); err == nil || !strings.Contains(err.Error(), "real directory") {
+		t.Fatalf("regular file Runtime lock directory was accepted: %v", err)
 	}
 }
 

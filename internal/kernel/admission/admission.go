@@ -11,16 +11,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/eventlog"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/eventlog"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (
-	RequestVersion = "vouch.task_admission_request.v0"
-	ResultVersion  = "vouch.task_admission.v0"
+	LegacyRequestVersion = "gatemole.task_admission_request.v0"
+	RequestVersion       = "gatemole.task_admission_request.v1"
+	LegacyResultVersion  = "gatemole.task_admission.v0"
+	ResultVersion        = "gatemole.task_admission.v1"
 )
 
 // ContractSpec contains only caller-owned policy inputs. The daemon derives
@@ -39,32 +41,36 @@ type ContractSpec struct {
 	ReleaseContractRef string                        `json:"release_contract_ref,omitempty"`
 }
 
-// Request is the non-authoritative task admission input accepted by vouchd.
+// Request is the non-authoritative task admission input accepted by gatemoled.
 // Digests, event envelopes, timestamps and lifecycle state are intentionally
 // absent.
 type Request struct {
-	Version        string                        `json:"version"`
-	IdempotencyKey string                        `json:"idempotency_key"`
-	TransactionID  string                        `json:"transaction_id"`
-	RunID          string                        `json:"run_id,omitempty"`
-	Intent         string                        `json:"intent"`
-	AgentProfile   model.AgentTaskProfileBinding `json:"agent_profile"`
-	Sponsor        model.Principal               `json:"sponsor"`
-	Actor          model.Principal               `json:"actor"`
-	Contract       ContractSpec                  `json:"contract"`
+	Version                    string                        `json:"version"`
+	ExpectedRuntimeID          string                        `json:"expected_runtime_id,omitempty"`
+	ExpectedEnforcementProfile string                        `json:"expected_enforcement_profile,omitempty"`
+	IdempotencyKey             string                        `json:"idempotency_key"`
+	TransactionID              string                        `json:"transaction_id"`
+	RunID                      string                        `json:"run_id,omitempty"`
+	Intent                     string                        `json:"intent"`
+	AgentProfile               model.AgentTaskProfileBinding `json:"agent_profile"`
+	Sponsor                    model.Principal               `json:"sponsor"`
+	Actor                      model.Principal               `json:"actor"`
+	Contract                   ContractSpec                  `json:"contract"`
 }
 
 // Result is the immutable representation returned for both the initial
 // admission and an identical idempotent retry.
 type Result struct {
-	Version        string                        `json:"version"`
-	IdempotencyKey string                        `json:"idempotency_key"`
-	RequestDigest  string                        `json:"request_digest"`
-	Task           model.AgentTask               `json:"task"`
-	Contract       model.ExecutionContract       `json:"contract"`
-	Run            reducer.Projection            `json:"run"`
-	Grants         []model.CapabilityGrant       `json:"grants"`
-	Transaction    transactionreducer.Projection `json:"transaction"`
+	Version            string                        `json:"version"`
+	RuntimeID          string                        `json:"runtime_id,omitempty"`
+	EnforcementProfile string                        `json:"enforcement_profile,omitempty"`
+	IdempotencyKey     string                        `json:"idempotency_key"`
+	RequestDigest      string                        `json:"request_digest"`
+	Task               model.AgentTask               `json:"task"`
+	Contract           model.ExecutionContract       `json:"contract"`
+	Run                reducer.Projection            `json:"run"`
+	Grants             []model.CapabilityGrant       `json:"grants"`
+	Transaction        transactionreducer.Projection `json:"transaction"`
 }
 
 // Prepared carries the immutable result plus the exact daemon-authored events
@@ -122,12 +128,41 @@ func ComputeRequestDigest(namespace string, request Request) (string, error) {
 // admission. Callers should check the idempotency index before invoking it so
 // an old admission can still be replayed after its authority has expired.
 func Prepare(namespace string, request Request, now time.Time) (Prepared, error) {
-	if request.Version != RequestVersion {
+	switch request.Version {
+	case LegacyRequestVersion:
+		if request.ExpectedRuntimeID != "" ||
+			request.ExpectedEnforcementProfile != "" {
+			return Prepared{}, admissionError(
+				model.ErrorSchemaInvalid,
+				"prepare_task_admission",
+				request.TransactionID,
+				"v0 admission cannot carry Runtime metadata",
+				nil,
+			)
+		}
+	case RequestVersion:
+		if !model.IsRuntimeID(request.ExpectedRuntimeID) ||
+			!model.IsEnforcementProfile(
+				request.ExpectedEnforcementProfile,
+			) {
+			return Prepared{}, admissionError(
+				model.ErrorSchemaInvalid,
+				"prepare_task_admission",
+				request.ExpectedRuntimeID,
+				"v1 Runtime metadata is invalid",
+				nil,
+			)
+		}
+	default:
 		return Prepared{}, admissionError(
 			model.ErrorSchemaInvalid,
 			"prepare_task_admission",
 			request.TransactionID,
-			fmt.Sprintf("version must be %q", RequestVersion),
+			fmt.Sprintf(
+				"version must be %q or %q",
+				LegacyRequestVersion,
+				RequestVersion,
+			),
 			nil,
 		)
 	}
@@ -243,12 +278,13 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 		Namespace:              namespace,
 		ImageDigest:            imageDigest,
 		ContractDigest:         contract.Digest,
-		Principal:              model.Principal{ID: runID, Kind: model.PrincipalRun, Issuer: "vouchd"},
+		Principal:              model.Principal{ID: runID, Kind: model.PrincipalRun, Issuer: "gatemoled"},
 		DelegationChain:        []model.Principal{request.Sponsor},
 		State:                  model.RunCreated,
 		Deadline:               cloneTime(contract.Deadline),
 		BudgetLimits:           contract.Budgets,
 		BudgetUsage:            model.BudgetUsage{},
+		Workspace:              admittedWorkspaceRoot(contract.Resources),
 		CapabilityIDs:          []string{},
 		OutstandingApprovalIDs: []string{},
 		EventSequence:          1,
@@ -318,9 +354,11 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 		IntentDigest: task.IntentDigest,
 		Task:         &task,
 		Admission: &model.TransactionAdmissionBinding{
-			TaskDigest:     task.Digest,
-			RunID:          runID,
-			ContractDigest: contract.Digest,
+			RuntimeID:          request.ExpectedRuntimeID,
+			EnforcementProfile: request.ExpectedEnforcementProfile,
+			TaskDigest:         task.Digest,
+			RunID:              runID,
+			ContractDigest:     contract.Digest,
 		},
 		Sponsor:                request.Sponsor,
 		AgentRunIDs:            []string{runID},
@@ -341,15 +379,21 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 	if err != nil {
 		return Prepared{}, err
 	}
+	resultVersion := ResultVersion
+	if request.Version == LegacyRequestVersion {
+		resultVersion = LegacyResultVersion
+	}
 	result := Result{
-		Version:        ResultVersion,
-		IdempotencyKey: request.IdempotencyKey,
-		RequestDigest:  requestDigest,
-		Task:           task,
-		Contract:       contract,
-		Run:            runProjection,
-		Grants:         grants,
-		Transaction:    transactionProjection,
+		Version:            resultVersion,
+		RuntimeID:          request.ExpectedRuntimeID,
+		EnforcementProfile: request.ExpectedEnforcementProfile,
+		IdempotencyKey:     request.IdempotencyKey,
+		RequestDigest:      requestDigest,
+		Task:               task,
+		Contract:           contract,
+		Run:                runProjection,
+		Grants:             grants,
+		Transaction:        transactionProjection,
 	}
 	prepared := Prepared{
 		Namespace:        namespace,
@@ -365,11 +409,31 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 	return prepared, nil
 }
 
+// admittedWorkspaceRoot binds the run's logical workspace to the same unique
+// root named by its compiled contract. Transaction execution materializes that
+// logical root separately; low-level connector drivers use it to prevent a
+// v1-admitted run from acting outside its declared workspace.
+func admittedWorkspaceRoot(
+	resources []model.ContractResource,
+) string {
+	root := ""
+	for _, resource := range resources {
+		candidate := resource.Conditions.WorkspaceRoot
+		if candidate == "" {
+			continue
+		}
+		if root != "" && root != candidate {
+			return ""
+		}
+		root = candidate
+	}
+	return root
+}
+
 // Validate checks the immutable admission representation without requiring
 // access to its event rows.
 func (result Result) Validate(namespace string) error {
-	if result.Version != ResultVersion ||
-		!model.IsIdentifier(namespace) ||
+	if !model.IsIdentifier(namespace) ||
 		!model.IsIdentifier(result.IdempotencyKey) ||
 		!model.IsSHA256Digest(result.RequestDigest) {
 		return admissionError(
@@ -377,6 +441,37 @@ func (result Result) Validate(namespace string) error {
 			"validate_task_admission",
 			result.IdempotencyKey,
 			"admission result envelope is invalid",
+			nil,
+		)
+	}
+	switch result.Version {
+	case LegacyResultVersion:
+		if result.RuntimeID != "" || result.EnforcementProfile != "" {
+			return admissionError(
+				model.ErrorEventChain,
+				"validate_task_admission",
+				result.RuntimeID,
+				"v0 admission cannot carry Runtime metadata",
+				nil,
+			)
+		}
+	case ResultVersion:
+		if !model.IsRuntimeID(result.RuntimeID) ||
+			!model.IsEnforcementProfile(result.EnforcementProfile) {
+			return admissionError(
+				model.ErrorEventChain,
+				"validate_task_admission",
+				result.RuntimeID,
+				"v1 admission Runtime metadata is invalid",
+				nil,
+			)
+		}
+	default:
+		return admissionError(
+			model.ErrorEventChain,
+			"validate_task_admission",
+			result.Version,
+			"admission result version is invalid",
 			nil,
 		)
 	}
@@ -413,6 +508,8 @@ func (result Result) Validate(namespace string) error {
 		transaction.State != model.TransactionCreated ||
 		transaction.EventSequence != 1 ||
 		binding == nil ||
+		binding.RuntimeID != result.RuntimeID ||
+		binding.EnforcementProfile != result.EnforcementProfile ||
 		result.Task.Namespace != namespace ||
 		run.Namespace != namespace ||
 		transaction.Namespace != namespace ||
@@ -458,6 +555,57 @@ func (result Result) Validate(namespace string) error {
 				nil,
 			)
 		}
+	}
+	return nil
+}
+
+// ValidateAgainstRequest verifies that an internally valid daemon result
+// represents the caller-owned authority in request. RequestDigest alone is not
+// sufficient for client correlation because authenticated middleware may add
+// verified actor issuer/claims before hashing, while that actor metadata is not
+// part of the returned task/contract projections.
+func (result Result) ValidateAgainstRequest(
+	namespace string,
+	request Request,
+) error {
+	if err := result.Validate(namespace); err != nil {
+		return err
+	}
+	expected, err := Prepare(
+		namespace,
+		request,
+		result.Task.CreatedAt,
+	)
+	if err != nil {
+		return admissionError(
+			model.ErrorEventChain,
+			"validate_task_admission_response",
+			request.TransactionID,
+			"reconstruct caller-owned admission authority",
+			err,
+		)
+	}
+	expectedResult := expected.Result
+	if result.Version != expectedResult.Version ||
+		result.RuntimeID != request.ExpectedRuntimeID ||
+		result.EnforcementProfile !=
+			request.ExpectedEnforcementProfile ||
+		result.IdempotencyKey != request.IdempotencyKey ||
+		!reflect.DeepEqual(result.Task, expectedResult.Task) ||
+		!reflect.DeepEqual(result.Contract, expectedResult.Contract) ||
+		!reflect.DeepEqual(result.Run.Run, expectedResult.Run.Run) ||
+		!reflect.DeepEqual(result.Grants, expectedResult.Grants) ||
+		!reflect.DeepEqual(
+			result.Transaction.Transaction,
+			expectedResult.Transaction.Transaction,
+		) {
+		return admissionError(
+			model.ErrorEventChain,
+			"validate_task_admission_response",
+			request.TransactionID,
+			"admission response does not match caller-owned request authority",
+			nil,
+		)
 	}
 	return nil
 }
@@ -611,9 +759,9 @@ func createRunEvent(
 
 func daemonPrincipal() model.Principal {
 	return model.Principal{
-		ID:     "service:vouchd",
+		ID:     "service:gatemoled",
 		Kind:   model.PrincipalService,
-		Issuer: "vouchd",
+		Issuer: "gatemoled",
 	}
 }
 

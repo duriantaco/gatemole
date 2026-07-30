@@ -14,38 +14,47 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/broker"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/broker"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimepreflight"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 const maxResponseBytes = 4 << 20
 
-// Client talks to vouchd over a local Unix socket. The socket is the trust
-// boundary: vouchd still validates every request and never trusts this client.
+// Client talks to gatemoled over a local Unix socket. New verifies that each
+// connection's peer owns the stable, private socket path before HTTP can send
+// a bearer token. gatemoled still validates every request and never trusts this
+// client.
 type Client struct {
-	http        *http.Client
-	bearerToken string
+	http              *http.Client
+	bearerToken       string
+	expectedRuntimeID string
 }
 
 func New(socketPath string) *Client {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return dialer.DialContext(ctx, "unix", socketPath)
+			return dialVerifiedUnix(
+				ctx,
+				dialer.DialContext,
+				socketPath,
+			)
 		},
 	}
 	client := NewWithTransport(transport)
-	client.bearerToken = os.Getenv("VOUCH_IDENTITY_TOKEN")
+	client.bearerToken = os.Getenv("GATEMOLE_IDENTITY_TOKEN")
 	return client
 }
 
 // NewWithTransport supports embedded callers and transport-level tests. Most
-// callers should use New so requests stay on the local vouchd Unix socket.
+// callers should use New so requests stay on the local gatemoled Unix socket.
 func NewWithTransport(transport http.RoundTripper) *Client {
 	return &Client{http: &http.Client{Transport: transport, Timeout: 30 * time.Second}}
 }
@@ -53,6 +62,15 @@ func NewWithTransport(transport http.RoundTripper) *Client {
 func (c *Client) WithBearerToken(token string) *Client {
 	cloned := *c
 	cloned.bearerToken = token
+	return &cloned
+}
+
+// WithExpectedRuntimeID returns a client that binds every request to one
+// Runtime. A configured daemon rejects the request before handler side effects
+// when the header names another Runtime.
+func (c *Client) WithExpectedRuntimeID(runtimeID string) *Client {
+	cloned := *c
+	cloned.expectedRuntimeID = runtimeID
 	return &cloned
 }
 
@@ -143,7 +161,74 @@ func (c *Client) AdmitTask(
 	var result admission.Result
 	path := "/v0/namespaces/" + url.PathEscape(namespace) + "/task-admissions"
 	err := c.do(ctx, http.MethodPost, path, request, &result)
-	return result, err
+	if err != nil {
+		return admission.Result{}, err
+	}
+	if err := result.ValidateAgainstRequest(namespace, request); err != nil {
+		return admission.Result{}, fmt.Errorf(
+			"validate task admission response: %w",
+			err,
+		)
+	}
+	if result.RuntimeID != request.ExpectedRuntimeID ||
+		result.EnforcementProfile != request.ExpectedEnforcementProfile ||
+		result.IdempotencyKey != request.IdempotencyKey {
+		return admission.Result{}, errors.New(
+			"validate task admission response: response does not match request",
+		)
+	}
+	return result, nil
+}
+
+func (c *Client) PreflightRuntime(
+	ctx context.Context,
+	namespace string,
+	request runtimepreflight.Request,
+) (runtimepreflight.Result, error) {
+	if err := request.Validate(); err != nil {
+		return runtimepreflight.Result{}, fmt.Errorf(
+			"validate Runtime preflight request: %w",
+			err,
+		)
+	}
+	var result runtimepreflight.Result
+	path := "/v0/namespaces/" + url.PathEscape(namespace) +
+		"/runtime/preflight"
+	err := c.do(ctx, http.MethodPost, path, request, &result)
+	if err != nil {
+		return runtimepreflight.Result{}, err
+	}
+	if err := result.Validate(); err != nil {
+		return runtimepreflight.Result{}, fmt.Errorf(
+			"validate Runtime preflight response: %w",
+			err,
+		)
+	}
+	if result.RuntimeID != request.ExpectedRuntimeID {
+		return runtimepreflight.Result{}, errors.New(
+			"validate Runtime preflight response: Runtime identity does not match request",
+		)
+	}
+	if request.RequiredEnforcementProfile != "" &&
+		result.EnforcementProfile != request.RequiredEnforcementProfile {
+		return runtimepreflight.Result{}, errors.New(
+			"validate Runtime preflight response: enforcement profile does not match request",
+		)
+	}
+	switch {
+	case request.Agent == nil &&
+		(result.AgentProfileID != "" || result.ImageDigest != ""):
+		return runtimepreflight.Result{}, errors.New(
+			"validate Runtime preflight response: unexpected agent binding",
+		)
+	case request.Agent != nil &&
+		(result.AgentProfileID != request.Agent.Profile.ID ||
+			result.ImageDigest != request.Agent.Profile.ImageDigest):
+		return runtimepreflight.Result{}, errors.New(
+			"validate Runtime preflight response: agent binding does not match request",
+		)
+	}
+	return result, nil
 }
 
 // CreateTaskTransaction is the product-level creation path for a single
@@ -382,7 +467,8 @@ func (c *Client) RunTransactionAgent(
 	} else {
 		longHTTP.Timeout = 0
 	}
-	longClient := &Client{http: &longHTTP, bearerToken: c.bearerToken}
+	longClient := *c
+	longClient.http = &longHTTP
 	err := longClient.do(
 		ctx, http.MethodPost,
 		transactionPath(namespace, transactionID)+"/executions/run",
@@ -481,7 +567,8 @@ func (c *Client) RunTransactionVerification(
 	var result TransactionVerificationRunResult
 	longHTTP := *c.http
 	longHTTP.Timeout = time.Duration(timeoutSeconds)*time.Second + 30*time.Second
-	longClient := &Client{http: &longHTTP, bearerToken: c.bearerToken}
+	longClient := *c
+	longClient.http = &longHTTP
 	err := longClient.do(
 		ctx, http.MethodPost,
 		transactionPath(namespace, transactionID)+"/verifications/run",
@@ -577,6 +664,12 @@ func (c *Client) transactionMutation(
 }
 
 func (c *Client) do(ctx context.Context, method, path string, input, output any) error {
+	if c.expectedRuntimeID != "" &&
+		!runtimeidentity.IsRuntimeID(c.expectedRuntimeID) {
+		return errors.New(
+			"build kernel request: expected Runtime identity is invalid",
+		)
+	}
 	var body io.Reader
 	if input != nil {
 		data, err := json.Marshal(input)
@@ -585,7 +678,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 		}
 		body = bytes.NewReader(data)
 	}
-	request, err := http.NewRequestWithContext(ctx, method, "http://vouchd"+path, body)
+	request, err := http.NewRequestWithContext(ctx, method, "http://gatemoled"+path, body)
 	if err != nil {
 		return fmt.Errorf("build kernel request: %w", err)
 	}
@@ -595,9 +688,15 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 	if c.bearerToken != "" {
 		request.Header.Set("Authorization", "Bearer "+c.bearerToken)
 	}
+	if c.expectedRuntimeID != "" {
+		request.Header.Set(
+			runtimeidentity.HTTPHeader,
+			c.expectedRuntimeID,
+		)
+	}
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("connect to vouchd: %w", err)
+		return fmt.Errorf("connect to gatemoled: %w", err)
 	}
 	defer response.Body.Close()
 	limited := io.LimitReader(response.Body, maxResponseBytes+1)
@@ -613,7 +712,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 		if err := json.Unmarshal(data, &kernelErr); err == nil && kernelErr.Code != "" {
 			return &kernelErr
 		}
-		return fmt.Errorf("vouchd returned %s", response.Status)
+		return fmt.Errorf("gatemoled returned %s", response.Status)
 	}
 	if output == nil {
 		return nil

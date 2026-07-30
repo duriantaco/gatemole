@@ -28,7 +28,7 @@ jobs:
           cache: true
 
       - name: Verify validation routing
-        run: scripts/vouchci-plan-test.sh
+        run: scripts/gatemoleci-plan-test.sh
 
       - name: Select affected validation
         id: plan
@@ -38,8 +38,8 @@ jobs:
         run: |
           merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           git diff --name-only --no-renames "$merge_base" "$HEAD_SHA" \
-            > "$RUNNER_TEMP/vouch-changed-files"
-          scripts/vouchci-plan.sh --paths "$RUNNER_TEMP/vouch-changed-files" \
+            > "$RUNNER_TEMP/gatemole-changed-files"
+          scripts/gatemoleci-plan.sh --paths "$RUNNER_TEMP/gatemole-changed-files" \
             >> "$GITHUB_OUTPUT"
 
       - name: Check formatting
@@ -76,21 +76,21 @@ jobs:
           python -m pip install -r docs/requirements.txt
           mkdocs build --strict
 
-      - name: Run VouchBench
-        if: steps.plan.outputs.vouchbench == 'true'
-        run: scripts/vouchbench.sh --out /tmp/vouch-pr-validation/vouchbench
+      - name: Run GatemoleBench
+        if: steps.plan.outputs.gatemolebench == 'true'
+        run: scripts/gatemolebench.sh --out /tmp/gatemole-pr-validation/gatemolebench
 
-      - name: Run VouchKernelBench
+      - name: Run GatemoleKernelBench
         if: steps.plan.outputs.kernelbench == 'true'
-        run: scripts/vouchkernelbench.sh --out /tmp/vouch-pr-validation/kernelbench
+        run: scripts/gatemolekernelbench.sh --out /tmp/gatemole-pr-validation/kernelbench
 
-      - name: Run VouchTransactionBench
+      - name: Run GatemoleTransactionBench
         if: steps.plan.outputs.transactionbench == 'true'
-        run: scripts/vouchtransactionbench.sh
+        run: scripts/gatemoletransactionbench.sh
 
-      - name: Run VouchRuntimeBench
+      - name: Run GatemoleRuntimeBench
         if: steps.plan.outputs.runtimebench == 'true'
-        run: scripts/vouchruntimebench.sh
+        run: scripts/gatemoleruntimebench.sh
 
       - name: Verify Docker
         if: steps.plan.outputs.production == 'true'
@@ -103,21 +103,21 @@ jobs:
         if: steps.plan.outputs.production == 'true'
         id: fixture
         run: |
-          image="$(scripts/vouchproductionfixture.sh \
-            --tag "vouch-production-fixture:${GITHUB_SHA}")"
+          image="$(scripts/gatemoleproductionfixture.sh \
+            --tag "gatemole-production-fixture:${GITHUB_SHA}")"
           echo "image=$image" >> "$GITHUB_OUTPUT"
 
       - name: Run production OCI acceptance
         if: steps.plan.outputs.production == 'true'
         env:
-          VOUCH_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
-        run: scripts/vouchproductionbench.sh
+          GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
+        run: scripts/gatemoleproductionbench.sh
 
       - name: Summarize validation plan
         if: always()
         env:
           DOCS: ${{ steps.plan.outputs.docs }}
-          VOUCHBENCH: ${{ steps.plan.outputs.vouchbench }}
+          GATEMOLEBENCH: ${{ steps.plan.outputs.gatemolebench }}
           KERNELBENCH: ${{ steps.plan.outputs.kernelbench }}
           TRANSACTIONBENCH: ${{ steps.plan.outputs.transactionbench }}
           RUNTIMEBENCH: ${{ steps.plan.outputs.runtimebench }}
@@ -133,9 +133,9 @@ jobs:
             echo "| --- | --- |"
             echo "| Go format, tidy, vet and unit tests | always |"
             echo "| Strict documentation build | ${DOCS:-unknown} |"
-            echo "| VouchBench | ${VOUCHBENCH:-unknown} |"
-            echo "| VouchKernelBench | ${KERNELBENCH:-unknown} |"
-            echo "| VouchTransactionBench | ${TRANSACTIONBENCH:-unknown} |"
-            echo "| VouchRuntimeBench | ${RUNTIMEBENCH:-unknown} |"
+            echo "| GatemoleBench | ${GATEMOLEBENCH:-unknown} |"
+            echo "| GatemoleKernelBench | ${KERNELBENCH:-unknown} |"
+            echo "| GatemoleTransactionBench | ${TRANSACTIONBENCH:-unknown} |"
+            echo "| GatemoleRuntimeBench | ${RUNTIMEBENCH:-unknown} |"
             echo "| Production OCI boundary | ${PRODUCTION:-unknown} |"
           } >> "$GITHUB_STEP_SUMMARY"

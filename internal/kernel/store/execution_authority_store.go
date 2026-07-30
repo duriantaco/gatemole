@@ -6,16 +6,88 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
-const getExecutionAuthorityOperation = "get_execution_authority"
+const (
+	getExecutionAuthorityOperation    = "get_execution_authority"
+	getRunExecutionAuthorityOperation = "get_run_execution_authority"
+)
+
+// GetExecutionAuthorityForRun resolves the immutable admission index before
+// loading the same fully verified v1 authority snapshot used for daemon-owned
+// execution. Configured Runtime APIs use it to keep the legacy host broker from
+// turning replayable v0 history or a raw run into live effects.
+func (s *SQLiteStore) GetExecutionAuthorityForRun(
+	ctx context.Context,
+	namespace string,
+	runID string,
+) (ExecutionAuthoritySnapshot, error) {
+	if err := validateNamespace(namespace); err != nil {
+		return ExecutionAuthoritySnapshot{}, err
+	}
+	if !identifierPattern.MatchString(runID) {
+		return ExecutionAuthoritySnapshot{}, storeError(
+			model.ErrorSchemaInvalid,
+			getRunExecutionAuthorityOperation,
+			runID,
+			"invalid run ID",
+			nil,
+		)
+	}
+	var transactionID string
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT transaction_id
+		 FROM task_admissions
+		 WHERE namespace = ? AND run_id = ?`,
+		namespace,
+		runID,
+	).Scan(&transactionID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return ExecutionAuthoritySnapshot{}, storeError(
+			model.ErrorCapabilityDenied,
+			getRunExecutionAuthorityOperation,
+			runID,
+			"run has no current Runtime-bound task admission",
+			err,
+		)
+	case err != nil:
+		return ExecutionAuthoritySnapshot{}, storeError(
+			model.ErrorInternal,
+			getRunExecutionAuthorityOperation,
+			runID,
+			"resolve run task admission",
+			err,
+		)
+	}
+	snapshot, err := s.GetExecutionAuthority(
+		ctx,
+		namespace,
+		transactionID,
+	)
+	if err != nil {
+		return ExecutionAuthoritySnapshot{}, err
+	}
+	if snapshot.Run.Run.ID != runID {
+		return ExecutionAuthoritySnapshot{}, storeError(
+			model.ErrorEventChain,
+			getRunExecutionAuthorityOperation,
+			runID,
+			"task admission run binding does not match its index",
+			nil,
+		)
+	}
+	return snapshot, nil
+}
 
 // GetExecutionAuthority returns one consistent, fully verified view of the
 // authority admitted for a transaction and its current lifecycle projections.
-// Legacy transactions are intentionally not upgraded into execution authority.
+// Legacy task admissions remain replayable, but never become live authority.
 func (s *SQLiteStore) GetExecutionAuthority(
 	ctx context.Context,
 	namespace, transactionID string,
@@ -82,6 +154,15 @@ func (s *SQLiteStore) GetExecutionAuthority(
 			transactionID,
 			"load admitted authority",
 			err,
+		)
+	}
+	if initial.Version != admission.ResultVersion {
+		return ExecutionAuthoritySnapshot{}, storeError(
+			model.ErrorCapabilityDenied,
+			getExecutionAuthorityOperation,
+			transactionID,
+			"legacy task admission cannot yield live execution authority",
+			nil,
 		)
 	}
 	if initial.Transaction.Transaction.ID != transactionID {

@@ -12,11 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
-const TrustDocumentVersion = "vouch.approval_trust.v0"
+const TrustDocumentVersion = "gatemole.approval_trust.v0"
+
+const maxTrustDocumentBytes = 2 << 20
 
 type TrustedKey struct {
 	KeyID           string
@@ -104,30 +106,46 @@ func LoadTrustFile(path string) (*TrustStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("approval trust: stat %s: %w", path, err)
 	}
-	if !info.Mode().IsRegular() || info.Size() > 2<<20 {
+	if !info.Mode().IsRegular() || info.Size() > maxTrustDocumentBytes {
 		return nil, errors.New("approval trust must be a regular file no larger than 2 MiB")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, 2<<20))
+	data, err := io.ReadAll(io.LimitReader(file, maxTrustDocumentBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("approval trust: read %s: %w", path, err)
+	}
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("approval trust must be a regular file no larger than 2 MiB")
+	}
+	store, err := ParseTrustDocument(data)
+	if err != nil {
+		return nil, fmt.Errorf("approval trust: decode %s: %w", path, err)
+	}
+	return store, nil
+}
+
+// ParseTrustDocument validates one already-bounded approval trust snapshot.
+// Callers that also record a digest must hash these exact bytes.
+func ParseTrustDocument(data []byte) (*TrustStore, error) {
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("approval trust must be no larger than 2 MiB")
 	}
 	var document TrustDocument
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("approval trust: decode %s: %w", path, err)
+		return nil, err
 	}
 	if err := requireJSONEOF(decoder); err != nil {
-		return nil, fmt.Errorf("approval trust: decode %s: %w", path, err)
+		return nil, err
 	}
 	if document.Version != TrustDocumentVersion {
-		return nil, fmt.Errorf("approval trust: expected version %q", TrustDocumentVersion)
+		return nil, fmt.Errorf("expected version %q", TrustDocumentVersion)
 	}
 	keys := make([]TrustedKey, 0, len(document.Keys))
 	for _, entry := range document.Keys {
 		publicKey, err := base64.StdEncoding.DecodeString(entry.PublicKeyBase64)
 		if err != nil {
-			return nil, fmt.Errorf("approval trust: key %q public key is not base64: %w", entry.KeyID, err)
+			return nil, fmt.Errorf("key %q public key is not base64: %w", entry.KeyID, err)
 		}
 		keys = append(keys, TrustedKey{
 			KeyID:           entry.KeyID,

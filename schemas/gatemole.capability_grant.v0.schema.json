@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.capability_grant.v0.schema.json",
+  "title": "Gatemole CapabilityGrant v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "subject_run_id", "issuer", "resource", "operations",
+    "delegable", "issued_at", "expires_at", "uses", "policy_decision_id"
+  ],
+  "properties": {
+    "version": { "const": "gatemole.capability_grant.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "subject_run_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "issuer": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/principal" },
+    "resource": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/resource_selector" },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approval_required": { "type": "boolean" },
+        "workspace_root": { "type": "string", "minLength": 1 },
+        "environment_allowlist": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "data_classifications": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "max_output_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "delegable": { "type": "boolean" },
+    "delegation_parent_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "issued_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "expires_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "revoked_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "max_uses": { "type": "integer", "minimum": 1 },
+    "uses": { "type": "integer", "minimum": 0 },
+    "policy_decision_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
+  }
+}

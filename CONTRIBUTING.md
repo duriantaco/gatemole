@@ -1,29 +1,29 @@
 # Contributing
 
-Thanks for helping build Vouch Runtime.
+Thanks for helping build Gatemole Runtime.
 
 ## Product first principle
 
-The current Vouch Runtime provides transaction and outcome control inside a
+The current Gatemole Runtime provides transaction and outcome control inside a
 narrow local-Git boundary. A contribution should strengthen the controlled path
 from task intent to isolated execution, staged effects, exact-state
 verification, authority, commit and recovery.
 
 Keep the hierarchy clear:
 
-- Vouch is the company and product name.
-- Vouch Agent OS is the complete architecture: Control Plane plus Runtime
+- Gatemole is the company and product name.
+- Gatemole Agent OS is the complete architecture: Control Plane plus Runtime
   fleet, transaction protocol and connector model.
-- Vouch Runtime is the first sellable product and customer-side enforcement
+- Gatemole Runtime is the first sellable product and customer-side enforcement
   boundary.
-- Vouch Developer Runtime is the local experience around one Runtime, using the
+- Gatemole Developer Runtime is the local experience around one Runtime, using the
   same kernel rather than a separate developer-only enforcement path.
-- `vouchd` is the trusted transaction kernel inside each Runtime.
-- Vouch Contracts is an optional verification module.
-- Vouch Control Plane is the future central fleet, policy, approval and audit
+- `gatemoled` is the trusted transaction kernel inside each Runtime.
+- Gatemole Contracts is an optional verification module.
+- Gatemole Control Plane is the future central fleet, policy, approval and audit
   manager; it does not execute downstream agent actions.
 
-Vouch is not a coding agent, generic AI code reviewer, identity provider or
+Gatemole is not a coding agent, generic AI code reviewer, identity provider or
 universal rollback system.
 
 ## Start locally
@@ -38,7 +38,7 @@ go vet ./...
 Build the runtime:
 
 ```sh
-go install ./cmd/vouch ./cmd/vouchd ./cmd/vouch-model-broker
+go install ./cmd/gatemole ./cmd/gatemoled ./cmd/gatemole-model-broker
 ```
 
 If the binaries are not on `PATH`:
@@ -50,22 +50,22 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 The runtime acceptance paths are separate so failures retain a useful scope:
 
 ```sh
-scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
-scripts/vouchtransactionbench.sh
-scripts/vouchruntimebench.sh
+scripts/gatemolekernelbench.sh --out /tmp/gatemolekernelbench
+scripts/gatemoletransactionbench.sh
+scripts/gatemoleruntimebench.sh
 ```
 
 The OCI production acceptance requires a working Docker-compatible engine:
 
 ```sh
-image="$(scripts/vouchproductionfixture.sh --tag vouch-production-fixture:acceptance)"
-VOUCH_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+image="$(scripts/gatemoleproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
+GATEMOLE_PRODUCTION_IMAGE="$image" scripts/gatemoleproductionbench.sh
 ```
 
 The optional Contracts module has its own regression harness:
 
 ```sh
-scripts/vouchbench.sh --out /tmp/vouchbench
+scripts/gatemolebench.sh --out /tmp/gatemolebench
 ```
 
 ## Runtime work areas
@@ -133,9 +133,9 @@ Prefer one deep connector to many shallow wrappers. A connector should define:
 
 Remote Git/GitHub is first, followed by Kubernetes and PostgreSQL.
 
-## Vouch Contracts contributions
+## Gatemole Contracts contributions
 
-The Contracts module under `internal/vouch/` remains useful as optional
+The Contracts module under `internal/gatemole/` remains useful as optional
 verification policy. Its most valuable work connects it to runtime authority:
 
 - Compile obligations into daemon-owned verifier requirements.
@@ -164,7 +164,7 @@ For code changes:
 
 For documentation:
 
-- Lead with Vouch Runtime, not the Contracts compiler.
+- Lead with Gatemole Runtime, not the Contracts compiler.
 - Distinguish implemented, supported and planned behavior.
 - Preserve the single-node/single-tenant/local-Git production limits.
 - Do not claim arbitrary code correctness, universal rollback, multi-tenancy or
@@ -191,13 +191,13 @@ Avoid changes that:
 - Hide ambiguous or partially committed state.
 - Depend on nondeterministic model output for authority.
 - Add a connector without reconciliation semantics.
-- Present Vouch Contracts as the whole product.
-- Call the current implementation a complete Vouch Agent OS.
+- Present Gatemole Contracts as the whole product.
+- Call the current implementation a complete Gatemole Agent OS.
 
 The project should be ambitious about enforcement and conservative about its
 claims.
 
 ## License
 
-By contributing to Vouch, you agree that your contributions are licensed under
+By contributing to Gatemole, you agree that your contributions are licensed under
 the Apache License, Version 2.0.

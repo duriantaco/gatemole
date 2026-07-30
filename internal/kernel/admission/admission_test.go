@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
 )
 
 func TestComputeRequestDigestIsDeterministicAndIgnoresActorClaimsDigest(t *testing.T) {
@@ -47,6 +47,16 @@ func TestComputeRequestDigestIsDeterministicAndIgnoresActorClaimsDigest(t *testi
 	}
 	if digest == first {
 		t.Fatal("material actor identity did not change the request digest")
+	}
+
+	changedRuntime := request
+	changedRuntime.ExpectedRuntimeID = testRuntimeID("f")
+	digest, err = ComputeRequestDigest("engineering", changedRuntime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if digest == first {
+		t.Fatal("expected Runtime identity did not change the request digest")
 	}
 }
 
@@ -153,11 +163,16 @@ func TestPrepareBindsContractTaskRunAndTransaction(t *testing.T) {
 	}
 	if result.Task.TransactionID != transaction.ID ||
 		result.Task.RunID != result.Run.Run.ID ||
+		result.Run.Run.Workspace != "workspace" ||
 		len(transaction.AgentRunIDs) != 1 ||
 		transaction.AgentRunIDs[0] != result.Run.Run.ID {
 		t.Fatal("task, run, and transaction identities are not cross-bound")
 	}
-	if binding.TaskDigest != result.Task.Digest ||
+	if binding.RuntimeID != request.ExpectedRuntimeID ||
+		binding.EnforcementProfile != request.ExpectedEnforcementProfile ||
+		result.RuntimeID != request.ExpectedRuntimeID ||
+		result.EnforcementProfile != request.ExpectedEnforcementProfile ||
+		binding.TaskDigest != result.Task.Digest ||
 		binding.RunID != result.Run.Run.ID ||
 		binding.ContractDigest != result.Contract.Digest ||
 		result.Run.Run.ContractDigest != result.Contract.Digest {
@@ -172,6 +187,39 @@ func TestPrepareBindsContractTaskRunAndTransaction(t *testing.T) {
 			result.Run.Run.CapabilityIDs[index] != grant.ID {
 			t.Fatalf("grant %q is not bound to the admitted run", grant.ID)
 		}
+	}
+}
+
+func TestResultValidateAgainstCallerRequestIgnoresOnlyAuthenticatedActorClaims(
+	t *testing.T,
+) {
+	t.Parallel()
+	request := validAdmissionRequest()
+	authenticated := request
+	authenticated.Actor.Issuer = "https://issuer.example.invalid"
+	authenticated.Actor.ClaimsDigest = testDigest("f")
+	prepared, err := Prepare(
+		"engineering",
+		authenticated,
+		time.Date(2026, 7, 27, 9, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepared.Result.ValidateAgainstRequest(
+		"engineering",
+		request,
+	); err != nil {
+		t.Fatalf("authenticated actor binding broke client correlation: %v", err)
+	}
+
+	changed := request
+	changed.Intent = "Different caller-owned authority."
+	if err := prepared.Result.ValidateAgainstRequest(
+		"engineering",
+		changed,
+	); err == nil {
+		t.Fatal("unrelated caller-owned intent matched admission response")
 	}
 }
 
@@ -203,6 +251,20 @@ func TestPreparedValidateRejectsAdmissionMutations(t *testing.T) {
 			name: "grant subject",
 			edit: func(prepared *Prepared) {
 				prepared.Result.Grants[0].SubjectRunID = "run:different"
+			},
+		},
+		{
+			name: "Runtime admission binding",
+			edit: func(prepared *Prepared) {
+				prepared.Result.Transaction.Transaction.Admission.RuntimeID =
+					testRuntimeID("f")
+			},
+		},
+		{
+			name: "enforcement profile admission binding",
+			edit: func(prepared *Prepared) {
+				prepared.Result.Transaction.Transaction.Admission.EnforcementProfile =
+					"production"
 			},
 		},
 		{
@@ -263,16 +325,18 @@ func validAdmissionRequest() Request {
 	maxToolCalls := int64(20)
 	deadline := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC)
 	return Request{
-		Version:        RequestVersion,
-		IdempotencyKey: "admission:auth-fix",
-		TransactionID:  "tx:auth-fix",
-		Intent:         "Fix authentication without changing public behavior.",
+		Version:                    RequestVersion,
+		ExpectedRuntimeID:          testRuntimeID("0"),
+		ExpectedEnforcementProfile: "development",
+		IdempotencyKey:             "admission:auth-fix",
+		TransactionID:              "tx:auth-fix",
+		Intent:                     "Fix authentication without changing public behavior.",
 		AgentProfile: model.AgentTaskProfileBinding{
 			ID:            "agent-profile:secure-coder",
 			Digest:        testDigest("a"),
 			RuntimeClass:  "oci",
 			ImageDigest:   testDigest("b"),
-			Entrypoint:    "/opt/vouch-agent",
+			Entrypoint:    "/opt/gatemole-agent",
 			CommandDigest: testDigest("c"),
 		},
 		Sponsor: model.Principal{
@@ -303,4 +367,8 @@ func validAdmissionRequest() Request {
 
 func testDigest(character string) string {
 	return "sha256:" + strings.Repeat(character, 64)
+}
+
+func testRuntimeID(character string) string {
+	return "runtime:" + strings.Repeat(character, 64)
 }

@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_run.v0",
+  "version": "gatemole.agent_run.v0",
   "id": "run:invalid-unknown",
   "namespace": "fixture",
   "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

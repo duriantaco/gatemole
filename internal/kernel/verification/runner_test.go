@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
 )
 
 func TestRunnerReportsInterruptedContainerCleanupFailure(t *testing.T) {
@@ -39,7 +39,7 @@ exec sleep 5
 		CPUMillis:     1000,
 		PIDsLimit:     64,
 		TmpfsBytes:    64 << 20,
-		ContainerName: "vouch-cleanup",
+		ContainerName: "gatemole-cleanup",
 		Role:          "agent",
 		WorkspaceMode: "transaction_rw",
 	}
@@ -86,7 +86,7 @@ done
 		CPUMillis:     1000,
 		PIDsLimit:     64,
 		TmpfsBytes:    64 << 20,
-		ContainerName: "vouch-output-limit",
+		ContainerName: "gatemole-output-limit",
 		Role:          "verifier",
 		WorkspaceMode: "staged_ro",
 	}
@@ -123,14 +123,14 @@ func TestRunnerReconcilesNamedContainerAfterFailedWorkload(t *testing.T) {
 	engine := filepath.Join(root, "fake-oci")
 	if err := os.WriteFile(engine, []byte(`#!/bin/sh
 if [ "$1" = "rm" ]; then
-  : > "$VOUCH_CLEANUP_MARKER"
+  : > "$GATEMOLE_CLEANUP_MARKER"
   exit 0
 fi
 exit 42
 `), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_CLEANUP_MARKER", cleanupMarker)
+	t.Setenv("GATEMOLE_CLEANUP_MARKER", cleanupMarker)
 	workspace := filepath.Join(root, "workspace")
 	if err := os.Mkdir(workspace, 0o700); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ exit 42
 		CPUMillis:     1000,
 		PIDsLimit:     64,
 		TmpfsBytes:    64 << 20,
-		ContainerName: "vouch-failed-cleanup",
+		ContainerName: "gatemole-failed-cleanup",
 		Role:          "agent",
 		WorkspaceMode: "transaction_rw",
 	}

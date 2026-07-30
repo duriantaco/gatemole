@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 func (s *SQLiteStore) CreateTransaction(ctx context.Context, event model.TransactionEvent) (transactionreducer.Projection, error) {

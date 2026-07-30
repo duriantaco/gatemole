@@ -13,19 +13,19 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
 )
 
 const (
-	VerifierProfilesVersion = "vouch.verifier_profiles.v0"
+	VerifierProfilesVersion = "gatemole.verifier_profiles.v0"
 
 	MinVerifierProfileTimeoutSeconds int64 = 1
 	MaxVerifierProfileTimeoutSeconds int64 = 3600
 	MaxVerifierProfilesFileBytes     int64 = 2 << 20
 
-	verifierProfileDigestVersion    = "vouch.verifier_profile_digest.v0"
-	verifierProfileSetDigestVersion = "vouch.verifier_profile_set_digest.v0"
+	verifierProfileDigestVersion    = "gatemole.verifier_profile_digest.v0"
+	verifierProfileSetDigestVersion = "gatemole.verifier_profile_set_digest.v0"
 )
 
 // Profile is one daemon-owned OCI verifier invocation. Command is an exact
@@ -115,25 +115,41 @@ func LoadProfiles(path string) (*ProfileSet, error) {
 			MaxVerifierProfilesFileBytes,
 		)
 	}
+	profiles, err := ParseProfiles(data)
+	if err != nil {
+		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+	}
+	return profiles, nil
+}
+
+// ParseProfiles validates and digests one already-bounded verifier-profile
+// snapshot. The returned set digest is derived from these exact parsed bytes.
+func ParseProfiles(data []byte) (*ProfileSet, error) {
+	if int64(len(data)) > MaxVerifierProfilesFileBytes {
+		return nil, fmt.Errorf(
+			"verifier profiles must be no larger than %d bytes",
+			MaxVerifierProfilesFileBytes,
+		)
+	}
 	if !utf8.Valid(data) {
-		return nil, errors.New("decode verifier profiles: JSON must be valid UTF-8")
+		return nil, errors.New("JSON must be valid UTF-8")
 	}
 	if err := rejectDuplicateJSONKeys(data); err != nil {
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 
 	var document profileDocument
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("trailing JSON value")
 		}
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 	return newProfileSet(document)
 }

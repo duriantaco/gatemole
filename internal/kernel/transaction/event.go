@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func CreationEvent(transaction model.AgentTransaction, actor model.Principal) (model.TransactionEvent, error) {

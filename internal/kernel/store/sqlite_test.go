@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
 )
 
 func TestSQLiteStoreImplementsStore(t *testing.T) {
@@ -382,7 +382,7 @@ func stateEvent(t *testing.T, projection reducer.Projection, to model.RunState, 
 		RunID:          projection.Run.ID,
 		Sequence:       int64(sequence),
 		Type:           reducer.EventRunStateChanged,
-		Actor:          model.Principal{ID: "service:vouchd", Kind: model.PrincipalService},
+		Actor:          model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService},
 		OccurredAt:     projection.Run.UpdatedAt.Add(time.Duration(sequence) * time.Second),
 		Payload:        payload,
 		PreviousDigest: projection.LastEventDigest,

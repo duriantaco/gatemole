@@ -500,7 +500,7 @@ func writeBrokerError(w http.ResponseWriter, status int, code, message string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"error": map[string]string{
-			"type":    "vouch_model_broker_error",
+			"type":    "gatemole_model_broker_error",
 			"code":    code,
 			"message": message,
 		},

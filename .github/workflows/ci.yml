@@ -73,8 +73,8 @@ jobs:
       - name: Run kernel tests with the race detector
         run: go test -race -count=1 ./internal/kernel/...
 
-  vouchbench:
-    name: VouchBench acceptance
+  gatemolebench:
+    name: GatemoleBench acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -87,26 +87,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run VouchBench
-        run: scripts/vouchbench.sh --out /tmp/vouchbench
+      - name: Run GatemoleBench
+        run: scripts/gatemolebench.sh --out /tmp/gatemolebench
 
       - name: Add benchmark summary
         if: always()
         run: |
-          if [ -f /tmp/vouchbench/vouchbench.latest.md ]; then
-            cat /tmp/vouchbench/vouchbench.latest.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/gatemolebench/gatemolebench.latest.md ]; then
+            cat /tmp/gatemolebench/gatemolebench.latest.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vouchbench-results
-          path: /tmp/vouchbench
+          name: gatemolebench-results
+          path: /tmp/gatemolebench
           if-no-files-found: ignore
 
   kernelbench:
-    name: VouchKernelBench acceptance
+    name: GatemoleKernelBench acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -119,26 +119,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run VouchKernelBench
-        run: scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
+      - name: Run GatemoleKernelBench
+        run: scripts/gatemolekernelbench.sh --out /tmp/gatemolekernelbench
 
       - name: Add benchmark summary
         if: always()
         run: |
-          if [ -f /tmp/vouchkernelbench/vouchkernelbench.latest.md ]; then
-            cat /tmp/vouchkernelbench/vouchkernelbench.latest.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/gatemolekernelbench/gatemolekernelbench.latest.md ]; then
+            cat /tmp/gatemolekernelbench/gatemolekernelbench.latest.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vouchkernelbench-results
-          path: /tmp/vouchkernelbench
+          name: gatemolekernelbench-results
+          path: /tmp/gatemolekernelbench
           if-no-files-found: ignore
 
   transactionbench:
-    name: VouchTransactionBench acceptance
+    name: GatemoleTransactionBench acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -156,11 +156,11 @@ jobs:
           command -v git
           command -v jq
 
-      - name: Run VouchTransactionBench
-        run: scripts/vouchtransactionbench.sh
+      - name: Run GatemoleTransactionBench
+        run: scripts/gatemoletransactionbench.sh
 
   runtimebench:
-    name: VouchRuntimeBench acceptance
+    name: GatemoleRuntimeBench acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -178,8 +178,8 @@ jobs:
           command -v git
           command -v jq
 
-      - name: Run VouchRuntimeBench
-        run: scripts/vouchruntimebench.sh
+      - name: Run GatemoleRuntimeBench
+        run: scripts/gatemoleruntimebench.sh
 
   production-acceptance:
     name: Production OCI acceptance
@@ -204,13 +204,13 @@ jobs:
       - name: Build local production fixture image
         id: fixture
         run: |
-          image="$(scripts/vouchproductionfixture.sh --tag "vouch-production-fixture:${GITHUB_SHA}")"
+          image="$(scripts/gatemoleproductionfixture.sh --tag "gatemole-production-fixture:${GITHUB_SHA}")"
           echo "image=$image" >> "$GITHUB_OUTPUT"
 
       - name: Run production acceptance
         env:
-          VOUCH_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
-        run: scripts/vouchproductionbench.sh
+          GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
+        run: scripts/gatemoleproductionbench.sh
 
   skylos:
     name: Skylos advisory

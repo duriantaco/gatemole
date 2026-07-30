@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/driver"
-	"github.com/duriantaco/vouch/internal/kernel/eventlog"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	"github.com/duriantaco/vouch/internal/kernel/store"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/driver"
+	"github.com/duriantaco/gatemole/internal/kernel/eventlog"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
 )
 
 func TestBrokerCommitsAllowedWriteAndAuditsDeniedEscape(t *testing.T) {
@@ -273,7 +273,7 @@ func createRunningRunWithGrant(
 		Namespace:      "test",
 		ImageDigest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ContractDigest: digest,
-		Principal:      model.Principal{ID: "run:broker-test", Kind: model.PrincipalRun, Issuer: "vouchd"},
+		Principal:      model.Principal{ID: "run:broker-test", Kind: model.PrincipalRun, Issuer: "gatemoled"},
 		DelegationChain: []model.Principal{
 			{ID: "human:test", Kind: model.PrincipalHuman},
 		},
@@ -329,7 +329,7 @@ func createRunningRunWithGrant(
 	if err != nil {
 		t.Fatal(err)
 	}
-	grantEvent, err := eventlog.Next(projection, reducer.EventCapabilitiesGranted, model.Principal{ID: "service:vouchd", Kind: model.PrincipalService}, now,
+	grantEvent, err := eventlog.Next(projection, reducer.EventCapabilitiesGranted, model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService}, now,
 		model.CapabilitiesGrantedPayload{ContractDigest: contract.Digest, Grants: grants})
 	if err != nil {
 		t.Fatal(err)

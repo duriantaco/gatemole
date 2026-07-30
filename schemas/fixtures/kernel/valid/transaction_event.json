@@ -1,11 +1,11 @@
 {
-  "version": "vouch.transaction_event.v0",
+  "version": "gatemole.transaction_event.v0",
   "id": "tx-event:demo-001:1",
   "transaction_id": "tx:demo-001",
   "sequence": 1,
   "type": "transaction.created",
   "actor": {
-    "id": "service:vouchd",
+    "id": "service:gatemoled",
     "kind": "service"
   },
   "occurred_at": "2026-07-23T08:00:00Z",

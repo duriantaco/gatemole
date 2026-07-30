@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_execution.v0",
+  "version": "gatemole.agent_execution.v0",
   "id": "execution:demo-001",
   "transaction_id": "tx:demo-001",
   "run_id": "run:demo-001",

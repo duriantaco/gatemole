@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	AgentImageVersion        = "vouch.agent_image.v0"
-	ExecutionContractVersion = "vouch.execution_contract.v0"
-	AgentRunVersion          = "vouch.agent_run.v0"
-	CapabilityGrantVersion   = "vouch.capability_grant.v0"
-	ActionRequestVersion     = "vouch.action_request.v0"
-	RunEventVersion          = "vouch.run_event.v0"
-	CheckpointVersion        = "vouch.checkpoint.v0"
-	PolicyDecisionVersion    = "vouch.policy_decision.v0"
+	AgentImageVersion        = "gatemole.agent_image.v0"
+	ExecutionContractVersion = "gatemole.execution_contract.v0"
+	AgentRunVersion          = "gatemole.agent_run.v0"
+	CapabilityGrantVersion   = "gatemole.capability_grant.v0"
+	ActionRequestVersion     = "gatemole.action_request.v0"
+	RunEventVersion          = "gatemole.run_event.v0"
+	CheckpointVersion        = "gatemole.checkpoint.v0"
+	PolicyDecisionVersion    = "gatemole.policy_decision.v0"
 )
 
 type PrincipalKind string

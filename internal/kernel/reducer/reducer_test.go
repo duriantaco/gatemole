@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestTransitionTableMatchesDocumentedLifecycle(t *testing.T) {
@@ -286,7 +286,7 @@ func stateEvent(t *testing.T, projection Projection, to model.RunState, reason s
 		RunID:          projection.Run.ID,
 		Sequence:       int64(sequence),
 		Type:           EventRunStateChanged,
-		Actor:          model.Principal{ID: "service:vouchd", Kind: model.PrincipalService},
+		Actor:          model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService},
 		OccurredAt:     projection.Run.UpdatedAt.Add(time.Second),
 		Payload:        mustJSON(t, payload),
 		PreviousDigest: projection.LastEventDigest,

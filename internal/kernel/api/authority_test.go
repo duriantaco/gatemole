@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 func TestApprovalSeparationRejectsSponsorAndPriorActor(t *testing.T) {
@@ -196,7 +196,7 @@ func TestRequiredVerifierProfilesBindPreparationAndPolicyDigest(t *testing.T) {
 		VerifierDigest:    verifierDigest,
 		InputsDigest:      inputsDigest,
 		Verifier: model.Principal{
-			ID: "service:vouch-verifier", Kind: model.PrincipalService,
+			ID: "service:gatemole-verifier", Kind: model.PrincipalService,
 			ClaimsDigest: profile.Digest,
 		},
 	}}
@@ -224,6 +224,28 @@ func TestRequiredVerifierProfilesBindPreparationAndPolicyDigest(t *testing.T) {
 	server.executionPolicy.VerifierMemoryBytes = 8 << 30
 	if err := server.validateVerifierProfiles(projection); err == nil {
 		t.Fatal("stale verifier result remained valid after runtime policy change")
+	}
+}
+
+func TestVerifierProfileSourceSnapshotDigestBindsAuthorityPolicy(t *testing.T) {
+	profiles := loadAuthorityProfiles(t, "verify", `["/verify","strict"]`)
+	policy := testVerifierExecutionPolicy(profiles)
+	policy.VerifierProfilesSourceDigest = testDigest("9")
+	server := &Server{
+		sequencePolicy:  transactionreducer.BaselinePolicy{},
+		executionPolicy: policy,
+	}
+	first, err := server.currentAuthorityPolicyDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.executionPolicy.VerifierProfilesSourceDigest = testDigest("a")
+	second, err := server.currentAuthorityPolicyDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("verifier-profile source snapshot change did not invalidate authority")
 	}
 }
 
@@ -281,7 +303,7 @@ func loadAuthorityProfiles(
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "verifier-profiles.json")
 	document := `{
-		"version":"vouch.verifier_profiles.v0",
+		"version":"gatemole.verifier_profiles.v0",
 		"profiles":[{
 			"name":"` + name + `",
 			"image":"registry.example/verifier@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

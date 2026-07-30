@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestSequencePolicyDetectsControlAndEvidenceCoupling(t *testing.T) {
@@ -23,7 +23,7 @@ func TestSequencePolicyDetectsControlAndEvidenceCoupling(t *testing.T) {
 	if decision.Outcome != SequenceRequireApproval {
 		t.Fatalf("combined sequence = %q, want approval: %#v", decision.Outcome, decision)
 	}
-	if !hasFinding(decision, "vouch.sequence.control-and-evidence-coupling") {
+	if !hasFinding(decision, "gatemole.sequence.control-and-evidence-coupling") {
 		t.Fatalf("missing coupling finding: %#v", decision)
 	}
 }
@@ -32,7 +32,7 @@ func TestSequencePolicyBlocksGrantThenSelfUse(t *testing.T) {
 	grant := policyEffect(1, "role/deployer", "permission.grant", nil)
 	use := policyEffect(2, "production/service", "deploy", []string{grant.ID})
 	decision := (BaselinePolicy{}).Evaluate([]model.Effect{grant, use})
-	if decision.Outcome != SequenceBlock || !hasFinding(decision, "vouch.sequence.grant-then-self-use") {
+	if decision.Outcome != SequenceBlock || !hasFinding(decision, "gatemole.sequence.grant-then-self-use") {
 		t.Fatalf("decision = %#v, want self-use block", decision)
 	}
 }
@@ -47,7 +47,7 @@ func TestSequencePolicyRequiresApprovalForIrreversibleAndLargeDelete(t *testing.
 	if decision.Outcome != SequenceRequireApproval {
 		t.Fatalf("outcome = %q, want approval", decision.Outcome)
 	}
-	if !hasFinding(decision, "vouch.sequence.irreversible-release") || !hasFinding(decision, "vouch.sequence.large-database-delete") {
+	if !hasFinding(decision, "gatemole.sequence.irreversible-release") || !hasFinding(decision, "gatemole.sequence.large-database-delete") {
 		t.Fatalf("missing irreversible/delete findings: %#v", decision)
 	}
 }

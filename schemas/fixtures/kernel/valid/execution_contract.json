@@ -1,5 +1,5 @@
 {
-  "version": "vouch.execution_contract.v0",
+  "version": "gatemole.execution_contract.v0",
   "id": "contract.demo-change",
   "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "owner": {
@@ -10,7 +10,7 @@
   "goal": "Modify the fixture only inside its workspace and produce release evidence.",
   "non_goals": [
     "Do not write outside the fixture workspace.",
-    "Do not release without satisfying the existing Vouch gate."
+    "Do not release without satisfying the existing Gatemole gate."
   ],
   "risk": "high",
   "resources": [

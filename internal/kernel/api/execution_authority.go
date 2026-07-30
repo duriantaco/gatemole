@@ -6,17 +6,75 @@ import (
 	"sort"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/authority"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/authority"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 type liveExecutionAuthority struct {
 	Plan               authority.ExecutionPlan
 	RunSequence        int64
 	RunLastEventDigest string
+}
+
+func (s *Server) requireCurrentRuntimeRunAuthority(
+	ctx context.Context,
+	namespace string,
+	runID string,
+) error {
+	if !runtimeidentity.IsRuntimeID(s.runtimeID) {
+		return nil
+	}
+	_, err := s.store.GetExecutionAuthorityForRun(
+		ctx,
+		namespace,
+		runID,
+	)
+	return err
+}
+
+func (s *Server) requireCurrentRuntimeAuthority(
+	ctx context.Context,
+	namespace string,
+	transactionID string,
+	current transactionreducer.Projection,
+) error {
+	if !runtimeidentity.IsRuntimeID(s.runtimeID) {
+		return nil
+	}
+	snapshot, err := s.store.GetExecutionAuthority(
+		ctx,
+		namespace,
+		transactionID,
+	)
+	if err != nil {
+		var kernelErr *model.KernelError
+		if errors.As(err, &kernelErr) &&
+			kernelErr.Code == model.ErrorNotFound {
+			return &model.KernelError{
+				Code:      model.ErrorCapabilityDenied,
+				Operation: "require_runtime_authority",
+				Resource:  transactionID,
+				Message:   "configured Runtime operation requires atomic v1 task admission",
+				Cause:     err,
+			}
+		}
+		return err
+	}
+	if snapshot.Transaction.Transaction.EventSequence !=
+		current.Transaction.EventSequence ||
+		snapshot.Transaction.LastEventDigest != current.LastEventDigest {
+		return &model.KernelError{
+			Code:      model.ErrorConflict,
+			Operation: "require_runtime_authority",
+			Resource:  transactionID,
+			Message:   "transaction changed while Runtime authority was loaded",
+		}
+	}
+	return nil
 }
 
 func (s *Server) compileLiveExecutionAuthority(

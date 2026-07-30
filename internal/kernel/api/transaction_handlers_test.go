@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 )
 
 func TestFrozenStageFreshnessRequiresStateAndEffectDigests(t *testing.T) {
@@ -77,7 +77,7 @@ func TestFrozenStageFreshnessRequiresStateAndEffectDigests(t *testing.T) {
 
 func TestPersistedTaskAuthorizesExactAgentProfileAndMaterializesReadOnly(t *testing.T) {
 	t.Parallel()
-	command := []string{"agent", "--task-file", "/vouch/task.json"}
+	command := []string{"agent", "--task-file", "/gatemole/task.json"}
 	commandDigest, err := transactionreducer.ComputeCommandDigest(command)
 	if err != nil {
 		t.Fatal(err)

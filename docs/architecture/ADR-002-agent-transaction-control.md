@@ -1,13 +1,13 @@
-# ADR-002: Vouch Agent Transaction Control
+# ADR-002: Gatemole Agent Transaction Control
 
 - Status: accepted for implementation
 - Date: 2026-07-23
 - Supersedes: the product framing, but not the kernel boundary, in ADR-001
-- Owners: Vouch maintainers
+- Owners: Gatemole maintainers
 
 ## Context
 
-Vouch now has a durable local run kernel, scoped capabilities, action
+Gatemole now has a durable local run kernel, scoped capabilities, action
 mediation, and an append-only event history. Those mechanisms answer important
 questions about one action at a time: which run requested it, whether a grant
 permits it, and whether the driver returned a receipt.
@@ -22,7 +22,7 @@ Identity and request-level authorization are also becoming incumbent
 capabilities. Entra Agent ID manages and governs agent identities; Okta exposes
 agent registration and lifecycle controls; AWS AgentCore provides identity and
 a Cedar policy engine at its gateway; and MCP specifies OAuth-based resource
-authorization. Vouch should integrate those systems instead of duplicating
+authorization. Gatemole should integrate those systems instead of duplicating
 them.
 
 AuthZEN's Authorization and API Access Prerequisites work validates approvals,
@@ -43,7 +43,7 @@ Primary references checked on 2026-07-23:
 
 ## Decision
 
-Vouch will be the transaction and verification layer between agents and
+Gatemole will be the transaction and verification layer between agents and
 real-world systems.
 
 Its core protocol is:
@@ -60,13 +60,13 @@ declare intent
   -> compensate, roll back, or require manual recovery on failure
 ```
 
-Vouch is not an identity provider, model runtime, planner, general workflow
+Gatemole is not an identity provider, model runtime, planner, general workflow
 engine, or universal rollback mechanism. It consumes identity and credentials
 from existing systems, governs agents from existing runtimes, and represents
 partial failure honestly.
 
-The first sellable product is **Vouch Runtime — transaction and outcome control
-for autonomous-agent actions**. **Vouch Agent OS** names the complete
+The first sellable product is **Gatemole Runtime — transaction and outcome control
+for autonomous-agent actions**. **Gatemole Agent OS** names the complete
 architecture: a Control Plane plus a fleet of customer-side Runtimes, the
 transaction protocol and the connector model. An external complete-enterprise
 claim requires both non-bypassable multi-system Runtime enforcement and
@@ -119,7 +119,7 @@ irreversible    cannot be reliably undone
 
 `reversible` and `compensatable` are not synonyms. Compensation may not restore
 the exact prior world. Irreversible effects are held in an outbox and approved
-before release; Vouch must never imply they can be rolled back.
+before release; Gatemole must never imply they can be rolled back.
 
 An effect follows an explicit lifecycle:
 
@@ -134,7 +134,7 @@ committed -> manual_recovery_required
 
 ## Evaluation and authority
 
-Vouch evaluates both:
+Gatemole evaluates both:
 
 1. Each action and effect against deterministic resource policy.
 2. The ordered transaction prefix and complete proposed sequence against
@@ -157,7 +157,7 @@ Any material change invalidates approval.
 
 ## Commit protocol
 
-Vouch coordinates a saga, not a fictional global ACID transaction:
+Gatemole coordinates a saga, not a fictional global ACID transaction:
 
 1. Freeze the intent, effect set, policy, verification results, and commit plan.
 2. Recheck grants, approvals, and preconditions immediately before release.
@@ -196,7 +196,7 @@ Positive:
 
 - The existing run kernel becomes valuable infrastructure rather than a
   commodity identity directory.
-- Vouch can govern composed behavior that single-request authorization misses.
+- Gatemole can govern composed behavior that single-request authorization misses.
 - Verification and the existing release-contract engine become central.
 - Partial failure and irreversibility are visible before approval.
 - The product can integrate across identity providers, clouds, and agent
@@ -216,7 +216,7 @@ Costs:
 ### Agent identity directory
 
 Rejected as the core product because identity, discovery, lifecycle, and
-credential brokering are already strong incumbent categories. Vouch will adapt
+credential brokering are already strong incumbent categories. Gatemole will adapt
 their principals into a common transaction sponsor and agent identity.
 
 ### Per-tool allow/deny gateway
@@ -227,7 +227,7 @@ forbidden sequence.
 ### Observability and approval dashboard
 
 Rejected because approval after an effect is already real is not control.
-Vouch must stage or withhold release at the data-plane boundary.
+Gatemole must stage or withhold release at the data-plane boundary.
 
 ### Universal rollback promise
 

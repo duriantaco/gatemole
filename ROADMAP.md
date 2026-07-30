@@ -1,27 +1,27 @@
-# Vouch Agent OS Roadmap
+# Gatemole Agent OS Roadmap
 
 ## Direction
 
-**Vouch Agent OS** is the complete architecture: the organization-wide Control
-Plane, a fleet of customer-side Vouch Runtimes, the transaction protocol and
+**Gatemole Agent OS** is the complete architecture: the organization-wide Control
+Plane, a fleet of customer-side Gatemole Runtimes, the transaction protocol and
 connector model. It is not a separate daemon.
 
-**Vouch Runtime** is the deployable enforcement boundary. The trusted
-**`vouchd` kernel** lives inside each Runtime and owns authority, durable
+**Gatemole Runtime** is the deployable enforcement boundary. The trusted
+**`gatemoled` kernel** lives inside each Runtime and owns authority, durable
 transaction state, policy decisions, approvals and commit coordination.
 
 One kernel supports two product experiences:
 
 | Experience | User promise | Current truth |
 | --- | --- | --- |
-| **Vouch Developer Runtime** | Run an existing agent locally with bounded authority, isolated effects, review and recovery. | A manually operated local-Git path plus profile initialization and diagnostics exists. Packaging, maintained adapters, live supervision and review UX need product work. |
-| **Vouch Agent OS** | Govern consequential agent actions across customer systems and a fleet of Runtimes. | Enterprise experience and full target architecture only. The action protocol, remote connectors, cross-run policy and Control Plane are planned. |
+| **Gatemole Developer Runtime** | Run an existing agent locally with bounded authority, isolated effects, review and recovery. | A manually operated local-Git path plus profile initialization and diagnostics exists. Packaging, maintained adapters, live supervision and review UX need product work. |
+| **Gatemole Agent OS** | Govern consequential agent actions across customer systems and a fleet of Runtimes. | Enterprise experience and full target architecture only. The action protocol, remote connectors, cross-run policy and Control Plane are planned. |
 
 The experiences are different packaging and operations around the same
 enforcement semantics, not separate kernels. The honest current external
 product message is:
 
-> **Vouch Runtime — stateful transaction and outcome integrity for local Git
+> **Gatemole Runtime — stateful transaction and outcome integrity for local Git
 > actions proposed by autonomous agents.**
 
 The market problem is real, but generic identity, policy gateways, durable
@@ -46,7 +46,7 @@ admit exact intent and delegated authority
   -> reconcile, compensate or require manual recovery
 ```
 
-Vouch succeeds when a customer safely grants an agent authority to complete a
+Gatemole succeeds when a customer safely grants an agent authority to complete a
 task it previously allowed the agent only to suggest.
 
 ## Current state
@@ -73,19 +73,19 @@ commands.
 
 ### Next architecture gap
 
-The production `vouch run` path now uses one daemon-owned, idempotent admission
+The production `gatemole run` path now uses one daemon-owned, idempotent admission
 operation to persist the exact `AgentTask`, content-bound
 `ExecutionContract`, real `AgentRun`, initial capability grants and
 `AgentTransaction` in one SQLite transaction.
 
-Immediately before OCI launch, `vouchd` now reloads a consistent live snapshot
+Immediately before OCI launch, `gatemoled` now reloads a consistent live snapshot
 of those resources and compiles a fail-closed execution plan. Caller-supplied
 image and command material must match admitted digests; only full-workspace
 read/write and explicitly granted provider-scoped model brokering are
 currently supported. Expired, terminal, narrowed or otherwise unsupported
 authority starts no workload.
 
-Before any broker or agent workload starts, `vouchd` now atomically verifies
+Before any broker or agent workload starts, `gatemoled` now atomically verifies
 that both snapshot heads are still current and records execution start in the
 transaction ledger. A concurrent run or transaction change therefore starts
 no workload. Execution is not yet one paired lifecycle: the OCI workload
@@ -127,20 +127,20 @@ validation.
 | **OS-2: atomic task admission** | Complete | One daemon-owned, idempotent endpoint persists the exact task, `ExecutionContract`, real `AgentRun`, initial capability grants and `AgentTransaction` in one database transaction. The server authors authoritative events and digests. | Fault injection after every persistence step creates no orphan resources. Identical idempotency retry returns the same admission; a changed retry conflicts. Every transaction references a digest-matching run and contract. |
 | **OS-3: bind execution authority and data boundaries** | In progress | OCI execution transitions the admitted `AgentRun`. Identity, sponsor and parent lineage, contract, capabilities, deadline, allowed resources, data classes, model egress and budgets become authoritative. Task limits may narrow daemon ceilings but never widen them. | Run and transaction state cannot diverge after success, failure or injected crash. Expired authority prevents start. Time, model, tool and cost limits fail closed and are durably charged across restart. Denied mounts, connector reads, resource classes and model-egress destinations are inaccessible rather than merely recorded. |
 | **OS-4: durable supervisor and circuit breaker** | Planned | Asynchronous workload start, durable desired state and execution lease; functional `watch`, `cancel`, kill and revocation. “Pause” means stop at a declared safe boundary, not arbitrary process snapshotting. | Repeated start creates one workload. Cancel terminates the agent and broker within a bounded interval and prevents release. No new effect executes after revocation. Restart produces one reconciled outcome. |
-| **DX-1: Developer Runtime onboarding** | In progress | Runtime-aware project setup and diagnostics, a versioned CLI release, one maintained coding-agent profile and local daemon setup. Keep generated configuration explicit and repository-owned. | On a clean supported machine, a developer can install Vouch, initialize a repository, diagnose prerequisites and start one maintained agent without hand-authoring kernel configuration. |
+| **DX-1: Developer Runtime onboarding** | In progress | Runtime-aware project setup and diagnostics, a versioned CLI release, one maintained coding-agent profile and local daemon setup. Keep generated configuration explicit and repository-owned. | On a clean supported machine, a developer can install Gatemole, initialize a repository, diagnose prerequisites and start one maintained agent without hand-authoring kernel configuration. |
 | **DX-2: Developer review shell** | Planned | Readable status and diff plus explicit apply/reject, preserving the exact underlying transaction and evidence IDs. Reuse OS-4 for `watch` and real cancellation. | A developer can inspect the exact diff and evidence, then apply or reject it without low-level `tx` commands or database access. |
 | **OS-5: connector interface and transaction coordinator** | Planned | Introduce `Plan → Stage/Hold → Inspect → Verify → Commit → Reconcile → Compensate`; add a connector registry plus a durable dependency-ordered coordinator. Each connector persists preparation state, commit state and receipts. Unknown results stop dependent work; restart performs reconciliation before retry or compensation. Move local Git behind the interface only after the generic harness passes. | Two fake connectors prove dependency-ordered prepare/commit, stop-on-unknown, restart recovery, reverse compensation and manual-recovery escalation. Faults are injected before dispatch, during dispatch and after an external effect but before its receipt. Connectors cannot mint authority. Existing local-Git production acceptance remains behaviorally unchanged. |
 | **OS-6: versioned Runtime action protocol and broker** | Planned | Replace or converge the legacy broker behind a supported `ActionRequest → decision/approval → receipt` protocol. A transaction-scoped workload credential binds sandbox transport, task, run, transaction, delegated identity, capability, deadline and idempotency key. Publish stable status/event cursors, error semantics and one maintained Go client. Direct private-worktree mutation remains an explicitly contained, stageable boundary. | Local transport rejects forged, cross-run, expired and replayed credentials. Approval resumes only the exact immutable request after restart. A fake connector proves allow, deny, approval, expiry and revocation without exposing its credential. N/N-1 protocol and adapter-conformance fixtures pass; every attempted external effect is attributable. |
-| **OS-7: lineage-aware temporal policy** | Planned | Persist immutable identity, delegation, action and effect facts across runs and transactions. Evaluate bounded temporal and separation-of-duties rules across sessions, systems, child agents and a shared sponsor lineage. Ordinary stateless decisions may use an ACS/Cedar/OPA adapter, but Vouch remains authoritative for history and commit. | An AP-style fixture spanning separate sessions and delegated identities is denied for the composed sequence while individually valid actions remain allowed. Restart yields the same decision. Retention and query bounds are explicit, and the policy adapter cannot authorize or commit an effect outside the Runtime transaction. |
+| **OS-7: lineage-aware temporal policy** | Planned | Persist immutable identity, delegation, action and effect facts across runs and transactions. Evaluate bounded temporal and separation-of-duties rules across sessions, systems, child agents and a shared sponsor lineage. Ordinary stateless decisions may use an ACS/Cedar/OPA adapter, but Gatemole remains authoritative for history and commit. | An AP-style fixture spanning separate sessions and delegated identities is denied for the composed sequence while individually valid actions remain allowed. Restart yields the same decision. Retention and query bounds are explicit, and the policy adapter cannot authorize or commit an effect outside the Runtime transaction. |
 | **GH-1: GitHub ref driver** | Planned | After OS-5 and OS-6, add daemon-owned GitHub App authentication, installation/repository allowlist, exact-base branch publication and reconciliation. No pull request or merge yet. | Credentials never enter the task, sandbox, events or logs. Retry is idempotent, stale base fails, and a simulated timeout after remote mutation reconciles to the exact commit without another mutation. |
 | **GH-2: protected PR driver** | Planned | Idempotent create/update, transaction marker, exact head/base binding and a concise reviewer summary. Material updates invalidate prepared authority. | Retry creates no duplicate PR. Foreign or stale heads fail closed. Summary explains intent, material effects, verification, risk and required authority without dumping the internal ledger. |
 | **GH-3: exact-SHA merge** | Planned | Recheck head SHA, required checks, review policy, approval package and releaser separation immediately before merge; reconcile ambiguous outcomes. | Mutated head, failed check, expired approval and approver-as-releaser fail. Injected timeout yields at most one merge. Receipt identifies the exact reviewed and merged SHA. |
 | **OPS-1: release, API and evidence** | Planned | Versioned Runtime configuration and local API contract, daemon container/service definition, audit-bundle export and compatibility/upgrade policy. | A clean supported VM completes the documented transaction. N/N-1 API/config compatibility, restart, backup and restore pass. JSON and Markdown evidence replay to the authoritative projection. |
-| **CP-1: pilot Vouch Control Plane** | Planned | Runtime enrollment and health, signed policy distribution, approval routing, central receipt collection and fleet kill/revocation. Build only after paid-pilot evidence. | Vouch Control Plane loss cannot duplicate effects or erase local receipts. Cached-policy behavior is explicit and fails safely. One partner operates multiple Runtimes. |
+| **CP-1: pilot Gatemole Control Plane** | Planned | Runtime enrollment and health, signed policy distribution, approval routing, central receipt collection and fleet kill/revocation. Build only after paid-pilot evidence. | Gatemole Control Plane loss cannot duplicate effects or erase local receipts. Cached-policy behavior is explicit and fails safely. One partner operates multiple Runtimes. |
 
 ## Product milestones
 
-### Milestone A: Vouch Developer Runtime preview
+### Milestone A: Gatemole Developer Runtime preview
 
 Complete **OS-0 through OS-4**, **DX-1** and **DX-2**. OS-5 through OS-7 are
 required for the enterprise connector path, not for an honest local developer
@@ -156,10 +156,10 @@ Exit criteria:
   or reject it without database surgery;
 - the documentation names the single-node, local-Git and full-workspace limits.
 
-At this point Vouch may describe the deliverable as a **Vouch Developer Runtime
-preview**, not a complete Vouch Agent OS.
+At this point Gatemole may describe the deliverable as a **Gatemole Developer Runtime
+preview**, not a complete Gatemole Agent OS.
 
-### Milestone B: Vouch Runtime GitHub pilot
+### Milestone B: Gatemole Runtime GitHub pilot
 
 Complete **OS-5**, **OS-6**, **GH-1 through GH-3** and **OPS-1**. Complete
 **OS-7** before the multi-system production pilot; it may proceed in parallel
@@ -167,20 +167,20 @@ with the first GitHub connector proof.
 
 GitHub is a technical proving ground, not an assumed standalone market. Native
 GitHub agent controls already provide isolated execution, safe write outputs,
-protected branches and human merge. The proof must demonstrate Vouch-specific
+protected branches and human merge. The proof must demonstrate Gatemole-specific
 properties: task authority, exact outcome binding, connector receipts and
 ambiguous-effect reconciliation.
 
 Exit criteria:
 
-- every GitHub mutation belongs to an admitted Vouch transaction;
+- every GitHub mutation belongs to an admitted Gatemole transaction;
 - the agent receives no GitHub write credential;
 - mutation after approval invalidates release;
 - restart and injected timeouts create no duplicate branch, PR or merge;
 - one operator can install and complete the supported transaction without
   database surgery.
 
-### Milestone C: Vouch Runtime multi-system production pilot
+### Milestone C: Gatemole Runtime multi-system production pilot
 
 Add deep connectors in this order:
 
@@ -198,9 +198,9 @@ Exit criteria:
 - unknown non-idempotent work is never duplicated.
 
 This milestone validates the Runtime enforcement layer. It does not by itself
-complete the Vouch Agent OS architecture.
+complete the Gatemole Agent OS architecture.
 
-### Milestone D: Vouch Control Plane pilot
+### Milestone D: Gatemole Control Plane pilot
 
 Build **CP-1** only after the commercial gates pass. Expand it incrementally
 with organization policy simulation, SSO/RBAC, approval delegation, audit
@@ -218,7 +218,7 @@ Exit criteria:
 - Control Plane loss follows the declared cached-policy behavior without
   duplicating an effect.
 
-After this exit, the complete system may be presented as a **Vouch Agent OS
+After this exit, the complete system may be presented as a **Gatemole Agent OS
 private preview**. Production enterprise claims still require the distributed
 operations in Milestone E.
 
@@ -258,7 +258,7 @@ exact-outcome or recovery gap that existing controls cannot cover acceptably.
 ### Non-bypassability gate
 
 At least 3 pilot customers must be willing to remove scoped credentials from
-the agent and route every relevant write through a Vouch Runtime. Otherwise the
+the agent and route every relevant write through a Gatemole Runtime. Otherwise the
 product is advisory middleware.
 
 ### Permission-expansion and recovery gate
@@ -274,7 +274,7 @@ customer previously restricted to humans, with:
 ### Commercial gate
 
 Obtain two paid pilots, not only free design partnerships, before building the
-Vouch Control Plane.
+Gatemole Control Plane.
 
 Stop or reposition if customers are satisfied by native controls, refuse
 non-bypassable mediation, cannot name a material cross-action gap or value
@@ -295,9 +295,9 @@ Full race, vulnerability, all-benchmark and production matrices run on
 required for security-critical changes. A new feature should add one focused
 acceptance scenario rather than another overlapping benchmark family.
 
-## Vouch Contracts
+## Gatemole Contracts
 
-Vouch Contracts remains an optional verification module. Its Runtime priorities
+Gatemole Contracts remains an optional verification module. Its Runtime priorities
 are:
 
 - bind obligation and evidence requirements into atomic task admission;

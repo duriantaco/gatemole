@@ -8,14 +8,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 )
 
 func TestRunAgentExecutionRejectsExpiredAuthorityBeforeWorkload(t *testing.T) {
@@ -86,20 +87,22 @@ func TestRunAgentExecutionRejectsLegacyTransactionBeforeWorkload(t *testing.T) {
 }
 
 type executionAuthorityAPIFixture struct {
-	handler         http.Handler
-	kernelStore     *store.SQLiteStore
-	now             time.Time
-	namespace       string
-	transactionID   string
-	runID           string
-	image           string
-	command         []string
-	actor           model.Principal
-	engineMarker    string
-	transactionHead int64
-	transactionSize int
-	runHead         int64
-	runSize         int
+	handler          http.Handler
+	kernelStore      *store.SQLiteStore
+	now              time.Time
+	namespace        string
+	transactionID    string
+	runID            string
+	runtimeID        string
+	image            string
+	command          []string
+	actor            model.Principal
+	engineMarker     string
+	transactionHead  int64
+	transactionSize  int
+	runHead          int64
+	runSize          int
+	armAuthorityRace func()
 }
 
 func newExecutionAuthorityAPIFixture(
@@ -129,11 +132,13 @@ func admitExecutionAuthorityTask(
 	}
 	maxWallTime := int64(10)
 	request := admission.Request{
-		Version:        admission.RequestVersion,
-		IdempotencyKey: "admission:" + suffix,
-		TransactionID:  fixture.transactionID,
-		RunID:          fixture.runID,
-		Intent:         "Exercise only the authority admitted for this task.",
+		Version:                    admission.RequestVersion,
+		ExpectedRuntimeID:          fixture.runtimeID,
+		ExpectedEnforcementProfile: store.EnforcementProfileDevelopment,
+		IdempotencyKey:             "admission:" + suffix,
+		TransactionID:              fixture.transactionID,
+		RunID:                      fixture.runID,
+		Intent:                     "Exercise only the authority admitted for this task.",
 		AgentProfile: model.AgentTaskProfileBinding{
 			ID:            "agent-profile:" + suffix,
 			Digest:        testDigest("b"),
@@ -154,7 +159,7 @@ func admitExecutionAuthorityTask(
 			},
 		},
 	}
-	response := requestJSON(
+	response := requestJSONWithRuntimeHeader(
 		t,
 		fixture.handler,
 		http.MethodPost,
@@ -163,6 +168,7 @@ func admitExecutionAuthorityTask(
 			fixture.namespace,
 		),
 		request,
+		fixture.runtimeID,
 	)
 	if response.Code != http.StatusCreated {
 		t.Fatalf(
@@ -209,7 +215,58 @@ func newLegacyExecutionAuthorityAPIFixture(
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.prepareRunningTransaction(t, created)
+	started, err := transactionreducer.NextEvent(
+		created,
+		transactionreducer.EventTransactionStateChanged,
+		fixture.actor,
+		now.Add(time.Second),
+		transactionreducer.TransactionStateChangedPayload{
+			From: model.TransactionCreated,
+			To:   model.TransactionRunning,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err = fixture.kernelStore.AppendTransactionEvents(
+		context.Background(),
+		fixture.namespace,
+		created.Transaction.EventSequence,
+		[]model.TransactionEvent{started},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := transactionreducer.NextEvent(
+		created,
+		transactionreducer.EventStageBindingCreated,
+		fixture.actor,
+		now.Add(2*time.Second),
+		transactionreducer.StageBindingCreatedPayload{
+			Binding: model.StageBinding{
+				ID:   "stage:legacy",
+				Kind: "git_worktree",
+				Resource: model.ResourceSelector{
+					Kind:    "git_repository",
+					Pattern: "repo:legacy",
+				},
+				Location:     filepath.Join(t.TempDir(), "legacy-worktree"),
+				BaseRevision: strings.Repeat("a", 40),
+				CreatedAt:    now.Add(2 * time.Second),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.kernelStore.AppendTransactionEvents(
+		context.Background(),
+		fixture.namespace,
+		created.Transaction.EventSequence,
+		[]model.TransactionEvent{bound},
+	); err != nil {
+		t.Fatal(err)
+	}
 	fixture.captureEventHeads(t)
 	return fixture
 }
@@ -238,7 +295,13 @@ func newExecutionAuthorityServerFixtureWithOptions(
 ) *executionAuthorityAPIFixture {
 	t.Helper()
 	repository := executionAuthorityRepository(t)
-	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	runtimeID := apiTestRuntimeID("e")
+	kernelStore, err := store.OpenSQLiteForRuntime(
+		context.Background(),
+		filepath.Join(t.TempDir(), "kernel.db"),
+		runtimeID,
+		store.EnforcementProfileDevelopment,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,6 +325,7 @@ func newExecutionAuthorityServerFixtureWithOptions(
 		namespace:     "authority-api",
 		transactionID: "tx:" + suffix,
 		runID:         "run:" + suffix,
+		runtimeID:     runtimeID,
 		image: "registry.example.invalid/agent@" +
 			testDigest("a"),
 		command:      []string{"/bin/sh", "-c", "exit 0"},
@@ -275,9 +339,13 @@ func newExecutionAuthorityServerFixtureWithOptions(
 	if decorateStore != nil {
 		serverStore = decorateStore(serverStore)
 	}
+	if armer, ok := serverStore.(interface{ Arm() }); ok {
+		fixture.armAuthorityRace = armer.Arm
+	}
 	fixture.handler = NewServer(
 		serverStore,
 		WithClock(clock),
+		WithRuntimeIdentity(runtimeID),
 		WithTransactionRuntime(
 			manager,
 			repository,
@@ -288,6 +356,7 @@ func newExecutionAuthorityServerFixtureWithOptions(
 			AllowedAgentImageDigests: map[string]struct{}{
 				testDigest("a"): {},
 			},
+			EnforcementProfile:  store.EnforcementProfileDevelopment,
 			EnginePath:          engine,
 			VerifierUID:         1000,
 			VerifierGID:         1000,
@@ -311,7 +380,7 @@ func (fixture *executionAuthorityAPIFixture) prepareRunningTransaction(
 		fixture.namespace,
 		fixture.transactionID,
 	)
-	response := requestJSON(
+	response := requestJSONWithRuntimeHeader(
 		t,
 		fixture.handler,
 		http.MethodPost,
@@ -320,6 +389,7 @@ func (fixture *executionAuthorityAPIFixture) prepareRunningTransaction(
 			ExpectedSequence: projection.Transaction.EventSequence,
 			Actor:            fixture.actor,
 		},
+		fixture.runtimeID,
 	)
 	if response.Code != http.StatusOK {
 		t.Fatalf(
@@ -330,7 +400,7 @@ func (fixture *executionAuthorityAPIFixture) prepareRunningTransaction(
 	}
 	decodeResponse(t, response, &projection)
 
-	worktreeResponse := requestJSON(
+	worktreeResponse := requestJSONWithRuntimeHeader(
 		t,
 		fixture.handler,
 		http.MethodPost,
@@ -339,6 +409,7 @@ func (fixture *executionAuthorityAPIFixture) prepareRunningTransaction(
 			ExpectedSequence: projection.Transaction.EventSequence,
 			Actor:            fixture.actor,
 		},
+		fixture.runtimeID,
 	)
 	if worktreeResponse.Code != http.StatusCreated {
 		t.Fatalf(
@@ -410,7 +481,7 @@ func assertExecutionAuthorityRejectedBeforeWorkload(
 	wantCode model.ErrorCode,
 ) {
 	t.Helper()
-	response := requestJSON(
+	response := requestJSONWithRuntimeHeader(
 		t,
 		fixture.handler,
 		http.MethodPost,
@@ -426,6 +497,7 @@ func assertExecutionAuthorityRejectedBeforeWorkload(
 			Command:          append([]string(nil), fixture.command...),
 			TimeoutSeconds:   1,
 		},
+		fixture.runtimeID,
 	)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf(
@@ -525,9 +597,9 @@ func executionAuthorityRepository(t *testing.T) string {
 		t,
 		repository,
 		"-c",
-		"user.name=Vouch Test",
+		"user.name=Gatemole Test",
 		"-c",
-		"user.email=vouch@example.invalid",
+		"user.email=gatemole@example.invalid",
 		"commit",
 		"-m",
 		"fixture",

@@ -3,7 +3,7 @@ package reducer
 import (
 	"fmt"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 const (

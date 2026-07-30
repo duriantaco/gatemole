@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.kernel.common.v0.schema.json",
+  "title": "Gatemole agent-kernel common values v0",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": {
+          "type": "string",
+          "enum": ["human", "service", "agent", "run", "operator"]
+        },
+        "issuer": { "type": "string", "minLength": 1 },
+        "claims_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "digest"],
+      "properties": {
+        "uri": { "type": "string", "minLength": 1 },
+        "digest": { "$ref": "#/$defs/digest" },
+        "media_type": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resource_selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "pattern"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/identifier" },
+        "pattern": { "type": "string", "minLength": 1 }
+      }
+    },
+    "budget_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_input_tokens": { "type": "integer", "minimum": 0 },
+        "max_output_tokens": { "type": "integer", "minimum": 0 },
+        "max_model_calls": { "type": "integer", "minimum": 0 },
+        "max_tool_calls": { "type": "integer", "minimum": 0 },
+        "max_cost_micros": { "type": "integer", "minimum": 0 },
+        "max_wall_time_seconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "budget_usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "model_calls",
+        "tool_calls",
+        "cost_micros",
+        "wall_time_seconds"
+      ],
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "model_calls": { "type": "integer", "minimum": 0 },
+        "tool_calls": { "type": "integer", "minimum": 0 },
+        "cost_micros": { "type": "integer", "minimum": 0 },
+        "wall_time_seconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "adapter_version"],
+      "properties": {
+        "adapter": { "$ref": "#/$defs/identifier" },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "lease_id": { "$ref": "#/$defs/identifier" },
+        "lease_expires_at": { "$ref": "#/$defs/timestamp" }
+      }
+    }
+  }
+}

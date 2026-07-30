@@ -1,11 +1,11 @@
 # Local Agent Kernel
 
-Vouch Runtime includes a single-machine `vouchd` authority kernel. This
+Gatemole Runtime includes a single-machine `gatemoled` authority kernel. This
 document describes its lower-level run/action substrate; the supported
 production Runtime path adds the OCI sandbox, OIDC authorization, signed
 approvals, model broker, verification and Git commit coordinator described in
 [Production Runtime Operations](PRODUCTION.md). This subsystem is not a claim
-that the complete Vouch Agent OS is finished.
+that the complete Gatemole Agent OS is finished.
 
 The implemented path is:
 
@@ -23,16 +23,18 @@ their existing CLI behavior.
 
 ## What is implemented
 
-- Eight strict `vouch.*.v0` kernel resource schemas and Go models.
+- Eight strict `gatemole.*.v0` kernel resource schemas and Go models.
 - Deterministic run lifecycle reducer and stable kernel error codes.
 - Append-only hash-chained events plus byte-replayable materialized run state.
 - SQLite transactions, optimistic event cursors, namespace predicates, and
   restart recovery.
-- `vouchd` over a mode-`0600` Unix socket and `vouch daemon` as a convenience.
-- Run create, inspect, list, event, pause, resume, cancel and capability
-  installation commands. Pause, resume and cancel currently transition only
-  the lower-level run record; they do not control a running production OCI
-  workload.
+- `gatemoled` over a mode-`0600` Unix socket and `gatemole daemon` as a convenience.
+- Runtime-bound task admission that creates the transaction, paired run and
+  capabilities atomically, plus run inspect, list, event, pause, resume and
+  cancel commands. Pause, resume and cancel currently transition only the
+  lower-level run record; they do not control a running production OCI
+  workload. Raw run creation and grant installation remain embedded/unbound
+  compatibility operations and configured `gatemoled` rejects them.
 - Execution-contract compilation into stable, expiring capability grants.
 - Typed filesystem read/write actions with output limits and workspace
   containment.
@@ -48,38 +50,45 @@ atomic rename.
 
 ## Local walkthrough
 
-Start the daemon in one terminal:
+Start from a Git repository with a `HEAD` commit and a `workspace/` directory,
+then initialize the repository-owned Runtime identity once:
 
 ```sh
-vouch --repo /path/to/repo daemon
+mkdir -p /path/to/repo/workspace
+gatemole --repo /path/to/repo runtime init
 ```
 
-An `AgentRun` JSON file pins an image digest, execution-contract digest,
-namespace, run principal, workspace, deadline, and budgets. Create and admit
-it, then make it runnable:
+Then start the development daemon in one terminal:
 
 ```sh
-vouch --repo /path/to/repo run create --file run.json
-vouch --repo /path/to/repo run transition --namespace demo --id run:demo --to admitted
-vouch --repo /path/to/repo run transition --namespace demo --id run:demo --to running
+gatemole --repo /path/to/repo daemon
 ```
 
-Compile the pinned `ExecutionContract` into grants:
+In another terminal, use the development-only manual transaction admission
+command. It binds the local Runtime identity and atomically creates the
+transaction, paired `AgentRun` and workspace capabilities. Then transition the
+run to `running`:
 
 ```sh
-vouch --repo /path/to/repo run grant \
-  --namespace demo --id run:demo --contract execution-contract.json
+gatemole --repo /path/to/repo tx create \
+  --id tx:demo \
+  --namespace demo \
+  --intent "Write only inside the workspace" \
+  --run run:demo
+
+gatemole --repo /path/to/repo kernel run transition \
+  --namespace demo --id run:demo --to running
 ```
 
 All filesystem paths are logical paths rooted by the contract, such as
 `workspace/output.txt`:
 
 ```sh
-vouch --repo /path/to/repo action fs-write \
+gatemole --repo /path/to/repo action fs-write \
   --namespace demo --run run:demo \
   --path workspace/output.txt --input ./candidate-output.txt
 
-vouch --repo /path/to/repo --json action fs-read \
+gatemole --repo /path/to/repo --json action fs-read \
   --namespace demo --run run:demo \
   --path workspace/output.txt
 ```
@@ -87,7 +96,7 @@ vouch --repo /path/to/repo --json action fs-read \
 Inspect the authoritative history:
 
 ```sh
-vouch --repo /path/to/repo --json run events \
+gatemole --repo /path/to/repo --json kernel run events \
   --namespace demo --id run:demo
 ```
 
@@ -97,10 +106,10 @@ write returns `KERNEL_CONFLICT`; it is not resolved by last-write-wins.
 ## Acceptance harness
 
 Run the kernel-specific acceptance path separately from the existing
-VouchBench release suite:
+GatemoleBench release suite:
 
 ```sh
-scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
+scripts/gatemolekernelbench.sh --out /tmp/gatemolekernelbench
 ```
 
 It builds both binaries, performs an allowed write, proves a path escape is
@@ -111,7 +120,7 @@ projection and event history before and after restart.
 
 This lower-level run/action slice mediates only actions submitted to its
 filesystem broker. It cannot stop a process that also has direct host
-filesystem access. Use the production Vouch Runtime path for untrusted agent
+filesystem access. Use the production Gatemole Runtime path for untrusted agent
 execution: it launches the agent in the daemon-owned OCI boundary,
 authenticates operator requests and removes direct model credentials.
 

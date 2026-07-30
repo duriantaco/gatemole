@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestVerifierAcceptsBoundEd25519Identity(t *testing.T) {
@@ -61,22 +61,22 @@ func TestVerifierRejectsUntrustedOrInvalidTokens(t *testing.T) {
 	)
 	tooLong := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
-		"aud": "vouch", "iat": now.Unix(), "exp": now.Add(2 * time.Hour).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"aud": "gatemole", "iat": now.Unix(), "exp": now.Add(2 * time.Hour).Unix(),
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	future := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
-		"aud": "vouch", "iat": now.Unix(), "nbf": now.Add(10 * time.Minute).Unix(),
-		"exp":                now.Add(20 * time.Minute).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"aud": "gatemole", "iat": now.Unix(), "nbf": now.Add(10 * time.Minute).Unix(),
+		"exp":                   now.Add(20 * time.Minute).Unix(),
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	wrongAudience := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
 		"aud": "somewhere-else", "iat": now.Unix(), "exp": now.Add(10 * time.Minute).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	noneHeader := base64.RawURLEncoding.EncodeToString(
 		[]byte(`{"alg":"none","kid":"key:test","typ":"JWT"}`),
@@ -85,7 +85,7 @@ func TestVerifierRejectsUntrustedOrInvalidTokens(t *testing.T) {
 	duplicateClaims := signRawEd25519(
 		t,
 		privateKey,
-		[]byte(`{"iss":"https://issuer.example.invalid","iss":"https://issuer.example.invalid","sub":"subject:alice","aud":"vouch","iat":1784800800,"exp":1784801400,"vouch_principal_id":"operator:alice","vouch_principal_kind":"operator","vouch_namespaces":["team-a"],"vouch_roles":["operator"]}`),
+		[]byte(`{"iss":"https://issuer.example.invalid","iss":"https://issuer.example.invalid","sub":"subject:alice","aud":"gatemole","iat":1784800800,"exp":1784801400,"gatemole_principal_id":"operator:alice","gatemole_principal_kind":"operator","gatemole_namespaces":["team-a"],"gatemole_roles":["operator"]}`),
 	)
 
 	for name, token := range map[string]string{
@@ -128,9 +128,9 @@ func TestVerifierAcceptsRS256(t *testing.T) {
 	})
 	claims, _ := json.Marshal(map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:service",
-		"aud": "vouch", "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
-		"vouch_principal_id": "service:ci", "vouch_principal_kind": "service",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"viewer"},
+		"aud": "gatemole", "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
+		"gatemole_principal_id": "service:ci", "gatemole_principal_kind": "service",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"viewer"},
 	})
 	encoding := base64.RawURLEncoding
 	signingInput := encoding.EncodeToString(header) + "." + encoding.EncodeToString(claims)
@@ -154,13 +154,13 @@ func TestIssueRejectsUnauthorizedClaims(t *testing.T) {
 	now := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
 	request := IssueRequest{
 		KeyID: "key:test", Issuer: "https://issuer.example.invalid",
-		Audience: "vouch", Subject: "subject:alice", PrincipalID: "operator:alice",
+		Audience: "gatemole", Subject: "subject:alice", PrincipalID: "operator:alice",
 		Kind: model.PrincipalOperator, Namespaces: []string{"team-a"},
 		Roles: []string{"root"}, IssuedAt: now, ExpiresAt: now.Add(time.Minute),
 		TokenID: "token:test",
 	}
 	if _, err := IssueEd25519(request, privateKey); err == nil {
-		t.Fatal("issuer accepted an unknown Vouch role")
+		t.Fatal("issuer accepted an unknown Gatemole role")
 	}
 	request.Roles = []string{"operator"}
 	request.Namespaces = []string{"not allowed"}
@@ -173,7 +173,7 @@ func testTrustDocument() TrustDocument {
 	return TrustDocument{
 		Version:                 TrustDocumentVersion,
 		Issuer:                  "https://issuer.example.invalid",
-		Audiences:               []string{"vouch"},
+		Audiences:               []string{"gatemole"},
 		ClockSkewSeconds:        30,
 		MaxTokenLifetimeSeconds: 3600,
 		JWKS:                    JWKS{},
@@ -203,7 +203,7 @@ func testIssueToken(
 	t.Helper()
 	token, err := IssueEd25519(IssueRequest{
 		KeyID: "key:test", Issuer: "https://issuer.example.invalid",
-		Audience: "vouch", Subject: "subject:alice", PrincipalID: "operator:alice",
+		Audience: "gatemole", Subject: "subject:alice", PrincipalID: "operator:alice",
 		Kind: model.PrincipalOperator, Namespaces: []string{"team-a"},
 		Roles: []string{"viewer", "operator"}, IssuedAt: issuedAt, ExpiresAt: expiresAt,
 		TokenID: "token:test",

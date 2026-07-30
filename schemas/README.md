@@ -1,6 +1,6 @@
-# Vouch Public Schemas
+# Gatemole Public Schemas
 
-This directory contains the machine-readable contracts for public Vouch
+This directory contains the machine-readable contracts for public Gatemole
 artifacts. Agent-kernel schemas use JSON Schema draft 2020-12 and reject unknown
 fields unless a field is explicitly documented as driver-defined data.
 
@@ -8,31 +8,31 @@ fields unless a field is explicitly documented as driver-defined data.
 
 | Resource | Schema version | File |
 | --- | --- | --- |
-| Agent image | `vouch.agent_image.v0` | `vouch.agent_image.v0.schema.json` |
-| Execution contract | `vouch.execution_contract.v0` | `vouch.execution_contract.v0.schema.json` |
-| Agent run | `vouch.agent_run.v0` | `vouch.agent_run.v0.schema.json` |
-| Capability grant | `vouch.capability_grant.v0` | `vouch.capability_grant.v0.schema.json` |
-| Action request | `vouch.action_request.v0` | `vouch.action_request.v0.schema.json` |
-| Run event | `vouch.run_event.v0` | `vouch.run_event.v0.schema.json` |
-| Checkpoint | `vouch.checkpoint.v0` | `vouch.checkpoint.v0.schema.json` |
-| Policy decision | `vouch.policy_decision.v0` | `vouch.policy_decision.v0.schema.json` |
-| Agent task | `vouch.agent_task.v0` | `vouch.agent_task.v0.schema.json` |
-| Agent transaction | `vouch.agent_transaction.v0` | `vouch.agent_transaction.v0.schema.json` |
-| Effect | `vouch.effect.v0` | `vouch.effect.v0.schema.json` |
-| Verification result | `vouch.verification_result.v0` | `vouch.verification_result.v0.schema.json` |
-| Approval package | `vouch.approval_package.v0` | `vouch.approval_package.v0.schema.json` |
-| Commit plan | `vouch.commit_plan.v0` | `vouch.commit_plan.v0.schema.json` |
-| Transaction event | `vouch.transaction_event.v0` | `vouch.transaction_event.v0.schema.json` |
+| Agent image | `gatemole.agent_image.v0` | `gatemole.agent_image.v0.schema.json` |
+| Execution contract | `gatemole.execution_contract.v0` | `gatemole.execution_contract.v0.schema.json` |
+| Agent run | `gatemole.agent_run.v0` | `gatemole.agent_run.v0.schema.json` |
+| Capability grant | `gatemole.capability_grant.v0` | `gatemole.capability_grant.v0.schema.json` |
+| Action request | `gatemole.action_request.v0` | `gatemole.action_request.v0.schema.json` |
+| Run event | `gatemole.run_event.v0` | `gatemole.run_event.v0.schema.json` |
+| Checkpoint | `gatemole.checkpoint.v0` | `gatemole.checkpoint.v0.schema.json` |
+| Policy decision | `gatemole.policy_decision.v0` | `gatemole.policy_decision.v0.schema.json` |
+| Agent task | `gatemole.agent_task.v0` | `gatemole.agent_task.v0.schema.json` |
+| Agent transaction | `gatemole.agent_transaction.v0` | `gatemole.agent_transaction.v0.schema.json` |
+| Effect | `gatemole.effect.v0` | `gatemole.effect.v0.schema.json` |
+| Verification result | `gatemole.verification_result.v0` | `gatemole.verification_result.v0.schema.json` |
+| Approval package | `gatemole.approval_package.v0` | `gatemole.approval_package.v0.schema.json` |
+| Commit plan | `gatemole.commit_plan.v0` | `gatemole.commit_plan.v0.schema.json` |
+| Transaction event | `gatemole.transaction_event.v0` | `gatemole.transaction_event.v0.schema.json` |
 
-Shared value definitions live in `vouch.kernel.common.v0.schema.json`; that file
+Shared value definitions live in `gatemole.kernel.common.v0.schema.json`; that file
 is not itself a kernel resource.
 
 ## Runtime configuration
 
 | Resource | Schema version | File |
 | --- | --- | --- |
-| Agent profiles | `vouch.agent_profiles.v0` | `vouch.agent_profiles.v0.schema.json` |
-| Verifier profiles | `vouch.verifier_profiles.v0` | `vouch.verifier_profiles.v0.schema.json` |
+| Agent profiles | `gatemole.agent_profiles.v0` | `gatemole.agent_profiles.v0.schema.json` |
+| Verifier profiles | `gatemole.verifier_profiles.v0` | `gatemole.verifier_profiles.v0.schema.json` |
 
 Agent and verifier profile names must be unique. Their loaders enforce semantic
 constraints that JSON Schema cannot express, including matching each complete
@@ -52,7 +52,7 @@ Within one schema version:
 - Resource identifiers, digests, event ordering, and lifecycle semantics are
   compatibility-sensitive.
 
-A breaking change creates a new version such as `vouch.agent_run.v1`. Readers
+A breaking change creates a new version such as `gatemole.agent_run.v1`. Readers
 must select decoding and validation from the resource's `version` field; they
 must not guess based on field presence.
 

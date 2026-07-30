@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_image.v0",
+  "version": "gatemole.agent_image.v0",
   "id": "image.coding-agent.v1",
   "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "runtime": {
@@ -30,7 +30,7 @@
   "contract_refs": ["contract.demo-change"],
   "source_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "publisher": {
-    "id": "service:vouch-fixtures",
+    "id": "service:gatemole-fixtures",
     "kind": "service",
     "issuer": "https://example.invalid"
   }

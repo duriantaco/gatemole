@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 // ComputeEffectSetDigest hashes the immutable proposal fields in sequence
@@ -78,7 +78,7 @@ func ComputeVerifierDigest(commandDigest, runtimeConfigDigest, imageDigest strin
 		RuntimeConfigDigest string `json:"runtime_config_digest"`
 		ImageDigest         string `json:"image_digest"`
 	}{
-		Version:             "vouch.verifier_identity.v0",
+		Version:             "gatemole.verifier_identity.v0",
 		CommandDigest:       commandDigest,
 		RuntimeConfigDigest: runtimeConfigDigest,
 		ImageDigest:         imageDigest,
@@ -98,7 +98,7 @@ func ComputeVerificationInputsDigest(effectSetDigest, stagedStateDigest string) 
 		EffectSetDigest   string `json:"effect_set_digest"`
 		StagedStateDigest string `json:"staged_state_digest"`
 	}{
-		Version:           "vouch.verification_inputs.v0",
+		Version:           "gatemole.verification_inputs.v0",
 		EffectSetDigest:   effectSetDigest,
 		StagedStateDigest: stagedStateDigest,
 	})

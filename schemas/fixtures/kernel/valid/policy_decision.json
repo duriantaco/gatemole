@@ -1,5 +1,5 @@
 {
-  "version": "vouch.policy_decision.v0",
+  "version": "gatemole.policy_decision.v0",
   "id": "decision:demo-write-001",
   "run_id": "run:demo-001",
   "subject_type": "action",

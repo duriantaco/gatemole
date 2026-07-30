@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
 )
 
 const defaultGrantTTL = time.Hour
@@ -56,7 +56,7 @@ func Compile(contract model.ExecutionContract, run model.AgentRun, issuedAt time
 			Version:          model.CapabilityGrantVersion,
 			ID:               stableID("cap", contract.Digest, run.ID, resource.ID),
 			SubjectRunID:     run.ID,
-			Issuer:           model.Principal{ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd"},
+			Issuer:           model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled"},
 			Resource:         resource.Selector,
 			Operations:       append([]string(nil), resource.Operations...),
 			Conditions:       resource.Conditions,

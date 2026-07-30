@@ -18,12 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	kernelmodelbroker "github.com/duriantaco/vouch/internal/kernel/modelbroker"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 const emptySHA256Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -435,13 +436,31 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	lock := s.runLock(namespace, "transaction:"+transactionID)
 	lock.Lock()
 	defer lock.Unlock()
-	projection, err := s.checkedTransaction(r, namespace, transactionID, request.ExpectedSequence)
+	// compileLiveExecutionAuthority performs the Runtime authority lookup and
+	// binds both transaction and run heads before any workload effect. Avoid a
+	// second earlier authority read so the launch-claim race check retains one
+	// coherent snapshot.
+	projection, err := s.transactionAtSequence(
+		r,
+		namespace,
+		transactionID,
+		request.ExpectedSequence,
+	)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	if projection.Transaction.State != model.TransactionRunning ||
 		len(projection.Transaction.StageBindings) != 1 {
+		if err := s.requireCurrentRuntimeAuthority(
+			r.Context(),
+			namespace,
+			transactionID,
+			projection,
+		); err != nil {
+			writeError(w, err)
+			return
+		}
 		writeError(w, transactionTransitionError("agent execution requires a running transaction with one stage boundary"))
 		return
 	}
@@ -553,15 +572,16 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		}
 		receiptDirectory := filepath.Join(
 			s.transactionStaging,
-			".vouch-model-evidence",
+			".gatemole-model-evidence",
 			sandbox.ModelBrokerContainerName(
 				transactionID,
 				executionPlan.RunID,
 			),
 		)
 		brokerConfig = &sandbox.ModelBrokerConfig{
-			EnginePath: s.executionPolicy.EnginePath,
-			Image:      brokerPolicy.Image, PolicyPath: brokerPolicy.PolicyPath,
+			EnginePath:          s.executionPolicy.EnginePath,
+			Image:               brokerPolicy.Image,
+			PolicyData:          append([]byte(nil), brokerPolicy.PolicyData...),
 			PolicyDigest:        brokerPolicy.PolicyDigest,
 			ReceiptDirectory:    receiptDirectory,
 			TransactionID:       transactionID,
@@ -583,7 +603,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			executionPlan.RunID,
 		)
 		config.ModelBroker = &sandbox.ModelBrokerBinding{
-			URL:   "http://vouch-model-broker:8080/v1",
+			URL:   "http://gatemole-model-broker:8080/v1",
 			Token: agentToken, ImageDigest: executionPlan.ModelBroker.ImageDigest,
 			PolicyDigest:      executionPlan.ModelBroker.PolicyDigest,
 			TokenDigest:       "sha256:" + hex.EncodeToString(tokenDigest[:]),
@@ -693,7 +713,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	if runErr == nil {
 		outcome, runErr = (verification.Runner{
-			EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-agent-evidence"),
+			EvidenceRoot: filepath.Join(s.transactionStaging, ".gatemole-agent-evidence"),
 		}).Run(authorityContext, config, execution.ID)
 	}
 	if brokerSession != nil {
@@ -751,7 +771,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	if runErr != nil && outcome.Receipt.Status == "" {
 		outcome.Receipt = verification.ProcessReceipt{
-			Version:             "vouch.verification_process_receipt.v0",
+			Version:             "gatemole.verification_process_receipt.v0",
 			Name:                execution.ID,
 			Status:              model.AgentExecutionStartFailed,
 			CommandDigest:       executionPlan.CommandDigest,
@@ -764,7 +784,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	finished, finishErr := transactionreducer.NextEvent(
 		projection, transactionreducer.EventAgentExecutionFinished,
-		model.Principal{ID: "service:vouchd-runtime", Kind: model.PrincipalService},
+		model.Principal{ID: "service:gatemoled-runtime", Kind: model.PrincipalService},
 		s.now().UTC(),
 		transactionreducer.AgentExecutionFinishedPayload{
 			ExecutionID:  execution.ID,
@@ -843,7 +863,7 @@ func materializeAgentTask(
 			Resource: task.ID, Message: "transaction staging root must be absolute",
 		}
 	}
-	parent := filepath.Join(stagingRoot, ".vouch-agent-tasks")
+	parent := filepath.Join(stagingRoot, ".gatemole-agent-tasks")
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return "", nil, &model.KernelError{
 			Code: model.ErrorDriverUnavailable, Operation: "materialize_agent_task",
@@ -1199,7 +1219,7 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		StagedStateDigest: projection.Transaction.StagedStateDigest,
 		Verifier: model.Principal{
 			ID: "service:external-verifier", Kind: model.PrincipalService,
-			Issuer: "vouch-client:external", ClaimsDigest: verifierDigest,
+			Issuer: "gatemole-client:external", ClaimsDigest: verifierDigest,
 		},
 		Independence:   model.VerificationAgentSupplied,
 		VerifierDigest: verifierDigest,
@@ -1392,7 +1412,7 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	verifierWorkspace, cleanupVerifierWorkspace, err := s.gitStage.MaterializeSnapshot(
 		r.Context(),
 		frozenSnapshot,
-		filepath.Join(s.transactionStaging, ".vouch-verifier-trees"),
+		filepath.Join(s.transactionStaging, ".gatemole-verifier-trees"),
 	)
 	if err != nil {
 		writeError(w, &model.KernelError{
@@ -1433,7 +1453,7 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	)
 	defer cancel()
 	outcome, runErr := (verification.Runner{
-		EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-evidence"),
+		EvidenceRoot: filepath.Join(s.transactionStaging, ".gatemole-evidence"),
 	}).Run(processContext, config, request.Name)
 	cleanupErr := cleanupVerifierWorkspace()
 	cleanupPending = false
@@ -1505,8 +1525,8 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		EffectSetDigest:   projection.Transaction.EffectSetDigest,
 		StagedStateDigest: projection.Transaction.StagedStateDigest,
 		Verifier: model.Principal{
-			ID: "service:vouch-verifier", Kind: model.PrincipalService,
-			Issuer: "vouchd:oci", ClaimsDigest: verifierClaimsDigest,
+			ID: "service:gatemole-verifier", Kind: model.PrincipalService,
+			Issuer: "gatemoled:oci", ClaimsDigest: verifierClaimsDigest,
 		},
 		Independence:   model.VerificationPlatformRun,
 		VerifierDigest: verifierDigest,
@@ -2184,7 +2204,37 @@ func (s *Server) mutateTransactionState(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, next)
 }
 
+// checkedTransaction is the common gate for transaction mutation routes. The
+// daemon-run execution path compiles the same authority and launch claim in one
+// snapshot instead. A configured Runtime may inspect legacy history, but only a
+// current atomic v1 task admission can advance state or reach an external effect.
 func (s *Server) checkedTransaction(r *http.Request, namespace, transactionID string, expected int64) (transactionreducer.Projection, error) {
+	projection, err := s.transactionAtSequence(
+		r,
+		namespace,
+		transactionID,
+		expected,
+	)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	if err := s.requireCurrentRuntimeAuthority(
+		r.Context(),
+		namespace,
+		transactionID,
+		projection,
+	); err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	return projection, nil
+}
+
+func (s *Server) transactionAtSequence(
+	r *http.Request,
+	namespace string,
+	transactionID string,
+	expected int64,
+) (transactionreducer.Projection, error) {
 	projection, err := s.store.GetTransaction(r.Context(), namespace, transactionID)
 	if err != nil {
 		return transactionreducer.Projection{}, err
@@ -2204,12 +2254,23 @@ func (s *Server) verifiedAuthorityTransaction(
 	transactionID string,
 	expected int64,
 ) (transactionreducer.Projection, error) {
-	if err := s.store.VerifyTransaction(
-		r.Context(), namespace, transactionID,
-	); err != nil {
+	projection, err := s.checkedTransaction(
+		r,
+		namespace,
+		transactionID,
+		expected,
+	)
+	if err != nil {
 		return transactionreducer.Projection{}, err
 	}
-	return s.checkedTransaction(r, namespace, transactionID, expected)
+	if !runtimeidentity.IsRuntimeID(s.runtimeID) {
+		if err := s.store.VerifyTransaction(
+			r.Context(), namespace, transactionID,
+		); err != nil {
+			return transactionreducer.Projection{}, err
+		}
+	}
+	return projection, nil
 }
 
 func (s *Server) acquireWorkloadSlot(

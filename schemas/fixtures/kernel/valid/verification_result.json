@@ -1,5 +1,5 @@
 {
-  "version": "vouch.verification_result.v0",
+  "version": "gatemole.verification_result.v0",
   "id": "verification:demo-001:tests",
   "transaction_id": "tx:demo-001",
   "name": "authentication-behavior",
@@ -8,7 +8,7 @@
   "effect_set_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
   "staged_state_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
   "verifier": {
-    "id": "verifier:vouch-tests",
+    "id": "verifier:gatemole-tests",
     "kind": "service"
   },
   "independence": "platform_run",

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (
@@ -457,7 +457,7 @@ func sameTime(left, right *time.Time) bool {
 }
 
 func daemonPrincipal() model.Principal {
-	return model.Principal{ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd"}
+	return model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled"}
 }
 
 func cloneModelPlan(plan *ModelBrokerPlan) *ModelBrokerPlan {

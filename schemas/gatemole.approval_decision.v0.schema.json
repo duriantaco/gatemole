@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.approval_decision.v0.schema.json",
+  "title": "Gatemole ApprovalDecision v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "transaction_id", "approval_id", "package_digest",
+    "approval_class", "decision", "approver", "key_id", "issued_at",
+    "expires_at", "nonce", "digest", "signature_base64"
+  ],
+  "properties": {
+    "version": { "const": "gatemole.approval_decision.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "approval_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "package_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "approval_class": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "decision": { "type": "string", "enum": ["approve", "reject", "revise"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "approver": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/principal" },
+    "key_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "issued_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "expires_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "nonce": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "signature_base64": { "type": "string", "minLength": 88, "maxLength": 88 }
+  }
+}

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestFilesystemWritesAndReadsInsideWorkspace(t *testing.T) {
@@ -68,7 +68,7 @@ func TestFilesystemDeniesLexicalAndSymlinkEscapes(t *testing.T) {
 	}
 }
 
-func TestFilesystemPermanentlyDeniesGitAndVouchControlState(t *testing.T) {
+func TestFilesystemPermanentlyDeniesControlStateNamespaces(t *testing.T) {
 	_, run, grant, filesystem := filesystemFixture(t)
 	content := []byte("forged control state")
 	for _, logicalPath := range []string{
@@ -76,6 +76,8 @@ func TestFilesystemPermanentlyDeniesGitAndVouchControlState(t *testing.T) {
 		"workspace/.GiT/refs/heads/main",
 		"workspace/.git./config",
 		"workspace/.git::$DATA/config",
+		"workspace/.gatemole/kernel.db",
+		"workspace/.GATEMOLE./gatemoled.sock",
 		"workspace/.vouch/kernel.db",
 		"workspace/.VOUCH./vouchd.sock",
 	} {

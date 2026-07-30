@@ -16,8 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
 )
 
 const CaptureLimit = int64(16 << 20)
@@ -169,7 +169,7 @@ func (runner Runner) Run(
 	}
 	filesClosed = true
 	receipt := ProcessReceipt{
-		Version:             "vouch.verification_process_receipt.v0",
+		Version:             "gatemole.verification_process_receipt.v0",
 		Name:                name,
 		Status:              status,
 		ExitCode:            exitCode,

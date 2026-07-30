@@ -14,8 +14,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 const (
@@ -104,7 +104,7 @@ func (filesystem *Filesystem) Execute(
 		return Result{}, denied(request.ID, "run workspace and capability workspace_root do not match")
 	}
 	if containsControlMetadataPath(workspace) || containsControlMetadataPath(logicalPath) {
-		return Result{}, denied(request.ID, "Git and Vouch control-state paths are never available to the filesystem driver")
+		return Result{}, denied(request.ID, "Git, Gatemole, and legacy Vouch control-state paths are never available to the filesystem driver")
 	}
 	relative, valid := capability.WorkspaceRelative(workspace, logicalPath)
 	if !valid {
@@ -162,6 +162,7 @@ func containsControlMetadataPath(logicalPath string) bool {
 			normalized = normalized[:stream]
 		}
 		if strings.EqualFold(normalized, ".git") ||
+			strings.EqualFold(normalized, ".gatemole") ||
 			strings.EqualFold(normalized, ".vouch") {
 			return true
 		}
@@ -263,7 +264,7 @@ func writeFile(root *os.Root, relative string, data []byte) (Result, error) {
 	if _, err := rand.Read(random); err != nil {
 		return Result{}, fmt.Errorf("generate temporary file name: %w", err)
 	}
-	temporary := path.Join(directory, ".vouch-write-"+hex.EncodeToString(random))
+	temporary := path.Join(directory, ".gatemole-write-"+hex.EncodeToString(random))
 	temporary = filepath.FromSlash(temporary)
 	file, err := root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

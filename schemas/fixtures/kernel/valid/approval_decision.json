@@ -1,5 +1,5 @@
 {
-  "version": "vouch.approval_decision.v0",
+  "version": "gatemole.approval_decision.v0",
   "id": "approval-decision:tx-demo:1",
   "transaction_id": "tx:demo",
   "approval_id": "approval:security:1",

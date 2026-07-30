@@ -24,8 +24,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (
@@ -354,7 +354,7 @@ func (manager *Manager) preflightWorktree(
 	}
 	indexDirectory, err := privateTemporaryDirectory(
 		workspace,
-		".vouch-gitstage-preflight-index-",
+		".gatemole-gitstage-preflight-index-",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create private Git preflight index directory: %w", err)
@@ -458,7 +458,7 @@ func (manager *Manager) materializeTree(
 	workspace Workspace,
 	changes []change,
 ) (treeRevision string, returnErr error) {
-	indexDirectory, err := privateTemporaryDirectory(workspace, ".vouch-gitstage-index-")
+	indexDirectory, err := privateTemporaryDirectory(workspace, ".gatemole-gitstage-index-")
 	if err != nil {
 		return "", fmt.Errorf("create private Git index directory: %w", err)
 	}
@@ -734,7 +734,7 @@ func (manager *Manager) Inspect(ctx context.Context, workspace Workspace, now ti
 		TreeRevision string `json:"tree_revision"`
 		PatchDigest  string `json:"patch_digest"`
 	}{
-		Version:      "vouch.git_stage_state.v1",
+		Version:      "gatemole.git_stage_state.v1",
 		BaseRevision: workspace.BaseRevision,
 		TreeRevision: treeRevision,
 		PatchDigest:  patchDigest,
@@ -1036,7 +1036,7 @@ func (manager *Manager) PrepareCommit(
 	}
 	treeRevision := snapshot.TreeRevision
 	message := fmt.Sprintf(
-		"Vouch transaction %s\n\nIntent-Digest: %s\nEffect-Set-Digest: %s\nStaged-State-Digest: %s\nPolicy-Digest: %s\nCommit-Plan-Digest: %s\n",
+		"Gatemole transaction %s\n\nIntent-Digest: %s\nEffect-Set-Digest: %s\nStaged-State-Digest: %s\nPolicy-Digest: %s\nCommit-Plan-Digest: %s\n",
 		plan.TransactionID,
 		plan.IntentDigest,
 		plan.EffectSetDigest,
@@ -1049,10 +1049,10 @@ func (manager *Manager) PrepareCommit(
 		workspace.Path,
 		message,
 		[]string{
-			"GIT_AUTHOR_NAME=Vouch Transaction OS",
-			"GIT_AUTHOR_EMAIL=vouch@localhost",
-			"GIT_COMMITTER_NAME=Vouch Transaction OS",
-			"GIT_COMMITTER_EMAIL=vouch@localhost",
+			"GIT_AUTHOR_NAME=Gatemole Transaction OS",
+			"GIT_AUTHOR_EMAIL=gatemole@localhost",
+			"GIT_COMMITTER_NAME=Gatemole Transaction OS",
+			"GIT_COMMITTER_EMAIL=gatemole@localhost",
 			"GIT_AUTHOR_DATE=" + plan.CreatedAt.UTC().Format(time.RFC3339),
 			"GIT_COMMITTER_DATE=" + plan.CreatedAt.UTC().Format(time.RFC3339),
 		},
@@ -2119,10 +2119,10 @@ func validObjectID(value string) bool {
 
 func mediaType(mode string) string {
 	if mode == "symlink" {
-		return "application/vnd.vouch.symlink"
+		return "application/vnd.gatemole.symlink"
 	}
 	if mode == "deleted" {
-		return "application/vnd.vouch.tombstone+json"
+		return "application/vnd.gatemole.tombstone+json"
 	}
 	return "application/octet-stream"
 }
