@@ -1,5 +1,5 @@
 {
-  "version": "vouch.action_request.v0",
+  "version": "gatemole.action_request.v0",
   "id": "action:demo-write-001",
   "run_id": "run:demo-001",
   "operation": "filesystem.write",

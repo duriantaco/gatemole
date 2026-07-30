@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.kernel.common.v0.schema.json",
-  "title": "Vouch agent-kernel common values v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.kernel.common.v0.schema.json",
+  "title": "Gatemole agent-kernel common values v0",
   "$defs": {
     "identifier": {
       "type": "string",

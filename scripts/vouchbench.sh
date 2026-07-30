@@ -1093,7 +1093,7 @@ add_docs_low_risk_full_evidence() {
     --behavior "readme documents usage" \
     --security "no secrets introduced" \
     --required-test "documentation smoke check" \
-    --metric "vouch.gate.decision" \
+    --metric "gatemole.gate.decision" \
     --rollback-strategy "revert_change" > "$dir/contract.stdout"
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
   "$VOUCH" --repo "$repo" manifest create \
@@ -1109,7 +1109,7 @@ add_docs_low_risk_full_evidence() {
   write_text_file "$repo/.vouch/artifacts/security.json" '{"status":"pass","obligations":["docs.readme.security.no_secrets_introduced"]}'
   write_text_file "$repo/.vouch/artifacts/runtime.json" '{"status":"pass","obligations":["docs.readme.runtime_signal.vouch_gate_decision"]}'
   write_text_file "$repo/.vouch/artifacts/rollback.json" '{"status":"pass","obligations":["docs.readme.rollback.revert_change"]}'
-  write_text_file "$repo/.vouch/test-map.json" '{"version":"vouch.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
+  write_text_file "$repo/.vouch/test-map.json" '{"version":"gatemole.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
   write_text_file "$repo/.vouch/artifacts/tests.xml" '<testsuite name="docs" tests="1" failures="0" errors="0" skipped="0"><testcase classname="tests.docs.test_readme" name="test_documentation_smoke_check" file="tests/docs/test_readme.py"></testcase></testsuite>'
 
   "$VOUCH" --repo "$repo" manifest attach-artifact \

@@ -63,7 +63,7 @@ The production runtime:
   Runtime or a conflicting nonempty profile fails startup.
 - Executes agents and verifiers in the daemon, not in the CLI.
 - Persists the exact task intent and its selected agent-profile, image, command,
-  transaction and run bindings in a digest-bound `vouch.agent_task.v0`
+  transaction and run bindings in a digest-bound `gatemole.agent_task.v0`
   resource. The agent receives that envelope through a separate read-only
   `/vouch/task.json` mount with `VOUCH_TASK_PATH` and `VOUCH_TASK_DIGEST`;
   it is never written into the mutable worktree.
@@ -237,7 +237,7 @@ discovery:
 
 ```json
 {
-  "version": "vouch.oidc_trust.v0",
+  "version": "gatemole.oidc_trust.v0",
   "issuer": "https://login.example.com/",
   "audiences": ["vouch-production"],
   "clock_skew_seconds": 60,
@@ -261,7 +261,7 @@ a mandatory verification gate for every production transaction:
 
 ```json
 {
-  "version": "vouch.verifier_profiles.v0",
+  "version": "gatemole.verifier_profiles.v0",
   "profiles": [
     {
       "name": "test-suite",

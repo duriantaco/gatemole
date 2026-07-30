@@ -1,5 +1,5 @@
 {
-  "version": "vouch.manifest.v0",
+  "version": "gatemole.manifest.v0",
   "task": {
     "id": "issue-184-traceability",
     "summary": "attempt password reset change while touching an unrouted billing file"

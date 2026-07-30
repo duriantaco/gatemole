@@ -1,5 +1,5 @@
 {
-  "version": "vouch.run_event.v0",
+  "version": "gatemole.run_event.v0",
   "id": "event:invalid:2",
   "run_id": "run:demo-001",
   "sequence": 2,

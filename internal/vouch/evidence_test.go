@@ -90,7 +90,7 @@ func TestIntentCompilesToSpecAndIR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ir.Version != "vouch.ir.v0" {
+	if ir.Version != "gatemole.ir.v0" {
 		t.Fatalf("unexpected IR version %s", ir.Version)
 	}
 	if !hasObligation(ir, ObligationSecurity, EvidenceSecurityCheck, "reset token is never logged") {
@@ -1479,7 +1479,7 @@ func TestGateCommandWritesGateResultFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Version != "vouch.gate_result.v0" || result.Decision != "auto_merge" {
+	if result.Version != "gatemole.gate_result.v0" || result.Decision != "auto_merge" {
 		t.Fatalf("unexpected gate result: %#v", result)
 	}
 }
@@ -1619,9 +1619,9 @@ func TestMalformedVerifierOutputInvalidatesEvidence(t *testing.T) {
 		}
 	})
 	writeArtifact(t, repo, "artifacts/verifier-bad.json", `{
-  "version": "vouch.verifier_output.old",
+  "version": "gatemole.verifier_output.old",
   "verifier": "spec_adherence",
-  "prompt_version": "vouch.verifier_prompt.v0",
+  "prompt_version": "gatemole.verifier_prompt.v0",
   "obligations": ["`+behaviorID+`"],
   "findings": []
 }`)

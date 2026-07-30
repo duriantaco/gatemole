@@ -78,7 +78,7 @@ func TestResolveNamedAgentProfileRejectsUnknownFieldsAndDigestDrift(t *testing.T
 	unknownPath := filepath.Join(repo, "unknown.json")
 	if err := os.WriteFile(
 		unknownPath,
-		[]byte(`{"version":"vouch.agent_profiles.v0","profiles":[],"unexpected":true}`),
+		[]byte(`{"version":"gatemole.agent_profiles.v0","profiles":[],"unexpected":true}`),
 		0o600,
 	); err != nil {
 		t.Fatal(err)

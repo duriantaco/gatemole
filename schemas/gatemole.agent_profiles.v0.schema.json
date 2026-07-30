@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.agent_profiles.v0.schema.json",
-  "title": "Vouch Agent Profiles v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.agent_profiles.v0.schema.json",
+  "title": "Gatemole Agent Profiles v0",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "profiles"],
   "properties": {
-    "version": { "const": "vouch.agent_profiles.v0" },
+    "version": { "const": "gatemole.agent_profiles.v0" },
     "profiles": {
       "type": "array",
       "minItems": 1,
@@ -17,7 +17,7 @@
         "required": ["name", "oci_image", "descriptor"],
         "properties": {
           "name": {
-            "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier"
+            "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier"
           },
           "oci_image": {
             "type": "string",
@@ -26,7 +26,7 @@
           "descriptor": {
             "allOf": [
               {
-                "$ref": "vouch.agent_image.v0.schema.json"
+                "$ref": "gatemole.agent_image.v0.schema.json"
               },
               {
                 "properties": {

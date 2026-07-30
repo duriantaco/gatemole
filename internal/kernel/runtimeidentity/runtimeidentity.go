@@ -23,7 +23,7 @@ import (
 
 const (
 	// IdentityVersion identifies the strict local Runtime identity document.
-	IdentityVersion = "vouch.runtime_identity.v0"
+	IdentityVersion = "gatemole.runtime_identity.v0"
 	// IdentityRelativePath is repository-relative and must never be resolved
 	// against an agent-controlled working directory.
 	IdentityRelativePath = ".vouch/runtime.json"

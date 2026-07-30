@@ -1,5 +1,5 @@
 {
-  "version": "vouch.effect.v0",
+  "version": "gatemole.effect.v0",
   "id": "effect:demo-001:1",
   "transaction_id": "tx:demo-001",
   "sequence": 1,

@@ -16,7 +16,7 @@ import (
 	bootstrap "github.com/duriantaco/vouch/internal/vouch/bootstrap"
 )
 
-const tryResultVersion = "vouch.try.v0"
+const tryResultVersion = "gatemole.try.v0"
 
 type TryResult struct {
 	Version              string            `json:"version"`

@@ -21,7 +21,7 @@ implemented in
 `rollback`.
 
 ```yaml
-version: vouch.intent.v0
+version: gatemole.intent.v0
 feature: auth.password_reset
 owner: platform
 owned_paths:
@@ -45,11 +45,11 @@ rollback:
 
 | Stage | Command | Code path | Output |
 | --- | --- | --- | --- |
-| Parse intent | `vouch contracts intent parse` | [`ParseIntentASTFile`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go) | `vouch.ast.v0` with source spans and diagnostics |
+| Parse intent | `vouch contracts intent parse` | [`ParseIntentASTFile`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go) | `gatemole.ast.v0` with source spans and diagnostics |
 | Analyze intent | repo compile path | [`AnalyzeIntentAST`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go) | typed intent values |
-| Compile spec | `vouch contracts intent compile` | [`SpecFromIntent`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go) | `vouch.spec.v0` JSON |
-| Build IR | `vouch contracts ir build` | [`IRFromSpec`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/ir.go) | `vouch.ir.v0` obligations |
-| Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/plan.go) | `vouch.plan.v0` verification plan |
+| Compile spec | `vouch contracts intent compile` | [`SpecFromIntent`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go) | `gatemole.spec.v0` JSON |
+| Build IR | `vouch contracts ir build` | [`IRFromSpec`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/ir.go) | `gatemole.ir.v0` obligations |
+| Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/plan.go) | `gatemole.plan.v0` verification plan |
 | Build artifacts | `vouch contracts artifacts build` | [`BuildArtifacts`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/artifacts.go) | verifier packets, test obligations, release-policy artifact |
 | Compile repo | `vouch contracts compile` | [`CompileRepo`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
 

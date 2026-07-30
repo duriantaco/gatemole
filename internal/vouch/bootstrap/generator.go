@@ -105,7 +105,7 @@ func obligationsForDraft(draft Draft, opts Options) []Obligation {
 
 func generated(signal Signal) Generated {
 	return Generated{
-		By:         "vouch.bootstrap",
+		By:         "gatemole.bootstrap",
 		Mode:       "deterministic",
 		Confidence: "high",
 		Source: SignalSource{

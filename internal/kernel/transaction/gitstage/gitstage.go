@@ -734,7 +734,7 @@ func (manager *Manager) Inspect(ctx context.Context, workspace Workspace, now ti
 		TreeRevision string `json:"tree_revision"`
 		PatchDigest  string `json:"patch_digest"`
 	}{
-		Version:      "vouch.git_stage_state.v1",
+		Version:      "gatemole.git_stage_state.v1",
 		BaseRevision: workspace.BaseRevision,
 		TreeRevision: treeRevision,
 		PatchDigest:  patchDigest,
@@ -2119,10 +2119,10 @@ func validObjectID(value string) bool {
 
 func mediaType(mode string) string {
 	if mode == "symlink" {
-		return "application/vnd.vouch.symlink"
+		return "application/vnd.gatemole.symlink"
 	}
 	if mode == "deleted" {
-		return "application/vnd.vouch.tombstone+json"
+		return "application/vnd.gatemole.tombstone+json"
 	}
 	return "application/octet-stream"
 }

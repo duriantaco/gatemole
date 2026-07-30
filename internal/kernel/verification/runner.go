@@ -169,7 +169,7 @@ func (runner Runner) Run(
 	}
 	filesClosed = true
 	receipt := ProcessReceipt{
-		Version:             "vouch.verification_process_receipt.v0",
+		Version:             "gatemole.verification_process_receipt.v0",
 		Name:                name,
 		Status:              status,
 		ExitCode:            exitCode,

@@ -1,5 +1,5 @@
 {
-  "version": "vouch.execution_contract.v0",
+  "version": "gatemole.execution_contract.v0",
   "id": "contract.demo-change",
   "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "owner": {

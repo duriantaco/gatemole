@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.policy_decision.v0.schema.json",
-  "title": "Vouch PolicyDecision v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.policy_decision.v0.schema.json",
+  "title": "Gatemole PolicyDecision v0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,24 +9,24 @@
     "policy_digest", "facts_digest", "rules_fired", "reasons", "evaluated_at"
   ],
   "properties": {
-    "version": { "const": "vouch.policy_decision.v0" },
-    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "version": { "const": "gatemole.policy_decision.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "subject_type": {
       "type": "string",
       "enum": ["run", "action", "delegation", "checkpoint", "release"]
     },
-    "subject_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "subject_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "decision": {
       "type": "string",
       "enum": ["allow", "deny", "require_approval", "constrain", "pause", "terminate"]
     },
-    "policy_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
-    "facts_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "policy_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "facts_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "rules_fired": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
     },
     "reasons": {
       "type": "array",
@@ -39,6 +39,6 @@
         "type": ["string", "number", "integer", "boolean", "null"]
       }
     },
-    "evaluated_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" }
+    "evaluated_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" }
   }
 }

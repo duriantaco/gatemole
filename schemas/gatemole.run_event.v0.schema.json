@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.run_event.v0.schema.json",
+  "title": "Gatemole RunEvent v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "run_id", "sequence", "type", "actor", "occurred_at", "payload", "digest"],
+  "properties": {
+    "version": { "const": "gatemole.run_event.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "type": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "actor": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/principal" },
+    "occurred_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "payload": { "type": "object" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/artifact_ref" }
+    },
+    "policy_decision_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "previous_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "sequence": { "const": 1 } }, "required": ["sequence"] },
+      "then": { "not": { "required": ["previous_digest"] } },
+      "else": { "required": ["previous_digest"] }
+    }
+  ]
+}

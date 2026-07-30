@@ -113,7 +113,7 @@ diff -u <(printf 'internal/auth/middleware.go\ninternal/auth/middleware_test.go\
 pass "successful child changes became an exact ordered effect ledger"
 
 [[ "$(jq -r '.decision.outcome' "$BENCH_DIR/success.json")" == "require_approval" ]] || fail "runtime sequence policy missed control/evidence coupling"
-jq -e '.decision.findings[] | select(.rule_id == "vouch.sequence.control-and-evidence-coupling")' "$BENCH_DIR/success.json" >/dev/null || fail "runtime finding missing"
+jq -e '.decision.findings[] | select(.rule_id == "gatemole.sequence.control-and-evidence-coupling")' "$BENCH_DIR/success.json" >/dev/null || fail "runtime finding missing"
 pass "combined control and test changes required focused approval"
 
 "$VOUCH_BIN" --repo "$REPO_DIR" --json tx events \

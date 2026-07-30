@@ -143,9 +143,9 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		return ModelBrokerSession{}, fmt.Errorf("remove stale model broker resources: %w", err)
 	}
 	labels := []string{
-		"--label=vouch.managed=true",
-		"--label=vouch.role=model-broker",
-		"--label=vouch.transaction=" + shortResourceLabel(config.TransactionID),
+		"--label=gatemole.managed=true",
+		"--label=gatemole.role=model-broker",
+		"--label=gatemole.transaction=" + shortResourceLabel(config.TransactionID),
 	}
 	networkArguments := append([]string{
 		"network", "create", "--internal",

@@ -205,7 +205,7 @@ Upload the whole Vouch bundle for each shadow run:
 - `.vouch/artifacts/`: raw evidence such as JUnit XML or SARIF.
 
 The compact gate result should be written to `.vouch/build/gate-result.json`.
-That file uses `vouch.gate_result.v0` and is the stable input for future status
+That file uses `gatemole.gate_result.v0` and is the stable input for future status
 checks or GitHub Checks integrations.
 
 ### Contracts In CI

@@ -309,7 +309,7 @@ Deliverables:
 - JSON Schemas for the eight core resources.
 - Lifecycle and action transition tables.
 - Error taxonomy and stable machine-readable error codes.
-- Compatibility policy for all `vouch.*.v0` resources.
+- Compatibility policy for all `gatemole.*.v0` resources.
 - A checked-in north-star demonstration specification.
 
 Exit criteria:

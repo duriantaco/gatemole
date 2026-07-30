@@ -1,7 +1,7 @@
 package bootstrap
 
 const (
-	Version = "vouch.bootstrap_report.v0"
+	Version = "gatemole.bootstrap_report.v0"
 )
 
 type Options struct {

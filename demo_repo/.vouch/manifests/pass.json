@@ -1,5 +1,5 @@
 {
-  "version": "vouch.manifest.v0",
+  "version": "gatemole.manifest.v0",
   "task": {
     "id": "issue-184",
     "summary": "replace password reset flow with agent-generated implementation"

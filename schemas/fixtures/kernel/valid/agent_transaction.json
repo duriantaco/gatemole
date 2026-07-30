@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_transaction.v0",
+  "version": "gatemole.agent_transaction.v0",
   "id": "tx:demo-001",
   "namespace": "team-payments",
   "intent_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",

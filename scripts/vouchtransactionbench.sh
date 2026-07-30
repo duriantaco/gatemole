@@ -130,7 +130,7 @@ printf 'package auth\n\nfunc Allowed() bool { return true }\n' >"$WORKTREE/inter
 "$VOUCH_BIN" --repo "$REPO_DIR" --json tx validate \
   --namespace bench --id tx:bench-001 --socket "$SOCKET_PATH" >"$BENCH_DIR/validate.json"
 [[ "$(jq -r '.decision.outcome' "$BENCH_DIR/validate.json")" == "require_approval" ]] || fail "combined control/test sequence did not require approval"
-jq -e '.decision.findings[] | select(.rule_id == "vouch.sequence.control-and-evidence-coupling")' "$BENCH_DIR/validate.json" >/dev/null || fail "composition finding missing"
+jq -e '.decision.findings[] | select(.rule_id == "gatemole.sequence.control-and-evidence-coupling")' "$BENCH_DIR/validate.json" >/dev/null || fail "composition finding missing"
 pass "sequence policy caught control-and-evidence coupling"
 
 "$VOUCH_BIN" --repo "$REPO_DIR" --json tx get \

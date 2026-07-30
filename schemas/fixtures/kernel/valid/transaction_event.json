@@ -1,5 +1,5 @@
 {
-  "version": "vouch.transaction_event.v0",
+  "version": "gatemole.transaction_event.v0",
   "id": "tx-event:demo-001:1",
   "transaction_id": "tx:demo-001",
   "sequence": 1,

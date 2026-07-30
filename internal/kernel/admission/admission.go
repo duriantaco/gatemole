@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	LegacyRequestVersion = "vouch.task_admission_request.v0"
-	RequestVersion       = "vouch.task_admission_request.v1"
-	LegacyResultVersion  = "vouch.task_admission.v0"
-	ResultVersion        = "vouch.task_admission.v1"
+	LegacyRequestVersion = "gatemole.task_admission_request.v0"
+	RequestVersion       = "gatemole.task_admission_request.v1"
+	LegacyResultVersion  = "gatemole.task_admission.v0"
+	ResultVersion        = "gatemole.task_admission.v1"
 )
 
 // ContractSpec contains only caller-owned policy inputs. The daemon derives

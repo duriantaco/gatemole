@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	CallEventVersion = "vouch.model_call_event.v0"
+	CallEventVersion = "gatemole.model_call_event.v0"
 	CallStarted      = "started"
 	CallCompleted    = "completed"
 	CallFailed       = "failed"

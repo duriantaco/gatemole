@@ -305,7 +305,7 @@ func RenderGitHubSummary(evidence Evidence) string {
 
 func GateResultFromEvidence(evidence Evidence) GateResult {
 	return GateResult{
-		Version:            "vouch.gate_result.v0",
+		Version:            "gatemole.gate_result.v0",
 		Decision:           evidence.Decision,
 		Reasons:            cloneStrings(evidence.Reasons),
 		PolicyPath:         evidence.PolicyPath,

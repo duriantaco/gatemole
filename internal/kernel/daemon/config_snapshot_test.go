@@ -80,7 +80,7 @@ func TestConfigSnapshotRejectsAtoBReplacementWhileOpening(t *testing.T) {
 func TestConfigureModelBrokerRetainsParsedAndHashedSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "model-policy.json")
 	policyA := []byte(`{
-		"version":"vouch.model_broker_policy.v0",
+		"version":"gatemole.model_broker_policy.v0",
 		"provider":"openai",
 		"upstream_base_url":"http://provider-a.invalid",
 		"allowed_models":["model-a"],

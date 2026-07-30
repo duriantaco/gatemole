@@ -23,7 +23,7 @@ their existing CLI behavior.
 
 ## What is implemented
 
-- Eight strict `vouch.*.v0` kernel resource schemas and Go models.
+- Eight strict `gatemole.*.v0` kernel resource schemas and Go models.
 - Deterministic run lifecycle reducer and stable kernel error codes.
 - Append-only hash-chained events plus byte-replayable materialized run state.
 - SQLite transactions, optimistic event cursors, namespace predicates, and

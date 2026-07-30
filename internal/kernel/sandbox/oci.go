@@ -269,7 +269,7 @@ func (config OCIConfig) RuntimeConfigDigest() (string, error) {
 		network = "internal_model_broker"
 	}
 	data, err := json.Marshal(runtimeDigestInput{
-		Version:         "vouch.oci_runtime_config.v0",
+		Version:         "gatemole.oci_runtime_config.v0",
 		ImageDigest:     imageDigest,
 		WorkspaceMode:   config.WorkspaceMode,
 		Role:            config.Role,

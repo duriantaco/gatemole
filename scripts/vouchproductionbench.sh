@@ -87,7 +87,7 @@ broker_image=$(docker image inspect --format '{{.Id}}' "$broker_image_tag")
 
 cat >"$bench_root/model-policy.json" <<'EOF'
 {
-  "version": "vouch.model_broker_policy.v0",
+  "version": "gatemole.model_broker_policy.v0",
   "provider": "openai",
   "upstream_base_url": "https://api.openai.invalid",
   "allowed_models": ["gpt-broker-bench"],
@@ -116,7 +116,7 @@ jq -n \
   --arg image "$production_image" \
   --arg command "$verifier_program" \
   '{
-    version: "vouch.verifier_profiles.v0",
+    version: "gatemole.verifier_profiles.v0",
     profiles: [{
       name: "authentication-invariant",
       image: $image,

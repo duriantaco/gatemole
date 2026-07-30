@@ -771,7 +771,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	if runErr != nil && outcome.Receipt.Status == "" {
 		outcome.Receipt = verification.ProcessReceipt{
-			Version:             "vouch.verification_process_receipt.v0",
+			Version:             "gatemole.verification_process_receipt.v0",
 			Name:                execution.ID,
 			Status:              model.AgentExecutionStartFailed,
 			CommandDigest:       executionPlan.CommandDigest,

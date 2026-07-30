@@ -84,7 +84,7 @@ func TestBootstrapWritesIntentReportAndCompileCompatibleContract(t *testing.T) {
 	if len(obligations) == 0 {
 		t.Fatalf("expected generated obligations, got %#v", report.Drafts[0])
 	}
-	if obligations[0].Generated.By != "vouch.bootstrap" || obligations[0].Generated.Source.File == "" {
+	if obligations[0].Generated.By != "gatemole.bootstrap" || obligations[0].Generated.Source.File == "" {
 		t.Fatalf("expected structured provenance on obligation, got %#v", obligations[0])
 	}
 

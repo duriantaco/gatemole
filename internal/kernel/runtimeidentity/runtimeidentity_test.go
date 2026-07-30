@@ -251,28 +251,28 @@ func TestLoadRejectsMalformedIdentityDocuments(t *testing.T) {
 	}
 	cases := map[string]string{
 		"unknown field": `{
-			"version":"vouch.runtime_identity.v0",
+			"version":"gatemole.runtime_identity.v0",
 			"runtime_id":"` + valid.RuntimeID + `",
 			"created_at":"` + valid.CreatedAt.Format(time.RFC3339Nano) + `",
 			"unexpected":true
 		}`,
 		"wrong version": `{
-			"version":"vouch.runtime_identity.v1",
+			"version":"gatemole.runtime_identity.v1",
 			"runtime_id":"` + valid.RuntimeID + `",
 			"created_at":"` + valid.CreatedAt.Format(time.RFC3339Nano) + `"
 		}`,
 		"invalid Runtime ID": `{
-			"version":"vouch.runtime_identity.v0",
+			"version":"gatemole.runtime_identity.v0",
 			"runtime_id":"runtime:not-random",
 			"created_at":"` + valid.CreatedAt.Format(time.RFC3339Nano) + `"
 		}`,
 		"invalid creation time": `{
-			"version":"vouch.runtime_identity.v0",
+			"version":"gatemole.runtime_identity.v0",
 			"runtime_id":"` + valid.RuntimeID + `",
 			"created_at":"0001-01-01T00:00:00Z"
 		}`,
 		"trailing JSON": `{
-			"version":"vouch.runtime_identity.v0",
+			"version":"gatemole.runtime_identity.v0",
 			"runtime_id":"` + valid.RuntimeID + `",
 			"created_at":"` + valid.CreatedAt.Format(time.RFC3339Nano) + `"
 		} {}`,

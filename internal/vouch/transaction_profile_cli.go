@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	agentProfilesVersion  = "vouch.agent_profiles.v0"
+	agentProfilesVersion  = "gatemole.agent_profiles.v0"
 	defaultAgentProfiles  = ".vouch/agent-profiles.json"
 	maxAgentProfilesBytes = 1 << 20
 	maxAgentProfiles      = 128
@@ -186,7 +186,7 @@ func resolveAdHocAgentProfile(
 		Command       []string `json:"command"`
 		CommandDigest string   `json:"command_digest"`
 	}{
-		Version:       "vouch.ad_hoc_agent_profile.v0",
+		Version:       "gatemole.ad_hoc_agent_profile.v0",
 		RuntimeClass:  runtimeClass,
 		OCIImage:      image,
 		ImageDigest:   imageDigest,

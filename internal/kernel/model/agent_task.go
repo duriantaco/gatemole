@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	AgentTaskVersion        = "vouch.agent_task.v0"
+	AgentTaskVersion        = "gatemole.agent_task.v0"
 	MaxAgentTaskIntentBytes = 64 << 10
 )
 

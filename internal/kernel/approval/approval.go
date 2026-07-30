@@ -16,7 +16,7 @@ import (
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 )
 
-const TrustDocumentVersion = "vouch.approval_trust.v0"
+const TrustDocumentVersion = "gatemole.approval_trust.v0"
 
 const maxTrustDocumentBytes = 2 << 20
 

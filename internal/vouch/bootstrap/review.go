@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const ReviewVersion = "vouch.bootstrap_review.v0"
+const ReviewVersion = "gatemole.bootstrap_review.v0"
 
 type ReviewOptions struct {
 	Limit int

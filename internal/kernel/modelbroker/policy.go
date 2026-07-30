@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const PolicyVersion = "vouch.model_broker_policy.v0"
+const PolicyVersion = "gatemole.model_broker_policy.v0"
 
 const maxPolicyBytes = 2 << 20
 

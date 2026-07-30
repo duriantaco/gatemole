@@ -51,7 +51,7 @@ func (policy BaselinePolicy) Digest() (string, error) {
 		Version                    string `json:"version"`
 		DatabaseDeleteApprovalRows int64  `json:"database_delete_approval_rows"`
 	}{
-		Version:                    "vouch.sequence_policy.baseline.v0",
+		Version:                    "gatemole.sequence_policy.baseline.v0",
 		DatabaseDeleteApprovalRows: threshold,
 	})
 }
@@ -85,7 +85,7 @@ func (policy BaselinePolicy) Evaluate(effects []model.Effect) SequenceDecision {
 		}
 		if effect.RecoveryClass == model.RecoveryIrreversible {
 			findings = append(findings, SequenceFinding{
-				RuleID:    "vouch.sequence.irreversible-release",
+				RuleID:    "gatemole.sequence.irreversible-release",
 				Outcome:   SequenceRequireApproval,
 				Summary:   "Irreversible effects require approval before release.",
 				EffectIDs: []string{effect.ID},
@@ -93,7 +93,7 @@ func (policy BaselinePolicy) Evaluate(effects []model.Effect) SequenceDecision {
 		}
 		if isLargeDatabaseDelete(effect, threshold) {
 			findings = append(findings, SequenceFinding{
-				RuleID:    "vouch.sequence.large-database-delete",
+				RuleID:    "gatemole.sequence.large-database-delete",
 				Outcome:   SequenceRequireApproval,
 				Summary:   fmt.Sprintf("Database deletion exceeds %d estimated rows.", threshold),
 				EffectIDs: []string{effect.ID},
@@ -102,7 +102,7 @@ func (policy BaselinePolicy) Evaluate(effects []model.Effect) SequenceDecision {
 	}
 	if len(controlEffects) > 0 && len(evidenceEffects) > 0 {
 		findings = append(findings, SequenceFinding{
-			RuleID:    "vouch.sequence.control-and-evidence-coupling",
+			RuleID:    "gatemole.sequence.control-and-evidence-coupling",
 			Outcome:   SequenceRequireApproval,
 			Summary:   "A protected control and its verification changed in the same transaction.",
 			EffectIDs: append(append([]string(nil), controlEffects...), evidenceEffects...),
@@ -160,7 +160,7 @@ func delegatedAuthoritySelfUse(effects []model.Effect) (SequenceFinding, bool) {
 		for _, dependency := range effect.Dependencies {
 			if _, dependsOnGrant := grants[dependency]; dependsOnGrant {
 				return SequenceFinding{
-					RuleID:    "vouch.sequence.grant-then-self-use",
+					RuleID:    "gatemole.sequence.grant-then-self-use",
 					Outcome:   SequenceBlock,
 					Summary:   "The transaction attempts to consume authority it granted to itself.",
 					EffectIDs: []string{dependency, effect.ID},

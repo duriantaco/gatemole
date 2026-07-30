@@ -214,7 +214,7 @@ func CreateContract(repo string, intent Intent, force bool) (Spec, string, strin
 		intent.Security = []string{"no owned-path changes bypass this contract"}
 	}
 	if len(intent.RuntimeMetrics) == 0 {
-		intent.RuntimeMetrics = []string{"vouch.gate.decision"}
+		intent.RuntimeMetrics = []string{"gatemole.gate.decision"}
 	}
 	if intent.Rollback.Strategy == "" {
 		intent.Rollback.Strategy = "revert_change"

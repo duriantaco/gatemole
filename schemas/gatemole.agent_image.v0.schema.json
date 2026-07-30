@@ -1,20 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.agent_image.v0.schema.json",
-  "title": "Vouch AgentImage v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.agent_image.v0.schema.json",
+  "title": "Gatemole AgentImage v0",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "id", "digest", "runtime", "source_digest", "publisher"],
   "properties": {
-    "version": { "const": "vouch.agent_image.v0" },
-    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-    "digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "version": { "const": "gatemole.agent_image.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
       "required": ["adapter", "entrypoint"],
       "properties": {
-        "adapter": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+        "adapter": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
         "adapter_version": { "type": "string", "minLength": 1 },
         "entrypoint": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       }
@@ -26,14 +26,14 @@
         "additionalProperties": false,
         "required": ["provider", "name"],
         "properties": {
-          "provider": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "provider": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
           "name": { "type": "string", "minLength": 1 }
         }
       }
     },
     "instructions": {
       "type": "array",
-      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" }
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/artifact_ref" }
     },
     "tools": {
       "type": "array",
@@ -42,13 +42,13 @@
         "additionalProperties": false,
         "required": ["name", "driver", "operations"],
         "properties": {
-          "name": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-          "driver": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+          "name": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+          "driver": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
           "operations": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+            "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
           }
         }
       }
@@ -56,10 +56,10 @@
     "contract_refs": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" }
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
     },
-    "source_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
-    "publisher": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/principal" },
-    "signature": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/artifact_ref" }
+    "source_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "publisher": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/principal" },
+    "signature": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/artifact_ref" }
   }
 }

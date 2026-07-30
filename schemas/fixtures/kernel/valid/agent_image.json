@@ -1,5 +1,5 @@
 {
-  "version": "vouch.agent_image.v0",
+  "version": "gatemole.agent_image.v0",
   "id": "image.coding-agent.v1",
   "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "runtime": {

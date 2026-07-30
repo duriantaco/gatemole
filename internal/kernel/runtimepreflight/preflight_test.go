@@ -30,7 +30,7 @@ func TestRequestRejectsMalformedInputs(t *testing.T) {
 	t.Parallel()
 	tests := map[string]func(*Request){
 		"version": func(request *Request) {
-			request.Version = "vouch.runtime_preflight_request.v1"
+			request.Version = "gatemole.runtime_preflight_request.v1"
 		},
 		"runtime": func(request *Request) {
 			request.ExpectedRuntimeID = "runtime:short"

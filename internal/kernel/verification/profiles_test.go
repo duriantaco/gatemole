@@ -14,7 +14,7 @@ const (
 
 func TestLoadProfilesBuildsDeterministicImmutableLookup(t *testing.T) {
 	first := loadProfilesJSON(t, `{
-  "version": "vouch.verifier_profiles.v0",
+  "version": "gatemole.verifier_profiles.v0",
   "profiles": [
     {
       "name": "zeta",
@@ -33,7 +33,7 @@ func TestLoadProfilesBuildsDeterministicImmutableLookup(t *testing.T) {
 	second := loadProfilesJSON(t, `{"profiles":[
   {"timeout_seconds":300,"command":["go","test","./..."],"image":"`+profileImageA+`","name":"alpha"},
   {"command":["scan","--mode","strict"],"name":"zeta","timeout_seconds":600,"image":"`+profileImageB+`"}
-],"version":"vouch.verifier_profiles.v0"}`)
+],"version":"gatemole.verifier_profiles.v0"}`)
 
 	if first.Len() != 2 {
 		t.Fatalf("Len()=%d, want 2", first.Len())
@@ -41,7 +41,7 @@ func TestLoadProfilesBuildsDeterministicImmutableLookup(t *testing.T) {
 	if first.Digest() == "" || !strings.HasPrefix(first.Digest(), "sha256:") {
 		t.Fatalf("Digest()=%q, want sha256 digest", first.Digest())
 	}
-	if first.Digest() != "sha256:177a5fd132ecf3b7ed05601c8f4539cb2dd3ce56998853e1c3a68c166af5f4bc" {
+	if first.Digest() != "sha256:1a07bd545d97d01a9d88be5c87651fc69238add48f3e4c92c76a2141caa90b99" {
 		t.Fatalf("Digest()=%q, deterministic v0 digest changed", first.Digest())
 	}
 	if first.Digest() != second.Digest() {
@@ -64,7 +64,7 @@ func TestLoadProfilesBuildsDeterministicImmutableLookup(t *testing.T) {
 		alpha.ImageDigest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
 		alpha.TimeoutSeconds != 300 ||
 		strings.Join(alpha.Command, "\x00") != "go\x00test\x00./..." ||
-		alpha.Digest != "sha256:caf027da50b0027c9c7e3fa71c08acce6626f3e94429b8abec53bffb3365f2f6" {
+		alpha.Digest != "sha256:b8930f154434a1886afb5549ae96931e401f02da3cbe8180c3d77a3a15e3546b" {
 		t.Fatalf("Lookup(alpha) returned unexpected profile: %#v", alpha)
 	}
 	secondAlpha, found := second.Lookup("alpha")
@@ -139,7 +139,7 @@ func TestLoadProfilesRejectsInvalidDocuments(t *testing.T) {
   "timeout_seconds": 300
 }`
 	document := func(profile string) string {
-		return `{"version":"vouch.verifier_profiles.v0","profiles":[` + profile + `]}`
+		return `{"version":"gatemole.verifier_profiles.v0","profiles":[` + profile + `]}`
 	}
 	tests := []struct {
 		name    string
@@ -147,8 +147,8 @@ func TestLoadProfilesRejectsInvalidDocuments(t *testing.T) {
 	}{
 		{name: "malformed", content: `{"version":`},
 		{name: "invalid utf8", content: document(validProfile) + string([]byte{0xff})},
-		{name: "unknown document field", content: `{"version":"vouch.verifier_profiles.v0","profiles":[` + validProfile + `],"extra":true}`},
-		{name: "wrong document field case", content: `{"Version":"vouch.verifier_profiles.v0","profiles":[` + validProfile + `]}`},
+		{name: "unknown document field", content: `{"version":"gatemole.verifier_profiles.v0","profiles":[` + validProfile + `],"extra":true}`},
+		{name: "wrong document field case", content: `{"Version":"gatemole.verifier_profiles.v0","profiles":[` + validProfile + `]}`},
 		{name: "unknown profile field", content: document(`{
 			"name":"alpha","image":"` + profileImageA + `","command":["go"],"timeout_seconds":300,"extra":true
 		}`)},
@@ -157,21 +157,21 @@ func TestLoadProfilesRejectsInvalidDocuments(t *testing.T) {
 		}`)},
 		{name: "trailing value", content: document(validProfile) + `{}`},
 		{name: "duplicate document key", content: `{
-			"version":"vouch.verifier_profiles.v0",
-			"version":"vouch.verifier_profiles.v0",
+			"version":"gatemole.verifier_profiles.v0",
+			"version":"gatemole.verifier_profiles.v0",
 			"profiles":[` + validProfile + `]
 		}`},
 		{name: "duplicate profile key", content: document(`{
 			"name":"alpha","name":"beta","image":"` + profileImageA + `","command":["go"],"timeout_seconds":300
 		}`)},
-		{name: "wrong version", content: `{"version":"vouch.verifier_profiles.v1","profiles":[` + validProfile + `]}`},
-		{name: "empty profiles", content: `{"version":"vouch.verifier_profiles.v0","profiles":[]}`},
-		{name: "missing profiles", content: `{"version":"vouch.verifier_profiles.v0"}`},
+		{name: "wrong version", content: `{"version":"gatemole.verifier_profiles.v1","profiles":[` + validProfile + `]}`},
+		{name: "empty profiles", content: `{"version":"gatemole.verifier_profiles.v0","profiles":[]}`},
+		{name: "missing profiles", content: `{"version":"gatemole.verifier_profiles.v0"}`},
 		{name: "invalid name", content: document(`{
 			"name":"bad name","image":"` + profileImageA + `","command":["go"],"timeout_seconds":300
 		}`)},
 		{name: "duplicate name", content: `{
-			"version":"vouch.verifier_profiles.v0",
+			"version":"gatemole.verifier_profiles.v0",
 			"profiles":[` + validProfile + `,` + validProfile + `]
 		}`},
 		{name: "tagged image", content: document(`{
@@ -240,7 +240,7 @@ func TestLoadProfilesRejectsNonRegularAndOversizedFiles(t *testing.T) {
 
 func singleProfileDocument(name, image, command, timeout string) string {
 	return `{
-  "version": "vouch.verifier_profiles.v0",
+  "version": "gatemole.verifier_profiles.v0",
   "profiles": [{
     "name": "` + name + `",
     "image": "` + image + `",

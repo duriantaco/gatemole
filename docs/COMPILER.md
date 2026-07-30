@@ -24,7 +24,7 @@ The source language is human-owned YAML under `.vouch/intents/`.
 Example:
 
 ```yaml
-version: vouch.intent.v0
+version: gatemole.intent.v0
 feature: auth.password_reset
 owner: platform
 owned_paths:
@@ -63,11 +63,11 @@ The parser accepts only the intent keys implemented in
 
 | Stage | Command | Main code | Output |
 | --- | --- | --- | --- |
-| Parse intent | `vouch contracts intent parse` | [`ParseIntentASTFile`](../internal/vouch/intent.go) | `vouch.ast.v0` with source spans and diagnostics |
+| Parse intent | `vouch contracts intent parse` | [`ParseIntentASTFile`](../internal/vouch/intent.go) | `gatemole.ast.v0` with source spans and diagnostics |
 | Analyze intent | repo compile path | [`AnalyzeIntentAST`](../internal/vouch/intent.go) | typed intent values |
-| Compile spec | `vouch contracts intent compile` | [`SpecFromIntent`](../internal/vouch/intent.go) | `vouch.spec.v0` JSON |
-| Build IR | `vouch contracts ir build` | [`IRFromSpec`](../internal/vouch/ir.go) | `vouch.ir.v0` obligations |
-| Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](../internal/vouch/plan.go) | `vouch.plan.v0` verification plan |
+| Compile spec | `vouch contracts intent compile` | [`SpecFromIntent`](../internal/vouch/intent.go) | `gatemole.spec.v0` JSON |
+| Build IR | `vouch contracts ir build` | [`IRFromSpec`](../internal/vouch/ir.go) | `gatemole.ir.v0` obligations |
+| Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](../internal/vouch/plan.go) | `gatemole.plan.v0` verification plan |
 | Build artifacts | `vouch contracts artifacts build` | [`BuildArtifacts`](../internal/vouch/artifacts.go) | verifier packets, test obligations, release policy artifact |
 | Compile repo | `vouch contracts compile` | [`CompileRepo`](../internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
 

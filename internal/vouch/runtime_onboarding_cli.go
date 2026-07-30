@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	runtimeDoctorVersion = "vouch.runtime_doctor.v0"
-	runtimeInitVersion   = "vouch.runtime_init.v0"
+	runtimeDoctorVersion = "gatemole.runtime_doctor.v0"
+	runtimeInitVersion   = "gatemole.runtime_init.v0"
 	runtimeIgnoreFile    = ".vouch/.gitignore"
 )
 

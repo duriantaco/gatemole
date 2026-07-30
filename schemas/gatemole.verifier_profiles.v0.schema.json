@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.verifier_profiles.v0.schema.json",
-  "title": "Vouch verifier profiles v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.verifier_profiles.v0.schema.json",
+  "title": "Gatemole verifier profiles v0",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "profiles"],
   "properties": {
-    "version": { "const": "vouch.verifier_profiles.v0" },
+    "version": { "const": "gatemole.verifier_profiles.v0" },
     "profiles": {
       "type": "array",
       "minItems": 1,
@@ -16,7 +16,7 @@
         "required": ["name", "image", "command", "timeout_seconds"],
         "properties": {
           "name": {
-            "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier"
+            "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier"
           },
           "image": {
             "type": "string",

@@ -1,5 +1,5 @@
 {
-  "version": "vouch.policy.v0",
+  "version": "gatemole.policy.v0",
   "rules": [
     {
       "id": "block_invalid_spec_or_manifest",

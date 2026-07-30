@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.approval_package.v0.schema.json",
+  "title": "Gatemole ApprovalPackage v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "id", "transaction_id", "intent_digest", "effect_set_digest",
+    "staged_state_digest", "policy_digest", "commit_plan_digest",
+    "verification_result_ids", "risk_findings", "required_approval_classes",
+    "summary", "digest", "created_at", "expires_at"
+  ],
+  "properties": {
+    "version": { "const": "gatemole.approval_package.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "intent_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "effect_set_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "staged_state_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "policy_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "commit_plan_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "verification_result_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "risk_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "summary", "effect_ids"],
+        "properties": {
+          "code": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+          "severity": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "effect_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
+          }
+        }
+      }
+    },
+    "required_approval_classes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" }
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
+    "created_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "expires_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" }
+  }
+}

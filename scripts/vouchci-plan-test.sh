@@ -55,7 +55,7 @@ assert_output "$transaction_plan" "kernelbench=false"
 assert_output "$transaction_plan" "transactionbench=true"
 assert_output "$transaction_plan" "runtimebench=false"
 
-schema_plan="$(run_plan schema schemas/vouch.agent_task.v0.schema.json)"
+schema_plan="$(run_plan schema schemas/gatemole.agent_task.v0.schema.json)"
 assert_output "$schema_plan" "docs=true"
 assert_output "$schema_plan" "vouchbench=true"
 assert_output "$schema_plan" "production=true"

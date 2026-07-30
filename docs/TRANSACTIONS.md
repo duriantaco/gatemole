@@ -100,12 +100,12 @@ vouch --repo /path/to/service tx events \
 ```
 
 `vouch runtime init` writes `.vouch/agent-profiles.json` using the
-[public profile schema](../schemas/vouch.agent_profiles.v0.schema.json). The
+[public profile schema](../schemas/gatemole.agent_profiles.v0.schema.json). The
 [checked-in fixture](../schemas/fixtures/runtime/valid/agent_profiles.json)
 shows the complete shareable document shape. `.vouch/runtime.json` is separate
 local control state, not part of that schema.
 
-Every primary `vouch run` persists a strict `vouch.agent_task.v0` resource. It
+Every primary `vouch run` persists a strict `gatemole.agent_task.v0` resource. It
 binds the transaction, namespace, participating run, exact intent, selected
 profile, pinned image and final command. Daemon-owned OCI agents receive the
 same envelope in a read-only mount:

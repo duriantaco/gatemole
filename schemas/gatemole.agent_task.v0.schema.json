@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://duriantaco.github.io/vouch/schemas/vouch.agent_task.v0.schema.json",
-  "title": "Vouch AgentTask v0",
+  "$id": "https://duriantaco.github.io/gatemole/schemas/gatemole.agent_task.v0.schema.json",
+  "title": "Gatemole AgentTask v0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,24 +17,24 @@
     "digest"
   ],
   "properties": {
-    "version": { "const": "vouch.agent_task.v0" },
-    "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-    "transaction_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-    "namespace": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-    "run_id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
+    "version": { "const": "gatemole.agent_task.v0" },
+    "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "namespace": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "run_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "intent": { "type": "string", "minLength": 1, "maxLength": 65536 },
-    "intent_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+    "intent_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "agent_profile": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "digest", "runtime_class", "command_digest"],
       "properties": {
-        "id": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/identifier" },
-        "digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+        "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
         "runtime_class": { "type": "string", "enum": ["oci", "host"] },
-        "image_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" },
+        "image_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
         "entrypoint": { "type": "string", "minLength": 1 },
-        "command_digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" }
+        "command_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" }
       },
       "allOf": [
         {
@@ -52,7 +52,7 @@
         }
       ]
     },
-    "created_at": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/timestamp" },
-    "digest": { "$ref": "vouch.kernel.common.v0.schema.json#/$defs/digest" }
+    "created_at": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/timestamp" },
+    "digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" }
   }
 }

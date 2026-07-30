@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	RequestVersion = "vouch.runtime_preflight_request.v0"
-	ResultVersion  = "vouch.runtime_preflight.v0"
+	RequestVersion = "gatemole.runtime_preflight_request.v0"
+	ResultVersion  = "gatemole.runtime_preflight.v0"
 )
 
 type AgentSelection struct {

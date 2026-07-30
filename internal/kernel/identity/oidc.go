@@ -22,7 +22,7 @@ import (
 	"github.com/duriantaco/vouch/internal/kernel/model"
 )
 
-const TrustDocumentVersion = "vouch.oidc_trust.v0"
+const TrustDocumentVersion = "gatemole.oidc_trust.v0"
 
 const maxTrustDocumentBytes = 2 << 20
 

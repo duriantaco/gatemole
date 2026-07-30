@@ -48,7 +48,7 @@ func (s *Server) currentAuthorityPolicyDigest() (string, error) {
 		IdentityTrustDigest   string `json:"identity_trust_digest,omitempty"`
 		ApprovalTrustDigest   string `json:"approval_trust_digest,omitempty"`
 	}{
-		Version:               "vouch.authority_policy.v0",
+		Version:               "gatemole.authority_policy.v0",
 		SequencePolicyDigest:  sequenceDigest,
 		VerifierProfileDigest: verifierProfileDigest,
 		VerifierRuntimeDigest: verifierRuntimeDigest,
@@ -242,7 +242,7 @@ func (s *Server) currentVerifierRuntimePolicyDigest() (string, error) {
 		MaxConcurrentWorkloads int            `json:"max_concurrent_workloads"`
 		Verifiers              []runtimeEntry `json:"verifiers"`
 	}{
-		Version: "vouch.verifier_runtime_policy.v0",
+		Version: "gatemole.verifier_runtime_policy.v0",
 		MaxConcurrentWorkloads: s.executionPolicy.
 			MaxConcurrentWorkloads,
 		Verifiers: entries,

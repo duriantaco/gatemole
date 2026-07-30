@@ -99,7 +99,7 @@ func TestCLIJUnitMap(t *testing.T) {
 func TestJUnitMapFailsWhenRequiredObligationHasNoSelector(t *testing.T) {
 	repo, manifestPath, _ := repoWithJUnitMapScenario(t)
 	writeRawPytestJUnit(t, repo)
-	writeText(t, filepath.Join(repo, ".vouch", "test-map.json"), `{"version":"vouch.test_map.v0","mappings":{}}`)
+	writeText(t, filepath.Join(repo, ".vouch", "test-map.json"), `{"version":"gatemole.test_map.v0","mappings":{}}`)
 
 	_, err := MapJUnitEvidence(repo, JUnitMapOptions{
 		ManifestPath: manifestPath,
@@ -129,7 +129,7 @@ func repoWithJUnitMapScenario(t *testing.T) (string, string, string) {
 		t.Fatal(err)
 	}
 	writeText(t, filepath.Join(repo, ".vouch", "test-map.json"), `{
-  "version": "vouch.test_map.v0",
+  "version": "gatemole.test_map.v0",
   "mappings": {
     "`+obligation+`": [
       "tests/test_app.py::test_service_json_contract"

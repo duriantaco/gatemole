@@ -1,5 +1,5 @@
 {
-  "version": "vouch.verification_result.v0",
+  "version": "gatemole.verification_result.v0",
   "id": "verification:demo-001:tests",
   "transaction_id": "tx:demo-001",
   "name": "authentication-behavior",

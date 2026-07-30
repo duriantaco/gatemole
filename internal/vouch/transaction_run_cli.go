@@ -549,7 +549,7 @@ func buildSupervisedInvocation(
 			CommandDigest string `json:"command_digest"`
 			Authority     string `json:"authority"`
 		}{
-			Version:       "vouch.host_runtime_config.v0",
+			Version:       "gatemole.host_runtime_config.v0",
 			CommandDigest: commandDigest,
 			Authority:     "ambient_host",
 		})

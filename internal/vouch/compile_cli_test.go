@@ -50,7 +50,7 @@ func TestCompileCommandBuildsRepoCompilerPipeline(t *testing.T) {
 	if requiredTest == nil {
 		t.Fatalf("missing compiled required-test obligation: %#v", ir.Obligations)
 	}
-	if requiredTest.Generated == nil || requiredTest.Generated.By != "vouch.bootstrap" {
+	if requiredTest.Generated == nil || requiredTest.Generated.By != "gatemole.bootstrap" {
 		t.Fatalf("generated provenance was not preserved: %#v", requiredTest)
 	}
 	plan := mustLoadPlanBundle(t, filepath.Join(repo, ".vouch", "build", "verification-plan.json"))

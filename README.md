@@ -223,7 +223,7 @@ vouch --repo /path/to/service run \
 ```
 
 The public profile schema is
-[`schemas/vouch.agent_profiles.v0.schema.json`](schemas/vouch.agent_profiles.v0.schema.json),
+[`schemas/gatemole.agent_profiles.v0.schema.json`](schemas/gatemole.agent_profiles.v0.schema.json),
 with a complete
 [example profile](schemas/fixtures/runtime/valid/agent_profiles.json). Vouch
 binds the selected profile, final command, pinned image and exact task intent

@@ -303,7 +303,7 @@ func loadAuthorityProfiles(
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "verifier-profiles.json")
 	document := `{
-		"version":"vouch.verifier_profiles.v0",
+		"version":"gatemole.verifier_profiles.v0",
 		"profiles":[{
 			"name":"` + name + `",
 			"image":"registry.example/verifier@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

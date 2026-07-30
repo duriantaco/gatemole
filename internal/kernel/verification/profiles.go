@@ -18,14 +18,14 @@ import (
 )
 
 const (
-	VerifierProfilesVersion = "vouch.verifier_profiles.v0"
+	VerifierProfilesVersion = "gatemole.verifier_profiles.v0"
 
 	MinVerifierProfileTimeoutSeconds int64 = 1
 	MaxVerifierProfileTimeoutSeconds int64 = 3600
 	MaxVerifierProfilesFileBytes     int64 = 2 << 20
 
-	verifierProfileDigestVersion    = "vouch.verifier_profile_digest.v0"
-	verifierProfileSetDigestVersion = "vouch.verifier_profile_set_digest.v0"
+	verifierProfileDigestVersion    = "gatemole.verifier_profile_digest.v0"
+	verifierProfileSetDigestVersion = "gatemole.verifier_profile_set_digest.v0"
 )
 
 // Profile is one daemon-owned OCI verifier invocation. Command is an exact

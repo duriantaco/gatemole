@@ -540,7 +540,7 @@ func TestRuntimeDoctorDistinguishesWarningsFailuresAndSelectedImages(t *testing.
 		t.Fatalf("selected missing image did not fail: code=%d", code)
 	}
 
-	if err := os.WriteFile(profilesPath, []byte(`{"version":"vouch.agent_profiles.v0","profiles":[]}`), 0o600); err != nil {
+	if err := os.WriteFile(profilesPath, []byte(`{"version":"gatemole.agent_profiles.v0","profiles":[]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	stdout.Reset()
