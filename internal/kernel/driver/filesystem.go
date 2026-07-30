@@ -104,7 +104,7 @@ func (filesystem *Filesystem) Execute(
 		return Result{}, denied(request.ID, "run workspace and capability workspace_root do not match")
 	}
 	if containsControlMetadataPath(workspace) || containsControlMetadataPath(logicalPath) {
-		return Result{}, denied(request.ID, "Git and Vouch control-state paths are never available to the filesystem driver")
+		return Result{}, denied(request.ID, "Git, Gatemole, and legacy Vouch control-state paths are never available to the filesystem driver")
 	}
 	relative, valid := capability.WorkspaceRelative(workspace, logicalPath)
 	if !valid {
@@ -162,6 +162,7 @@ func containsControlMetadataPath(logicalPath string) bool {
 			normalized = normalized[:stream]
 		}
 		if strings.EqualFold(normalized, ".git") ||
+			strings.EqualFold(normalized, ".gatemole") ||
 			strings.EqualFold(normalized, ".vouch") {
 			return true
 		}

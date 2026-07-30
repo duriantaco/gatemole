@@ -69,10 +69,12 @@ func scan(repo string, aggressive bool) ([]Signal, error) {
 
 func skipDir(path string) bool {
 	switch path {
-	case ".git", ".vouch", "node_modules", "vendor", "dist", "build", "target":
+	case ".git", ".gatemole", ".vouch", "node_modules", "vendor", "dist", "build", "target":
 		return true
 	default:
-		return strings.HasPrefix(path, ".git/") || strings.HasPrefix(path, ".vouch/")
+		return strings.HasPrefix(path, ".git/") ||
+			strings.HasPrefix(path, ".gatemole/") ||
+			strings.HasPrefix(path, ".vouch/")
 	}
 }
 

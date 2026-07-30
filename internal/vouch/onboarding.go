@@ -648,7 +648,10 @@ func goSuggestions(repo string) []ContractSuggestion {
 			return nil
 		}
 		name := entry.Name()
-		if name == ".git" || name == ".vouch" || name == "vendor" {
+		if name == ".git" ||
+			name == ".gatemole" ||
+			name == ".vouch" ||
+			name == "vendor" {
 			return filepath.SkipDir
 		}
 		if path == repo || !dirHasFileSuffix(path, ".go") {
