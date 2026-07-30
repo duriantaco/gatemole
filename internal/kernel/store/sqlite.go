@@ -99,6 +99,14 @@ func (s *SQLiteStore) Health(ctx context.Context) error {
 }
 
 func OpenSQLite(path string) (*SQLiteStore, error) {
+	return openSQLite(context.Background(), path, nil)
+}
+
+func openSQLite(
+	ctx context.Context,
+	path string,
+	beforeInitialize func(context.Context, *sql.DB) error,
+) (*SQLiteStore, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, storeError(model.ErrorSchemaInvalid, "open_store", path, "database path is required", nil)
 	}
@@ -118,7 +126,13 @@ func OpenSQLite(path string) (*SQLiteStore, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	store := &SQLiteStore{db: db}
-	if err := store.initialize(context.Background()); err != nil {
+	if beforeInitialize != nil {
+		if err := beforeInitialize(ctx, db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
+	if err := store.initialize(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
