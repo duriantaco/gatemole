@@ -1,14 +1,13 @@
 package vouch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +15,10 @@ import (
 	"strings"
 	"time"
 
+	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
 )
 
@@ -28,23 +30,29 @@ const (
 
 var runtimeStateIgnore = []byte(`# Local Vouch Runtime state. Keep agent-profiles.json under version control.
 kernel.db
+kernel.db-journal
 kernel.db-shm
 kernel.db-wal
 kernel.db.lock
+runtime.lock
 vouchd.sock
+runtime.json
 `)
 
 type runtimeInitResult struct {
-	Version           string `json:"version"`
-	Repository        string `json:"repository"`
-	AgentProfilesPath string `json:"agent_profiles_path"`
-	Agent             string `json:"agent"`
-	Image             string `json:"image"`
-	SourceDigest      string `json:"source_digest"`
-	ProfileCreated    bool   `json:"profile_created"`
-	IgnorePath        string `json:"ignore_path"`
-	IgnoreCreated     bool   `json:"ignore_created"`
-	IgnoreUpdated     bool   `json:"ignore_updated"`
+	Version                string `json:"version"`
+	Repository             string `json:"repository"`
+	AgentProfilesPath      string `json:"agent_profiles_path"`
+	Agent                  string `json:"agent"`
+	Image                  string `json:"image"`
+	SourceDigest           string `json:"source_digest"`
+	RuntimeID              string `json:"runtime_id"`
+	RuntimeIdentityPath    string `json:"runtime_identity_path"`
+	ProfileCreated         bool   `json:"profile_created"`
+	RuntimeIdentityCreated bool   `json:"runtime_identity_created"`
+	IgnorePath             string `json:"ignore_path"`
+	IgnoreCreated          bool   `json:"ignore_created"`
+	IgnoreUpdated          bool   `json:"ignore_updated"`
 }
 
 type runtimeDoctorCheck struct {
@@ -60,10 +68,16 @@ type runtimeDoctorResult struct {
 }
 
 type runtimeDoctorProbes struct {
-	gitRoot     func(context.Context, string) (string, error)
-	ociEngine   func(context.Context, string) (string, error)
-	ociImage    func(context.Context, string, string) error
-	daemonReady func(context.Context, string) error
+	gitRoot         func(context.Context, string) (string, error)
+	ociEngine       func(context.Context, string) (string, error)
+	ociImage        func(context.Context, string, string) error
+	socketInfo      func(string) (os.FileInfo, error)
+	daemonPreflight func(
+		context.Context,
+		string,
+		string,
+		runtimepreflight.Request,
+	) (runtimepreflight.Result, error)
 }
 
 func runtimeCommand(
@@ -90,8 +104,10 @@ func runtimeCommand(
 
 func runtimeUsage(out io.Writer) {
 	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] runtime <command>")
-	fmt.Fprintln(out, "  runtime init --agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]")
-	fmt.Fprintln(out, "  runtime doctor [--agent NAME] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
+	fmt.Fprintln(out, "  runtime init [--agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]]")
+	fmt.Fprintln(out, "  runtime doctor [--agent NAME] [--namespace NAME] [--require-enforcement-profile PROFILE] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
+	fmt.Fprintln(out, "  omit all runtime init profile inputs to initialize only the repository-local Runtime identity")
+	fmt.Fprintln(out, "  PROFILE must be development or production")
 }
 
 func runtimeInitCommand(
@@ -112,28 +128,68 @@ func runtimeInitCommand(
 		return 2
 	}
 	command := flags.Args()
-	if *agent == "" || *image == "" || *sourceDigest == "" || len(command) == 0 {
+	profileRequested := *agent != "" ||
+		*image != "" ||
+		*sourceDigest != "" ||
+		len(command) > 0
+	if profileRequested &&
+		(*agent == "" ||
+			*image == "" ||
+			*sourceDigest == "" ||
+			len(command) == 0) {
 		fmt.Fprintln(
 			stderr,
-			"runtime init requires --agent, --image, --source-digest, and a command after --",
+			"runtime init profile registration requires --agent, --image, --source-digest, and a command after --; omit all profile inputs to initialize identity only",
 		)
 		return 2
 	}
-	if !model.IsIdentifier(*agent) {
-		fmt.Fprintln(stderr, "runtime init: --agent must be a valid identifier")
-		return 2
-	}
-	imageDigest, err := sandbox.ImageDigest(*image)
-	if err != nil || !strings.Contains(*image, "@") {
-		fmt.Fprintln(
-			stderr,
-			"runtime init: --image must be a complete IMAGE@sha256:DIGEST reference",
-		)
-		return 2
-	}
-	if !model.IsSHA256Digest(*sourceDigest) {
-		fmt.Fprintln(stderr, "runtime init: --source-digest must be a lowercase sha256 digest")
-		return 2
+
+	var document *agentProfileDocument
+	if profileRequested {
+		if !model.IsIdentifier(*agent) {
+			fmt.Fprintln(stderr, "runtime init: --agent must be a valid identifier")
+			return 2
+		}
+		imageDigest, err := sandbox.ImageDigest(*image)
+		if err != nil || !strings.Contains(*image, "@") {
+			fmt.Fprintln(
+				stderr,
+				"runtime init: --image must be a complete IMAGE@sha256:DIGEST reference",
+			)
+			return 2
+		}
+		if !model.IsSHA256Digest(*sourceDigest) {
+			fmt.Fprintln(stderr, "runtime init: --source-digest must be a lowercase sha256 digest")
+			return 2
+		}
+		profile := agentProfileEntry{
+			Name:     *agent,
+			OCIImage: *image,
+			Descriptor: model.AgentImage{
+				Version: model.AgentImageVersion,
+				ID:      "image." + *agent + ".v1",
+				Digest:  imageDigest,
+				Runtime: model.AgentRuntime{
+					Adapter:        "oci",
+					AdapterVersion: "v1",
+					Entrypoint:     append([]string(nil), command...),
+				},
+				SourceDigest: *sourceDigest,
+				Publisher: model.Principal{
+					ID:   "service:local-runtime-init",
+					Kind: model.PrincipalService,
+				},
+			},
+		}
+		candidate := agentProfileDocument{
+			Version:  agentProfilesVersion,
+			Profiles: []agentProfileEntry{profile},
+		}
+		if err := validateAgentProfileDocument(candidate); err != nil {
+			fmt.Fprintf(stderr, "runtime init: invalid agent profile: %v\n", err)
+			return 2
+		}
+		document = &candidate
 	}
 
 	root, err := discoverGitRoot(context.Background(), repo)
@@ -154,35 +210,18 @@ func runtimeInitCommand(
 		)
 		return 1
 	}
-
-	profile := agentProfileEntry{
-		Name:     *agent,
-		OCIImage: *image,
-		Descriptor: model.AgentImage{
-			Version: model.AgentImageVersion,
-			ID:      "image." + *agent + ".v1",
-			Digest:  imageDigest,
-			Runtime: model.AgentRuntime{
-				Adapter:        "oci",
-				AdapterVersion: "v1",
-				Entrypoint:     append([]string(nil), command...),
-			},
-			SourceDigest: *sourceDigest,
-			Publisher: model.Principal{
-				ID:   "service:local-runtime-init",
-				Kind: model.PrincipalService,
-			},
-		},
+	trackedState, err := trackedRuntimeState(context.Background(), repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "runtime init: inspect tracked Runtime state: %v\n", err)
+		return 1
 	}
-	document := agentProfileDocument{
-		Version: agentProfilesVersion,
-		Profiles: []agentProfileEntry{
-			profile,
-		},
-	}
-	if err := validateAgentProfileDocument(document); err != nil {
-		fmt.Fprintf(stderr, "runtime init: invalid agent profile: %v\n", err)
-		return 2
+	if len(trackedState) > 0 {
+		fmt.Fprintf(
+			stderr,
+			"runtime init: local Runtime state must not be tracked by Git: %s\n",
+			strings.Join(trackedState, ", "),
+		)
+		return 1
 	}
 
 	result, err := writeRuntimeInitialization(
@@ -195,12 +234,22 @@ func runtimeInitCommand(
 	if jsonOut {
 		return renderCommandJSON(result, stdout, stderr)
 	}
-	if result.ProfileCreated {
+	if result.RuntimeIdentityCreated || result.ProfileCreated {
 		fmt.Fprintf(stdout, "Initialized Vouch Runtime in %s\n", result.Repository)
+	} else if result.Agent == "" {
+		fmt.Fprintf(stdout, "Vouch Runtime already initialized in %s.\n", result.Repository)
 	} else {
 		fmt.Fprintf(stdout, "Vouch Runtime already initialized in %s; profile left unchanged.\n", result.Repository)
 	}
-	fmt.Fprintf(stdout, "Agent profile: %s (%s)\n", result.Agent, result.AgentProfilesPath)
+	fmt.Fprintf(
+		stdout,
+		"Runtime instance: %s (%s; local-only)\n",
+		result.RuntimeID,
+		result.RuntimeIdentityPath,
+	)
+	if result.Agent != "" {
+		fmt.Fprintf(stdout, "Agent profile: %s (%s)\n", result.Agent, result.AgentProfilesPath)
+	}
 	if result.IgnoreCreated {
 		fmt.Fprintf(stdout, "Runtime state ignore: %s\n", result.IgnorePath)
 	} else if result.IgnoreUpdated {
@@ -214,61 +263,91 @@ func runtimeInitCommand(
 
 func writeRuntimeInitialization(
 	repo string,
-	document agentProfileDocument,
+	document *agentProfileDocument,
 	agent, image, sourceDigest string,
 ) (runtimeInitResult, error) {
-	vouchDirectory := filepath.Join(repo, ".vouch")
-	info, err := os.Lstat(vouchDirectory)
-	switch {
-	case err == nil:
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return runtimeInitResult{}, errors.New(".vouch must be a real directory")
+	if err := runtimeidentity.EnsurePrivateDirectory(
+		context.Background(),
+		repo,
+	); err != nil {
+		return runtimeInitResult{}, err
+	}
+
+	identityPath := filepath.Join(
+		repo,
+		filepath.FromSlash(runtimeidentity.IdentityRelativePath),
+	)
+	if _, err := os.Lstat(identityPath); err == nil {
+		if _, err := runtimeidentity.Load(
+			context.Background(),
+			repo,
+		); err != nil {
+			return runtimeInitResult{}, fmt.Errorf(
+				"validate existing Runtime identity before initialization: %w",
+				err,
+			)
 		}
-	case os.IsNotExist(err):
-		if err := os.Mkdir(vouchDirectory, 0o700); err != nil {
-			return runtimeInitResult{}, fmt.Errorf("create .vouch directory: %w", err)
-		}
-	default:
-		return runtimeInitResult{}, fmt.Errorf("inspect .vouch directory: %w", err)
+	} else if !os.IsNotExist(err) {
+		return runtimeInitResult{}, fmt.Errorf(
+			"inspect existing Runtime identity: %w",
+			err,
+		)
 	}
 
 	profilesPath := filepath.Join(repo, defaultAgentProfiles)
-	data, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return runtimeInitResult{}, fmt.Errorf("encode agent profiles: %w", err)
-	}
-	data = append(data, '\n')
 	profileCreated := false
-	if info, err := os.Lstat(profilesPath); err == nil {
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			return runtimeInitResult{}, fmt.Errorf(
-				"%s exists but is not a regular file",
-				defaultAgentProfiles,
-			)
-		}
-		existingData, err := readAgentProfilesFile(profilesPath)
+	if document != nil {
+		data, err := json.MarshalIndent(*document, "", "  ")
 		if err != nil {
-			return runtimeInitResult{}, err
+			return runtimeInitResult{}, fmt.Errorf("encode agent profiles: %w", err)
 		}
-		existing, err := decodeAgentProfileDocument(existingData)
-		if err != nil || !reflect.DeepEqual(existing, document) {
+		data = append(data, '\n')
+		if info, err := os.Lstat(profilesPath); err == nil {
+			if !info.Mode().IsRegular() ||
+				info.Mode()&os.ModeSymlink != 0 {
+				return runtimeInitResult{}, fmt.Errorf(
+					"%s exists but is not a regular file",
+					defaultAgentProfiles,
+				)
+			}
+			existingData, err := readAgentProfilesFile(profilesPath)
+			if err != nil {
+				return runtimeInitResult{}, err
+			}
+			existing, err := decodeAgentProfileDocument(existingData)
+			if err != nil ||
+				!reflect.DeepEqual(existing, *document) {
+				return runtimeInitResult{}, fmt.Errorf(
+					"%s already exists with different content; refusing to overwrite it",
+					defaultAgentProfiles,
+				)
+			}
+		} else if os.IsNotExist(err) {
+			if err := writeExclusiveRegularFile(
+				profilesPath,
+				data,
+				0o600,
+			); err != nil {
+				return runtimeInitResult{}, fmt.Errorf(
+					"create %s: %w",
+					defaultAgentProfiles,
+					err,
+				)
+			}
+			profileCreated = true
+		} else {
 			return runtimeInitResult{}, fmt.Errorf(
-				"%s already exists with different content; refusing to overwrite it",
+				"inspect %s: %w",
 				defaultAgentProfiles,
+				err,
 			)
 		}
-	} else if os.IsNotExist(err) {
-		if err := writeExclusiveRegularFile(profilesPath, data, 0o600); err != nil {
-			return runtimeInitResult{}, fmt.Errorf("create %s: %w", defaultAgentProfiles, err)
-		}
-		profileCreated = true
-	} else {
-		return runtimeInitResult{}, fmt.Errorf("inspect %s: %w", defaultAgentProfiles, err)
 	}
 
 	ignorePath := filepath.Join(repo, runtimeIgnoreFile)
 	ignoreCreated := false
 	ignoreUpdated := false
+	var originalIgnore []byte
 	if info, err := os.Lstat(ignorePath); err == nil {
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 			if profileCreated {
@@ -286,9 +365,15 @@ func writeRuntimeInitialization(
 			}
 			return runtimeInitResult{}, fmt.Errorf("read %s: %w", runtimeIgnoreFile, err)
 		}
+		originalIgnore = append([]byte(nil), existing...)
 		missing := missingRuntimeIgnoreEntries(existing)
 		if len(missing) > 0 {
-			if err := appendRuntimeIgnoreEntries(ignorePath, existing, missing); err != nil {
+			if err := appendRuntimeIgnoreEntries(
+				ignorePath,
+				info,
+				existing,
+				missing,
+			); err != nil {
 				if profileCreated {
 					_ = os.Remove(profilesPath)
 				}
@@ -311,6 +396,23 @@ func writeRuntimeInitialization(
 		return runtimeInitResult{}, fmt.Errorf("inspect %s: %w", runtimeIgnoreFile, err)
 	}
 
+	identity, identityCreated, err := runtimeidentity.CreateOrLoad(
+		context.Background(),
+		repo,
+	)
+	if err != nil {
+		if profileCreated {
+			_ = os.Remove(profilesPath)
+		}
+		switch {
+		case ignoreCreated:
+			_ = os.Remove(ignorePath)
+		case ignoreUpdated:
+			_ = os.WriteFile(ignorePath, originalIgnore, 0o600)
+		}
+		return runtimeInitResult{}, fmt.Errorf("initialize Runtime identity: %w", err)
+	}
+
 	return runtimeInitResult{
 		Version:           runtimeInitVersion,
 		Repository:        repo,
@@ -318,10 +420,16 @@ func writeRuntimeInitialization(
 		Agent:             agent,
 		Image:             image,
 		SourceDigest:      sourceDigest,
-		ProfileCreated:    profileCreated,
-		IgnorePath:        ignorePath,
-		IgnoreCreated:     ignoreCreated,
-		IgnoreUpdated:     ignoreUpdated,
+		RuntimeID:         identity.RuntimeID,
+		RuntimeIdentityPath: filepath.Join(
+			repo,
+			filepath.FromSlash(runtimeidentity.IdentityRelativePath),
+		),
+		ProfileCreated:         profileCreated,
+		RuntimeIdentityCreated: identityCreated,
+		IgnorePath:             ignorePath,
+		IgnoreCreated:          ignoreCreated,
+		IgnoreUpdated:          ignoreUpdated,
 	}, nil
 }
 
@@ -335,7 +443,8 @@ func missingRuntimeIgnoreEntries(data []byte) []string {
 	}
 	var missing []string
 	for _, entry := range []string{
-		"kernel.db", "kernel.db-shm", "kernel.db-wal", "kernel.db.lock", "vouchd.sock",
+		"kernel.db", "kernel.db-journal", "kernel.db-shm", "kernel.db-wal",
+		"kernel.db.lock", "runtime.lock", "vouchd.sock", "runtime.json",
 	} {
 		if _, exists := lines[entry]; exists {
 			continue
@@ -348,17 +457,49 @@ func missingRuntimeIgnoreEntries(data []byte) []string {
 	return missing
 }
 
-func appendRuntimeIgnoreEntries(path string, existing []byte, missing []string) error {
+func appendRuntimeIgnoreEntries(
+	path string,
+	expected os.FileInfo,
+	existing []byte,
+	missing []string,
+) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !opened.Mode().IsRegular() ||
+		expected == nil ||
+		!os.SameFile(expected, opened) {
+		return errors.New(
+			"Runtime ignore changed before it could be updated",
+		)
+	}
+	current, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !current.Mode().IsRegular() ||
+		current.Mode()&os.ModeSymlink != 0 ||
+		!os.SameFile(opened, current) {
+		return errors.New(
+			"Runtime ignore changed while it was opened",
+		)
+	}
 	var addition strings.Builder
 	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
 		addition.WriteByte('\n')
 	}
-	addition.WriteString("# Local Vouch Runtime state.\n")
+	if !bytes.Contains(
+		existing,
+		[]byte("# Local Vouch Runtime state."),
+	) {
+		addition.WriteString("# Local Vouch Runtime state.\n")
+	}
 	for _, entry := range missing {
 		addition.WriteString(entry)
 		addition.WriteByte('\n')
@@ -416,6 +557,12 @@ func runtimeDoctorCommandWithProbes(
 	flags.SetOutput(stderr)
 	engine := flags.String("runtime-engine", "docker", "OCI engine executable")
 	agent := flags.String("agent", "", "agent profile that must be executable")
+	namespace := flags.String("namespace", "local", "daemon namespace to preflight")
+	requiredEnforcementProfile := flags.String(
+		"require-enforcement-profile",
+		"",
+		"require daemon enforcement profile: development or production",
+	)
 	profilesPath := flags.String(
 		"agent-profiles", defaultAgentProfiles,
 		"agent profile document",
@@ -437,6 +584,18 @@ func runtimeDoctorCommandWithProbes(
 		fmt.Fprintln(stderr, "doctor: --agent must be a valid identifier")
 		return 2
 	}
+	if !model.IsIdentifier(*namespace) {
+		fmt.Fprintln(stderr, "doctor: --namespace must be a valid identifier")
+		return 2
+	}
+	if *requiredEnforcementProfile != "" &&
+		!model.IsEnforcementProfile(*requiredEnforcementProfile) {
+		fmt.Fprintln(
+			stderr,
+			"doctor: --require-enforcement-profile must be development or production",
+		)
+		return 2
+	}
 	if *timeout <= 0 || *timeout > time.Minute {
 		fmt.Fprintln(stderr, "doctor: --timeout must be greater than zero and at most 1m")
 		return 2
@@ -449,7 +608,15 @@ func runtimeDoctorCommandWithProbes(
 	}
 	probes = withDefaultRuntimeDoctorProbes(probes)
 	result := runRuntimeDoctor(
-		repo, *engine, *agent, *profilesPath, *socketPath, *timeout, probes,
+		repo,
+		*engine,
+		*agent,
+		*namespace,
+		*requiredEnforcementProfile,
+		*profilesPath,
+		*socketPath,
+		*timeout,
+		probes,
 	)
 	if jsonOut {
 		if code := renderCommandJSON(result, stdout, stderr); code != 0 {
@@ -485,14 +652,18 @@ func withDefaultRuntimeDoctorProbes(probes runtimeDoctorProbes) runtimeDoctorPro
 	if probes.ociImage == nil {
 		probes.ociImage = probeOCIImage
 	}
-	if probes.daemonReady == nil {
-		probes.daemonReady = probeDaemonReadiness
+	if probes.socketInfo == nil {
+		probes.socketInfo = os.Lstat
+	}
+	if probes.daemonPreflight == nil {
+		probes.daemonPreflight = probeDaemonRuntime
 	}
 	return probes
 }
 
 func runRuntimeDoctor(
-	repo, engine, selectedAgent, profilesPath, socketPath string,
+	repo, engine, selectedAgent, namespace, requiredEnforcementProfile,
+	profilesPath, socketPath string,
 	timeout time.Duration,
 	probes runtimeDoctorProbes,
 ) runtimeDoctorResult {
@@ -512,6 +683,7 @@ func runRuntimeDoctor(
 	ctx, cancel := probeContext()
 	root, err := probes.gitRoot(ctx, repo)
 	cancel()
+	gitRepositoryValid := false
 	if err != nil {
 		add("git_repository", "fail", err.Error())
 	} else {
@@ -522,17 +694,64 @@ func runRuntimeDoctor(
 		case !sameRoot:
 			add("git_repository", "fail", "--repo must be the Git repository root: "+root)
 		default:
+			gitRepositoryValid = true
 			add("git_repository", "pass", "Git worktree detected at "+root)
 		}
 	}
 
-	ctx, cancel = probeContext()
-	enginePath, engineErr := probes.ociEngine(ctx, engine)
-	cancel()
-	if engineErr != nil {
-		add("oci_engine", "fail", engineErr.Error())
+	var identity runtimeidentity.Identity
+	var identityErr error
+	if gitRepositoryValid {
+		ctx, cancel = probeContext()
+		trackedState, trackedErr := trackedRuntimeState(ctx, repo)
+		cancel()
+		switch {
+		case trackedErr != nil:
+			add(
+				"runtime_state",
+				"fail",
+				"inspect tracked local Runtime state: "+trackedErr.Error(),
+			)
+		case len(trackedState) > 0:
+			add(
+				"runtime_state",
+				"fail",
+				"local Runtime state is tracked by Git: "+
+					strings.Join(trackedState, ", "),
+			)
+		default:
+			add("runtime_state", "pass", "local Runtime state is not tracked by Git")
+		}
+
+		ctx, cancel = probeContext()
+		identity, identityErr = runtimeidentity.Load(ctx, repo)
+		cancel()
+		if identityErr != nil {
+			add(
+				"runtime_identity",
+				"fail",
+				"load local Runtime identity: "+identityErr.Error()+
+					"; run `vouch runtime init`",
+			)
+		} else {
+			add(
+				"runtime_identity",
+				"pass",
+				"local Runtime instance is "+identity.RuntimeID,
+			)
+		}
 	} else {
-		add("oci_engine", "pass", engine+" is available and reachable at "+enginePath)
+		identityErr = errors.New("Git repository check failed")
+		add(
+			"runtime_state",
+			"fail",
+			"not checked because the Git repository check failed",
+		)
+		add(
+			"runtime_identity",
+			"fail",
+			"not checked because the Git repository check failed",
+		)
 	}
 
 	var profiles agentProfileDocument
@@ -555,6 +774,81 @@ func runRuntimeDoctor(
 		)
 	default:
 		add("agent_profiles", "fail", profileErr.Error())
+	}
+
+	var selectedPreflight *runtimepreflight.AgentSelection
+	var selectedProfileErr error
+	if profilesValid && selectedAgent != "" {
+		selectedPreflight, selectedProfileErr = runtimeDoctorAgentSelection(
+			profiles,
+			selectedAgent,
+		)
+	}
+
+	socketSecure := false
+	socketStatus := ""
+	socketMessage := ""
+	socketInfo, socketErr := probes.socketInfo(socketPath)
+	switch {
+	case os.IsNotExist(socketErr):
+		socketStatus = "warn"
+		socketMessage =
+			"not running; start it with `vouch daemon` when you are ready to execute"
+	case socketErr != nil:
+		socketStatus = "fail"
+		socketMessage = "inspect daemon socket: " + socketErr.Error()
+	case socketInfo.Mode()&os.ModeSymlink != 0 || socketInfo.Mode()&os.ModeSocket == 0:
+		socketStatus = "fail"
+		socketMessage = "daemon path exists but is not a real Unix socket: " + socketPath
+	case socketInfo.Mode().Perm()&0o077 != 0:
+		socketStatus = "fail"
+		socketMessage =
+			"daemon socket permissions must not grant group or other access: " +
+				socketPath
+	default:
+		socketSecure = true
+	}
+
+	if socketSecure {
+		runDaemonDoctorChecks(
+			add,
+			probeContext,
+			probes,
+			socketPath,
+			namespace,
+			requiredEnforcementProfile,
+			identity,
+			identityErr,
+			selectedAgent,
+			profilesValid,
+			selectedPreflight,
+			selectedProfileErr,
+		)
+		return result
+	}
+
+	if requiredEnforcementProfile != "" {
+		add(
+			"enforcement_profile",
+			"fail",
+			"cannot verify required daemon enforcement profile "+
+				requiredEnforcementProfile+" because no secure daemon socket is available",
+		)
+	} else {
+		add(
+			"enforcement_profile",
+			"warn",
+			"not checked because no secure daemon socket is available",
+		)
+	}
+
+	ctx, cancel = probeContext()
+	enginePath, engineErr := probes.ociEngine(ctx, engine)
+	cancel()
+	if engineErr != nil {
+		add("oci_engine", "fail", engineErr.Error())
+	} else {
+		add("oci_engine", "pass", engine+" is available and reachable at "+enginePath)
 	}
 
 	switch {
@@ -604,30 +898,246 @@ func runRuntimeDoctor(
 		}
 	}
 
-	socketInfo, socketErr := os.Lstat(socketPath)
-	switch {
-	case os.IsNotExist(socketErr):
-		add(
-			"daemon", "warn",
-			"not running; start it with `vouch daemon` when you are ready to execute",
-		)
-	case socketErr != nil:
-		add("daemon", "fail", "inspect daemon socket: "+socketErr.Error())
-	case socketInfo.Mode()&os.ModeSymlink != 0 || socketInfo.Mode()&os.ModeSocket == 0:
-		add("daemon", "fail", "daemon path exists but is not a real Unix socket: "+socketPath)
-	case socketInfo.Mode().Perm()&0o077 != 0:
-		add("daemon", "fail", "daemon socket permissions must not grant group or other access: "+socketPath)
-	default:
-		ctx, cancel = probeContext()
-		err := probes.daemonReady(ctx, socketPath)
-		cancel()
-		if err != nil {
-			add("daemon", "fail", err.Error())
-		} else {
-			add("daemon", "pass", "vouchd is ready at "+socketPath)
-		}
-	}
+	add("daemon", socketStatus, socketMessage)
 	return result
+}
+
+func runDaemonDoctorChecks(
+	add func(string, string, string),
+	probeContext func() (context.Context, context.CancelFunc),
+	probes runtimeDoctorProbes,
+	socketPath string,
+	namespace string,
+	requiredEnforcementProfile string,
+	identity runtimeidentity.Identity,
+	identityErr error,
+	selectedAgent string,
+	profilesValid bool,
+	selected *runtimepreflight.AgentSelection,
+	selectedErr error,
+) {
+	if identityErr != nil {
+		add(
+			"enforcement_profile",
+			"fail",
+			"daemon enforcement profile was not checked because the local Runtime identity is unavailable",
+		)
+		add(
+			"oci_engine",
+			"fail",
+			"daemon-owned OCI engine was not checked because the local Runtime identity is unavailable",
+		)
+		addRuntimeDoctorAgentImageCheck(
+			add,
+			selectedAgent,
+			profilesValid,
+			selected,
+			selectedErr,
+			errors.New("local Runtime identity is unavailable"),
+		)
+		add(
+			"daemon",
+			"fail",
+			"daemon preflight requires a valid local Runtime identity",
+		)
+		return
+	}
+
+	request := runtimepreflight.Request{
+		Version:                    runtimepreflight.RequestVersion,
+		ExpectedRuntimeID:          identity.RuntimeID,
+		RequiredEnforcementProfile: requiredEnforcementProfile,
+		Agent:                      selected,
+	}
+	ctx, cancel := probeContext()
+	preflight, err := probes.daemonPreflight(
+		ctx,
+		socketPath,
+		namespace,
+		request,
+	)
+	cancel()
+	if err != nil {
+		add(
+			"enforcement_profile",
+			"fail",
+			"daemon enforcement profile was not established: "+err.Error(),
+		)
+		addRuntimeDoctorEngineCheck(add, err)
+		addRuntimeDoctorAgentImageCheck(
+			add,
+			selectedAgent,
+			profilesValid,
+			selected,
+			selectedErr,
+			err,
+		)
+		add("daemon", "fail", "authoritative Runtime preflight failed: "+err.Error())
+		return
+	}
+	if preflight.RuntimeID != identity.RuntimeID {
+		mismatch := errors.New("daemon returned a different Runtime identity")
+		add(
+			"enforcement_profile",
+			"fail",
+			"daemon enforcement profile was not established",
+		)
+		addRuntimeDoctorEngineCheck(add, mismatch)
+		addRuntimeDoctorAgentImageCheck(
+			add,
+			selectedAgent,
+			profilesValid,
+			selected,
+			selectedErr,
+			mismatch,
+		)
+		add("daemon", "fail", mismatch.Error())
+		return
+	}
+
+	add(
+		"enforcement_profile",
+		"pass",
+		"daemon enforcement profile is "+preflight.EnforcementProfile,
+	)
+	add(
+		"oci_engine",
+		"pass",
+		"daemon-owned OCI engine is available and reachable",
+	)
+	addRuntimeDoctorAgentImageCheck(
+		add,
+		selectedAgent,
+		profilesValid,
+		selected,
+		selectedErr,
+		nil,
+	)
+	add(
+		"daemon",
+		"pass",
+		fmt.Sprintf(
+			"vouchd accepted Runtime %s using the %s enforcement profile",
+			preflight.RuntimeID,
+			preflight.EnforcementProfile,
+		),
+	)
+}
+
+func addRuntimeDoctorEngineCheck(
+	add func(string, string, string),
+	preflightErr error,
+) {
+	var kernelErr *model.KernelError
+	if errors.As(preflightErr, &kernelErr) &&
+		kernelErr.Code == model.ErrorDriverUnavailable {
+		add(
+			"oci_engine",
+			"fail",
+			"daemon reported its Runtime engine or ledger unavailable",
+		)
+		return
+	}
+	add(
+		"oci_engine",
+		"warn",
+		"not checked because authoritative preflight was rejected before engine readiness was established",
+	)
+}
+
+func addRuntimeDoctorAgentImageCheck(
+	add func(string, string, string),
+	selectedAgent string,
+	profilesValid bool,
+	selected *runtimepreflight.AgentSelection,
+	selectedErr error,
+	preflightErr error,
+) {
+	switch {
+	case !profilesValid && selectedAgent == "":
+		add("agent_images", "warn", "not checked because agent profiles are unavailable")
+	case !profilesValid:
+		add(
+			"agent_images",
+			"fail",
+			fmt.Sprintf(
+				"agent profile %q cannot be checked because profiles are unavailable",
+				selectedAgent,
+			),
+		)
+	case selectedAgent == "":
+		add(
+			"agent_images",
+			"warn",
+			"not checked; pass --agent NAME to verify one daemon-owned pull=never image",
+		)
+	case selectedErr != nil:
+		add("agent_images", "fail", selectedErr.Error())
+	case selected == nil:
+		add(
+			"agent_images",
+			"fail",
+			fmt.Sprintf("agent profile %q was not found", selectedAgent),
+		)
+	case preflightErr != nil:
+		add(
+			"agent_images",
+			"fail",
+			fmt.Sprintf(
+				"daemon preflight did not accept selected agent %q: %v",
+				selectedAgent,
+				preflightErr,
+			),
+		)
+	default:
+		add(
+			"agent_images",
+			"pass",
+			fmt.Sprintf(
+				"daemon verified selected agent %q image with pull=never",
+				selectedAgent,
+			),
+		)
+	}
+}
+
+func runtimeDoctorAgentSelection(
+	document agentProfileDocument,
+	name string,
+) (*runtimepreflight.AgentSelection, error) {
+	for _, profile := range document.Profiles {
+		if profile.Name != name {
+			continue
+		}
+		digest, err := canonicalAgentProfileDigest(profile)
+		if err != nil {
+			return nil, err
+		}
+		if len(profile.Descriptor.Runtime.Entrypoint) == 0 {
+			return nil, fmt.Errorf("agent profile %q has no entrypoint", name)
+		}
+		resolved := resolvedAgentProfile{
+			ID:           profile.Name,
+			Digest:       digest,
+			RuntimeClass: "oci",
+			OCIImage:     profile.OCIImage,
+			ImageDigest:  profile.Descriptor.Digest,
+			Entrypoint:   profile.Descriptor.Runtime.Entrypoint[0],
+			Command: append(
+				[]string(nil),
+				profile.Descriptor.Runtime.Entrypoint...,
+			),
+		}
+		binding, err := resolved.binding()
+		if err != nil {
+			return nil, err
+		}
+		return &runtimepreflight.AgentSelection{
+			Profile:  binding,
+			OCIImage: profile.OCIImage,
+		}, nil
+	}
+	return nil, fmt.Errorf("agent profile %q was not found", name)
 }
 
 func profileRootCause(err error) error {
@@ -713,39 +1223,62 @@ func probeOCIImage(ctx context.Context, enginePath, image string) error {
 	return command.Run()
 }
 
-func probeDaemonReadiness(ctx context.Context, socketPath string) error {
-	dialer := &net.Dialer{}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return dialer.DialContext(ctx, "unix", socketPath)
-		},
-	}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport}
-	request, err := http.NewRequestWithContext(
-		ctx, http.MethodGet, "http://vouchd/readyz", nil,
-	)
+func probeDaemonRuntime(
+	ctx context.Context,
+	socketPath string,
+	namespace string,
+	request runtimepreflight.Request,
+) (runtimepreflight.Result, error) {
+	return kernelclient.New(socketPath).
+		WithExpectedRuntimeID(request.ExpectedRuntimeID).
+		PreflightRuntime(
+			ctx,
+			namespace,
+			request,
+		)
+}
+
+var runtimeLocalStatePaths = []string{
+	".vouch/runtime.json",
+	".vouch/kernel.db",
+	".vouch/kernel.db-journal",
+	".vouch/kernel.db-shm",
+	".vouch/kernel.db-wal",
+	".vouch/kernel.db.lock",
+	".vouch/runtime.lock",
+	".vouch/vouchd.sock",
+}
+
+func trackedRuntimeState(
+	ctx context.Context,
+	repositoryRoot string,
+) ([]string, error) {
+	gitPath, err := exec.LookPath("git")
 	if err != nil {
-		return fmt.Errorf("build vouchd readiness request: %w", err)
+		return nil, fmt.Errorf("find Git executable: %w", err)
 	}
-	response, err := client.Do(request)
+	args := []string{
+		"-C",
+		repositoryRoot,
+		"ls-files",
+		"--cached",
+		"-z",
+		"--",
+	}
+	args = append(args, runtimeLocalStatePaths...)
+	command := exec.CommandContext(ctx, gitPath, args...)
+	output, err := command.Output()
 	if err != nil {
-		return fmt.Errorf("vouchd socket exists but readiness failed: %w", err)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("inspect Git index: %w", err)
 	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("vouchd is not ready: %s", response.Status)
+	var tracked []string
+	for _, path := range strings.Split(string(output), "\x00") {
+		if path != "" {
+			tracked = append(tracked, path)
+		}
 	}
-	var body struct {
-		Status string `json:"status"`
-	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 4097))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		return fmt.Errorf("decode vouchd readiness response: %w", err)
-	}
-	if body.Status != "ready" {
-		return fmt.Errorf("vouchd returned unexpected readiness status %q", body.Status)
-	}
-	return nil
+	return tracked, nil
 }

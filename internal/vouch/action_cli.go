@@ -14,15 +14,23 @@ import (
 	"time"
 
 	"github.com/duriantaco/vouch/internal/kernel/broker"
-	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/driver"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 )
 
 func actionCommand(repo string, args []string, jsonOut bool, stdout io.Writer, stderr io.Writer) int {
-	return actionCommandWithFactory(repo, args, jsonOut, stdout, stderr, func(socket string) kernelRunClient {
-		return kernelclient.New(socket)
-	})
+	if len(args) == 0 {
+		actionUsage(stderr)
+		return 2
+	}
+	factory, err := runtimeBoundKernelClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "action: %v\n", err)
+		return 1
+	}
+	return actionCommandWithFactory(
+		repo, args, jsonOut, stdout, stderr, factory,
+	)
 }
 
 func actionCommandWithFactory(

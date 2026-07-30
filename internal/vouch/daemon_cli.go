@@ -2,8 +2,6 @@ package vouch
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -21,7 +19,7 @@ func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Write
 	flags.SetOutput(stderr)
 	databasePath := flags.String("db", filepath.Join(repo, ".vouch", "kernel.db"), "SQLite kernel database path")
 	socketPath := flags.String("socket", defaultKernelSocket(repo), "Unix socket path")
-	transactionRoot := flags.String("transaction-root", defaultTransactionRoot(repo), "directory for isolated transaction worktrees")
+	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
 	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")
 	allowedImages := flags.String("allowed-images", "", "comma-separated digest-pinned OCI images allowed in production")
 	approvalTrust := flags.String("approval-trust", "", "JSON file containing trusted approval public keys")
@@ -56,8 +54,15 @@ func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Write
 	if !filepath.IsAbs(*socketPath) {
 		*socketPath = filepath.Join(repo, *socketPath)
 	}
-	if !filepath.IsAbs(*transactionRoot) {
-		*transactionRoot = filepath.Join(repo, *transactionRoot)
+	var err error
+	*transactionRoot, err = daemonTransactionRoot(
+		repo,
+		*transactionRoot,
+		daemonFlagWasSet(flags, "transaction-root"),
+	)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 	if *approvalTrust != "" && !filepath.IsAbs(*approvalTrust) {
 		*approvalTrust = filepath.Join(repo, *approvalTrust)
@@ -71,6 +76,7 @@ func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Write
 	if *verifierProfiles != "" && !filepath.IsAbs(*verifierProfiles) {
 		*verifierProfiles = filepath.Join(repo, *verifierProfiles)
 	}
+	*runtimeEngine = repositoryExecutablePath(repo, *runtimeEngine)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := daemon.Run(ctx, daemon.Config{
@@ -99,6 +105,15 @@ func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Write
 	return 0
 }
 
+func repositoryExecutablePath(repo, executable string) string {
+	if executable == "" ||
+		filepath.IsAbs(executable) ||
+		!strings.ContainsRune(executable, filepath.Separator) {
+		return executable
+	}
+	return filepath.Clean(filepath.Join(repo, executable))
+}
+
 func splitCommaValues(value string) []string {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -113,7 +128,26 @@ func splitCommaValues(value string) []string {
 	return result
 }
 
-func defaultTransactionRoot(repo string) string {
-	sum := sha256.Sum256([]byte(repo))
-	return filepath.Join(os.TempDir(), "vouch-transactions", hex.EncodeToString(sum[:12]))
+func daemonFlagWasSet(flags *flag.FlagSet, name string) bool {
+	wasSet := false
+	flags.Visit(func(current *flag.Flag) {
+		if current.Name == name {
+			wasSet = true
+		}
+	})
+	return wasSet
+}
+
+func daemonTransactionRoot(
+	repo string,
+	configured string,
+	wasConfigured bool,
+) (string, error) {
+	if !wasConfigured {
+		return daemon.DefaultTransactionRoot(repo)
+	}
+	if filepath.IsAbs(configured) {
+		return filepath.Clean(configured), nil
+	}
+	return filepath.Clean(filepath.Join(repo, configured)), nil
 }
