@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 type processLock struct {

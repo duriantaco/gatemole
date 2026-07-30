@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 // ComputeEffectSetDigest hashes the immutable proposal fields in sequence

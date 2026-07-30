@@ -14,15 +14,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/broker"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
-	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/broker"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimepreflight"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 const maxResponseBytes = 4 << 20

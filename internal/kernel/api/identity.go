@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 type authenticatedIdentityKey struct{}

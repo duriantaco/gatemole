@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/duriantaco/vouch/internal/kernel/daemon"
+	"github.com/duriantaco/gatemole/internal/kernel/daemon"
 )
 
 func main() {

@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/broker"
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/broker"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 )
 
 func TestTaskAdmissionCreatesAtomicAuthorityAndReplaysIdempotently(t *testing.T) {

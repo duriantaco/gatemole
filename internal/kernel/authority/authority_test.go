@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/authority"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/authority"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 func TestCompileDerivesContentBoundOCIPlan(t *testing.T) {

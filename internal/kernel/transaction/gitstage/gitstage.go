@@ -24,8 +24,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (

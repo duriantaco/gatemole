@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 )
 
 func (s *Server) admitTask(w http.ResponseWriter, r *http.Request) {

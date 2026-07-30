@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestVerifierAcceptsBoundEd25519Identity(t *testing.T) {

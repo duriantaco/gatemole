@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 func (s *Server) currentAuthorityPolicyDigest() (string, error) {

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const emptySHA256Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

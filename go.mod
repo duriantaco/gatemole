@@ -1,4 +1,4 @@
-module github.com/duriantaco/vouch
+module github.com/duriantaco/gatemole
 
 go 1.26
 

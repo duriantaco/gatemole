@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/peercred"
+	"github.com/duriantaco/gatemole/internal/kernel/peercred"
 )
 
 type contextDialer func(

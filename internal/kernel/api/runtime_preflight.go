@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimepreflight"
 )
 
 const runtimePreflightStageTimeout = 5 * time.Second

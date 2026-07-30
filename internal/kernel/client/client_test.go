@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/admission"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
-	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimepreflight"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/store"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
 )
 
 func TestIdentityMiddlewareEnforcesRoleNamespaceAndActorBinding(t *testing.T) {

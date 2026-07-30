@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	kernelmodelbroker "github.com/duriantaco/vouch/internal/kernel/modelbroker"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
-	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
-	"github.com/duriantaco/vouch/internal/kernel/verification"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
+	"github.com/duriantaco/gatemole/internal/kernel/verification"
 )
 
 const emptySHA256Digest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/eventlog"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/reducer"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/eventlog"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const (

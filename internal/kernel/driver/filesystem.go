@@ -14,8 +14,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/duriantaco/vouch/internal/kernel/capability"
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/capability"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/modelbroker"
+	"github.com/duriantaco/gatemole/internal/kernel/modelbroker"
 )
 
 func main() {

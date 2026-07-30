@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
-	"github.com/duriantaco/vouch/internal/kernel/store"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
 )
 
 func TestRuntimeHeaderRejectsWrongDaemonBeforeMutation(t *testing.T) {

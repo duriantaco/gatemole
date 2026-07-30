@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
 func TestRequestValidatesExactRuntimeAndAgentBinding(t *testing.T) {

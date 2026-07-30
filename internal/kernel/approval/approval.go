@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 const TrustDocumentVersion = "gatemole.approval_trust.v0"

@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/duriantaco/vouch/internal/vouch"
+	"github.com/duriantaco/gatemole/internal/gatemole"
 )
 
 func main() {
-	os.Exit(vouch.Main(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(gatemole.Main(os.Args[1:], os.Stdout, os.Stderr))
 }

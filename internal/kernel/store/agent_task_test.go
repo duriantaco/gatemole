@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 func TestAgentTaskIntentSurvivesDurableTransactionReload(t *testing.T) {

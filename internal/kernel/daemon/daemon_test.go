@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/duriantaco/vouch/internal/kernel/approval"
-	"github.com/duriantaco/vouch/internal/kernel/identity"
-	"github.com/duriantaco/vouch/internal/kernel/model"
-	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
-	"github.com/duriantaco/vouch/internal/kernel/sandbox"
-	"github.com/duriantaco/vouch/internal/kernel/store"
-	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
+	"github.com/duriantaco/gatemole/internal/kernel/approval"
+	"github.com/duriantaco/gatemole/internal/kernel/identity"
+	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
+	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 )
 
 func TestRunRejectsRuntimeMismatchBeforeSocketOrLedgerMutation(t *testing.T) {

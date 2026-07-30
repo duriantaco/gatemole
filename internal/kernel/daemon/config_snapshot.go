@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/duriantaco/vouch/internal/kernel/peercred"
+	"github.com/duriantaco/gatemole/internal/kernel/peercred"
 	"golang.org/x/sys/unix"
 )
 
