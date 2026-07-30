@@ -40,24 +40,83 @@ Rules:
 - A reason is required when entering `blocked`, `failed`, or `cancelled`.
 - Every transition uses the next contiguous run-event sequence.
 
+## Runtime identity and preflight
+
+`vouch runtime init` creates an ignored `.vouch/runtime.json` containing one
+random, opaque Runtime ID. The file identifies this local repository Runtime;
+it is not a user identity, signing key or fleet enrollment credential.
+
+Before listening, `vouchd` loads that identity, acquires the repository-local
+same-host, same-UID `.vouch/runtime.lock`, validates and canonicalizes the
+transaction staging root, then acquires the separate ledger lock and opens
+SQLite with the expected Runtime ID and enforcement profile. Existing metadata
+is inspected before schema initialization. A conflicting Runtime ID,
+incompatible nonempty profile, or nonempty unbound production ledger fails
+startup before socket setup. The failed attempt may create lock files and
+private transaction-root components, but it does not mutate the rejected
+ledger, create a missing socket directory or socket path, or listen.
+
+`POST /v0/namespaces/{namespace}/runtime/preflight` is a non-authoritative
+readiness contract. It requires the client's exact expected Runtime ID and may
+require `development` or `production`. For an OCI selection, the daemon also
+checks its image policy and inspects the exact digest-pinned image without
+pulling or running it. Health, engine and image stages have separate bounded
+deadlines. A success reports the actual Runtime ID and enforcement profile but
+grants no task or execution authority.
+
+For every configured-daemon run/transaction lifecycle or read request, the
+server requires an exact `Vouch-Runtime-ID` header before the handler runs.
+`/healthz` and `/readyz` are deliberately exempt. Preflight and current v1 task
+admission instead require the expected identity in their validated bodies;
+the product client also sends the header when configured. Legacy v0 replay is
+the narrow no-new-authority compatibility exception described below.
+
+The product `run`, transaction, low-level `kernel` and `action` CLI surfaces
+load `.vouch/runtime.json` and keep the resulting client binding for all calls,
+including long-running agent and verifier operations. Direct
+configured-daemon clients must set the same exact header. The header is
+correlation metadata, not authentication or a secret.
+
+The local identity, repository lock and ledger lock catch accidental
+same-host, same-UID split-brain and repository/ledger mix-ups, including
+different environment or database paths. They do not establish cryptographic
+same-UID daemon attestation, cross-UID exclusion or cross-host uniqueness. A
+dedicated OS account is therefore part of the hardened deployment boundary.
+Normal Git clones do not copy the ignored identity and receive a new one;
+deliberately copying all ignored identity and ledger state to another
+repository deliberately clones the trust target. Fleet enrollment,
+attestation and revocation remain future Control Plane responsibilities.
+
 ## Task admission
 
 `POST /v0/namespaces/{namespace}/task-admissions` is the production authority
-creation boundary. The request contains caller-owned intent, sponsor, agent
-profile, contract limits and an idempotency key; it cannot contain event
+creation boundary; the `/v0` HTTP path and the versioned admission body are
+independent contracts. A current v1 request contains the caller's expected
+Runtime ID and enforcement profile plus caller-owned intent, sponsor, agent
+profile, contract limits and an idempotency key. It cannot contain event
 envelopes, lifecycle state, timestamps or authoritative digests.
 
 For a new admission, `vouchd` derives and persists the exact `AgentTask`,
 content-digest `ExecutionContract`, `AgentRun`, initial capability grants and
 `AgentTransaction` in one database transaction. It authors
 `run.created`, `capabilities.granted`, `run.state_changed` to `admitted`, and
-`transaction.created`.
+`transaction.created`. The admission result and transaction binding carry the
+same Runtime ID and enforcement profile, and the store requires them to match
+the ledger metadata.
 
 The idempotency key is scoped to its namespace. Retrying the same immutable
 input returns the original admission representation, including after restart
 or later lifecycle progress. Reusing the key with changed authority fails with
 `KERNEL_IDEMPOTENCY_CONFLICT`. A failed persistence step leaves none of the
 admission resources behind.
+
+A configured Runtime cannot create legacy v0 admission authority. A nonempty
+legacy ledger may be adopted only in development, where the exact request for
+an already-persisted v0 admission may be replayed. A new v0 request, changed
+idempotency input or production adoption fails closed. The replayed v0 result
+remains readable history: a configured Runtime requires current v1 authority
+before every run or transaction mutation, and permanently disables the legacy
+capability-compilation route.
 
 ## Live execution authority
 

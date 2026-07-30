@@ -68,11 +68,21 @@ vouch --repo /path/to/service run \
 This development command creates the isolated worktree, runs the agent, freezes
 its Git effects and performs sequence validation. Production verification,
 approval and local-ref release require the hardened runtime configuration.
-Runtime initialization creates a strict repository-owned agent profile. Vouch
-binds that profile, pinned image, final command and exact intent into a durable
-task envelope mounted read-only at `/vouch/task.json`. Doctor reports warnings
-for optional or intentionally stopped components and fails on broken configured
+Runtime initialization creates a strict repository-owned agent profile and an
+ignored local identity at `.vouch/runtime.json`. Commit the agent profile and
+`.vouch/.gitignore`, not the Runtime identity. For OCI execution, `vouch run`
+preflights the exact Runtime ID, daemon enforcement profile and selected image
+before creating authority or a worktree. Admission then durably binds the
+Runtime ID and actual profile with the transaction. Doctor reports warnings for
+optional or intentionally stopped components and fails on broken configured
 requirements; it does not prove that every future task will succeed.
+
+The product `run`, transaction, low-level `kernel` and `action` CLI surfaces
+also send that exact Runtime ID on every daemon read and lifecycle call,
+including long-running agent and verifier operations. Preflight and admission
+validate it in their versioned bodies; later calls use `Vouch-Runtime-ID`. The
+binding catches accidental cross-Runtime wiring but is not an authentication
+secret.
 
 An agent integration only needs to read `$VOUCH_TASK_PATH`, edit `/workspace`
 and exit. It should never receive the daemon socket or production credentials.
@@ -98,6 +108,10 @@ The resulting `OPENAI_API_KEY` is a transaction-scoped broker token, not the
 provider credential. A stale run, expired authority or executable mismatch is
 rejected before any broker or agent workload starts.
 
+Production callers should add
+`--require-enforcement-profile production` to both `doctor` and `run`; a
+development daemon then fails preflight before task authority is created.
+
 For a runnable deterministic payments-service fixture, including building the
 agent image, starting `vouchd`, inspecting effects and understanding why an
 authentication change requires approval, read the
@@ -113,7 +127,7 @@ before treating the runtime as an enforcement boundary.
 
 The supported deployment profile is one node and one security tenant on a
 dedicated trusted host. It uses daemon-owned, digest-pinned OCI workloads,
-immutable Git-tree verification, OIDC, signed independent approvals, a separate
+immutable Git-tree verification, OIDC, logically independent signed approvals, a separate
 releaser and atomic publication to an allowed local Git ref.
 
 It does not push or merge remote changes, deploy software, coordinate database
@@ -121,6 +135,20 @@ or Kubernetes effects, isolate multiple tenants, expose a remote control API or
 provide high availability. The generic action/connector path and Control Plane
 shown in the Agent OS architecture are planned. Stable versioned release
 packaging is pending.
+
+The local Runtime identity, repository-local same-host/same-UID lock and ledger
+lock prevent accidental wiring errors. Transaction worktrees default to a
+validated private per-user, repository-scoped directory. These controls are
+not cryptographic same-UID daemon attestation or cross-host fleet identity. A
+hardened Runtime should use a dedicated OS account. Copying the ignored
+identity together with its ledger to another repository copies the trust
+target. Enrollment, attestation and revocation remain future Control Plane
+work.
+
+All CLI processes that connect to the hardened Unix socket must use the daemon
+account's effective UID. OIDC tokens preserve logical operator, reviewer and
+releaser identities, but the current approval CLI does not provide a separate
+offline sign-and-submit path.
 
 ## Vouch Contracts
 

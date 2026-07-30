@@ -22,7 +22,7 @@ VOUCH_PRODUCTION_IMAGE="$AGENT_IMAGE" \
 ```
 
 It creates a temporary authentication repository, production OIDC identities,
-an operator/releaser plus an independent reviewer, a policy-controlled model
+an operator/releaser plus a logically independent signed reviewer, a policy-controlled model
 broker, daemon-owned agent and verifier containers, a frozen approval package,
 and an allowed release ref. A successful run ends with output like:
 
@@ -149,6 +149,11 @@ deployments normally use a registry reference of the form
 
 ```sh
 go install ./cmd/vouch ./cmd/vouchd
+
+# This fixture uses an ad-hoc local image ID below, so initialize only the
+# repository-local Runtime identity. Named production profiles are registered
+# with the full `vouch runtime init --agent ...` form shown in the README.
+vouch --repo "$REPO" runtime init
 
 RUNTIME="$EXAMPLE_ROOT/runtime"
 SOCKET="$RUNTIME/vouchd.sock"

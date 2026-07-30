@@ -78,22 +78,26 @@ The operating-system analogy is precise:
 | **Vouch Developer Runtime** | The local product experience around one Runtime: package an agent, execute it in an isolated Git transaction, inspect exact effects and control release. | Low-level integration, Runtime profile initialization and diagnostics implemented; packaged adapters, `watch`, live cancellation and review UX planned |
 | **Vouch Agent OS** | The enterprise product experience and complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
-| **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Narrow single-node local-Git profile implemented |
-| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Atomic task admission, live OCI authority preflight and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
+| **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Runtime identity, a narrow single-node local-Git profile and exact profile-bound admission are implemented |
+| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Runtime preflight, atomic task admission, live OCI authority revalidation and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
 | **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Generic interface and remote drivers planned. Local Git currently uses a dedicated transaction path, not that future interface |
 | **Vouch Contracts** | Optional verification module that turns human-owned intent into evidence obligations used by Runtime policy. | Beta |
 
 The diagram states the intended ownership boundary, not a completion claim.
-Today `vouch run` atomically admits its task, content-bound contract, real run,
-initial grants and transaction. Before OCI launch, `vouchd` reloads that live
-authority and fail-closed derives the permitted image, command, full-workspace
-access, model-broker access and deadline. It then atomically verifies the
-admitted run and transaction heads while recording execution start, before
-starting any broker or agent workload. Execution still advances only the
-transaction ledger; paired run lifecycle and durable budget charging are the
-next Runtime milestone.
+Today `vouch run` first asks the selected daemon to match the repository's
+Runtime identity, report the requested enforcement profile and inspect the
+selected digest-pinned image. This preflight happens before
+task authority or a worktree is created. Task admission then durably binds the
+exact Runtime ID and daemon enforcement profile with the content-bound
+contract, real run, initial grants and transaction. Before OCI launch,
+`vouchd` reloads that live authority and fail-closed derives the permitted
+image, command, full-workspace access, model-broker access and deadline. It
+then atomically verifies the admitted run and transaction heads while
+recording execution start, before starting any broker or agent workload.
+Execution still advances only the transaction ledger; paired run lifecycle and
+durable budget charging are the next Runtime milestone.
 
 The target remote-effect path is:
 
@@ -128,10 +132,10 @@ The current runtime requires Git, an OCI engine such as Docker, a running
 `vouchd`, and a digest-pinned agent image.
 
 This is a low-level developer integration, not yet a self-serve desktop agent
-environment. `vouch runtime init` creates a strict repository-owned profile and
-`vouch doctor` diagnoses Git, OCI, profile, local-image and daemon readiness.
-Packaged adapters, daemon supervision, `watch`, live cancellation and a
-friendly diff/apply flow remain roadmap work.
+environment. `vouch runtime init` creates a strict repository-owned profile
+and a local Runtime identity. `vouch doctor` diagnoses Git, OCI, profile,
+local-image and daemon readiness. Packaged adapters, daemon supervision,
+`watch`, live cancellation and a friendly diff/apply flow remain roadmap work.
 
 Build the CLI from source:
 
@@ -151,12 +155,22 @@ vouch --repo /path/to/service runtime init \
 ```
 
 `--source-digest` identifies the source or build input used for that image; it
-is deliberately not invented by Vouch. Start the repository-local development
-daemon in one terminal:
+is deliberately not invented by Vouch. Initialization also creates
+`.vouch/runtime.json`, a random local Runtime instance identity, and rules that
+keep it, SQLite/WAL files, locks and the daemon socket out of Git. Commit
+`.vouch/agent-profiles.json` and `.vouch/.gitignore`; do not commit
+`.vouch/runtime.json`.
+
+Start the repository-local development daemon in one terminal:
 
 ```sh
 vouch --repo /path/to/service daemon
 ```
+
+By default, transaction worktrees live in a canonical, repository-scoped
+directory beneath the current user's validated runtime or cache directory,
+not in a shared predictable `/tmp/vouch-transactions` path. A custom
+`--transaction-root` is validated before the ledger opens.
 
 In another terminal, diagnose the selected integration and run it:
 
@@ -171,6 +185,8 @@ vouch --repo /path/to/service run \
 Doctor warnings, such as an intentionally stopped daemon or omitting
 `--agent`, do not make the command fail. A selected missing image, invalid
 profile, unavailable OCI engine or unready existing daemon does.
+When the socket exists, doctor uses the daemon's authoritative Runtime
+preflight instead of treating a separate CLI-side OCI probe as proof.
 
 For a developer, the integration contract is deliberately small:
 
@@ -197,7 +213,8 @@ exec /opt/my-agent --task-file "$VOUCH_TASK_PATH"
 ```
 
 `vouch runtime init` writes the strict, repository-owned
-`.vouch/agent-profiles.json`. Select that profile by name:
+`.vouch/agent-profiles.json` and local-only `.vouch/runtime.json`. Select the
+agent profile by name:
 
 ```sh
 vouch --repo /path/to/service run \
@@ -210,10 +227,20 @@ The public profile schema is
 with a complete
 [example profile](schemas/fixtures/runtime/valid/agent_profiles.json). Vouch
 binds the selected profile, final command, pinned image and exact task intent
-into a durable task envelope. Before launch, `vouchd` atomically admits that
-task with its derived execution contract, real run, initial grants and
+into a durable task envelope. For OCI execution, `vouch run` first preflights
+the exact local Runtime ID, enforcement profile and image with `vouchd`; a
+failure creates neither task authority nor a worktree. Admission v1 then binds
+that Runtime ID and the daemon's actual enforcement profile into the durable
 transaction. Daemon-owned OCI agents receive the task envelope read-only at
 `/vouch/task.json`.
+
+The product CLI loads `.vouch/runtime.json` and binds every daemon call from
+the `run`, transaction, low-level `kernel` and `action` surfaces to that ID.
+Preflight and current task admission carry the expected ID in their validated
+bodies; lifecycle mutations, reads and long-running agent/verifier operations
+also carry `Vouch-Runtime-ID`. A configured daemon rejects a missing or
+different header before those handlers run. This is exact Runtime correlation,
+not a secret or an authentication credential.
 
 Model egress is absent unless the task explicitly requests the configured
 daemon broker, for example with `--model-provider openai`. The provider
@@ -269,6 +296,20 @@ configuration. See [Production Runtime Operations](docs/PRODUCTION.md) for the
 complete deployment contract; do not infer production safety from the
 development example above.
 
+Production callers should make the expected profile explicit:
+
+```sh
+vouch --repo /srv/vouch/repository run \
+  --socket /run/vouch/vouchd.sock \
+  --namespace engineering \
+  --require-enforcement-profile production \
+  --intent "Fix the approved authentication regression" \
+  --agent coding-agent
+```
+
+A development daemon cannot satisfy that command, so it fails during preflight
+before admission or worktree creation.
+
 ## What the runtime enforces today
 
 The implemented runtime includes:
@@ -283,6 +324,11 @@ The implemented runtime includes:
   the agent.
 - OIDC operator identity, signed approval packages and separation of approver
   and releaser.
+- A repository-local Runtime identity, stable Runtime and ledger locks,
+  same-UID Unix peer authentication, daemon-authoritative preflight, and
+  Runtime/profile-bound v1 admission.
+- A private, owner-validated transaction staging root and immutable startup
+  snapshots for trust, verifier and model-broker policy inputs.
 - Atomic compare-and-swap publication to an allowed local Git ref.
 - Bounded Git inspection, workload concurrency, output capture and readiness
   checks.
@@ -294,8 +340,9 @@ The current supported profile is deliberately narrow:
 - One node and one security tenant.
 - A dedicated trusted host or VM and non-root daemon account.
 - One repository and SQLite ledger per runtime boundary.
+- One local Runtime identity bound to that ledger and enforcement profile.
 - Preloaded, digest-pinned OCI images.
-- Required verifier profiles and independent approval.
+- Required verifier profiles and logically independent signed approval.
 - Publication to an allowed local Git ref only.
 
 It does **not** push to a remote, create or merge pull requests, deploy
@@ -304,6 +351,21 @@ isolation, expose a remote control API, or provide high availability. Stable
 versioned release packaging is also still pending. The exact host, storage,
 identity, quota and acceptance requirements are documented in
 [docs/PRODUCTION.md](docs/PRODUCTION.md).
+
+The Runtime identity, repository-local `.vouch/runtime.lock`, and ledger lock
+prevent an accidental same-host, same-UID daemon or ledger mix-up even when
+environment or database paths differ. They are not fleet enrollment,
+cryptographic same-UID daemon attestation or cross-host attestation. Use a
+dedicated OS account for a hardened Runtime. Deliberately copying all ignored
+identity and ledger state to another repository copies the trust target too.
+Organization enrollment, attested Runtime identity and fleet revocation belong
+to the planned Control Plane.
+
+Every CLI process that connects to the hardened Unix socket must use that
+daemon account's effective UID. OIDC tokens still distinguish operators,
+reviewers and releasers, but the current approval CLI has no separate offline
+sign-and-submit path; see the production guide before claiming OS-level
+reviewer-key custody separation.
 
 ## Vouch Contracts
 

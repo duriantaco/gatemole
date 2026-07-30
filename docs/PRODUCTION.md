@@ -17,6 +17,8 @@ profile.
 
 The daemon refuses to start unless it has:
 
+- A valid, local-only `.vouch/runtime.json` created for the exact repository
+  root by `vouch runtime init`.
 - At least one digest-pinned OCI image in its allowlist.
 - An Ed25519 approval trust document with at least one trusted reviewer.
 - A static OIDC trust document containing an HTTPS issuer, accepted audiences,
@@ -27,8 +29,11 @@ The daemon refuses to start unless it has:
 - A resolvable daemon-owned OCI engine.
 - A non-root numeric UID and GID for agent and verifier containers.
 
-Production trust, verifier-profile, and model-policy files must be regular
-files, not symlinks, and must not be group- or world-writable.
+Production trust, verifier-profile, and model-policy files must be owned by
+root or the daemon account, must be regular files rather than symlinks, and
+must not be group- or world-writable. The daemon reads each file into one
+bounded, inode-stable startup snapshot; parsing and policy evidence use those
+same bytes. Changing a source path after startup does not change live policy.
 
 The documented production boundary also requires deployment controls that the
 daemon cannot establish by itself:
@@ -49,6 +54,13 @@ daemon cannot establish by itself:
 
 The production runtime:
 
+- Loads the repository's Runtime ID, acquires the repository-local
+  `.vouch/runtime.lock`, validates the canonical private transaction staging
+  root, and opens the Runtime-bound SQLite ledger before creating its Unix
+  listener.
+- Binds the exact Runtime ID and `production` enforcement profile to SQLite
+  metadata before recovery or request handling. A ledger belonging to another
+  Runtime or a conflicting nonempty profile fails startup.
 - Executes agents and verifiers in the daemon, not in the CLI.
 - Persists the exact task intent and its selected agent-profile, image, command,
   transaction and run bindings in a digest-bound `vouch.agent_task.v0`
@@ -61,6 +73,10 @@ The production runtime:
 - Verifies every non-health API request as a signed OIDC token, enforces
   viewer/operator/approver roles and namespace membership, rejects actor
   impersonation, and binds the verified issuer and claims digest into events.
+- Requires the exact `Vouch-Runtime-ID` header on every configured-daemon
+  lifecycle and read request. Runtime preflight and admission v1 carry the same
+  expected identity in their validated bodies. Health and readiness remain
+  unbound liveness/readiness endpoints.
 - Mounts the transaction worktree read/write for the agent. A verifier receives
   a separate read-only materialization created from the exact immutable Git
   tree revision frozen by staging, never the mutable agent worktree.
@@ -80,16 +96,19 @@ The production runtime:
   verifier-profile set, approval-trust document, and verifier OCI runtime
   policy into the frozen authority-policy digest. Changing any of those inputs
   invalidates prepared authority and requires preparation and approval again.
-- Records `development` or `production` in SQLite metadata on first binding.
-  An empty ledger may be rebound; after any run or transaction history exists,
-  it cannot switch profiles. Production refuses a pre-existing nonempty
-  unmarked ledger.
+- Records the Runtime ID and `development` or `production` in SQLite metadata
+  on first binding. The Runtime ID is never rebound automatically. An empty
+  ledger may switch profile; after any run or transaction history exists, it
+  cannot switch profiles. Production refuses a pre-existing nonempty ledger
+  without both bindings.
 - Publishes a prepared Git commit with a compare-and-swap update of an allowed
   local ref. It does not push, merge, or deploy.
 - Reconciles a crash after Git publication and records partial or unknown
   outcomes explicitly.
 - Hash-chains transaction events in a synchronous SQLite WAL.
-- Holds an operating-system lock so only one daemon can own a ledger.
+- Holds both a repository-local same-host, same-UID Runtime lock and a ledger
+  lock so one daemon account cannot accidentally start two daemons for one
+  repository or one ledger, even with different environment or database paths.
 - Cleans up and marks an active agent execution interrupted during startup
   recovery.
 - Disables the legacy client-supervised mutation APIs in production: clients
@@ -153,19 +172,31 @@ account needs:
 - Read/write access to the repository, transaction root, database directory,
   and socket directory.
 - Permission to use the configured OCI engine.
-- No approval private keys.
+- No long-lived approval private keys in the daemon configuration or
+  environment. The current approval CLI limitation described below still
+  requires the signing process to use the daemon account while it connects.
+
+Every CLI process that connects to the Unix socket must run with the daemon
+account's effective UID. OIDC principals and roles still distinguish operator,
+reviewer and releaser authority, but the Unix peer boundary does not support
+separate human Unix accounts.
 
 Treat that account, the dedicated host or VM, the OCI engine, and the
 root- or daemon-owned parents of every configured path as one trusted boundary.
-The daemon rejects symlinked or group/world-writable production config files,
-but it does not prove that every parent directory is protected from replacement.
-Secure those parents with operating-system ownership and permissions.
+The daemon rejects production config files that are symlinks, are owned by an
+identity other than root or the daemon account, or are group/world-writable,
+and retains the exact bytes it parsed and digested. It separately validates
+every transaction-root component, allowing a writable parent only when its
+sticky bit protects the daemon-owned child. It does not prove that every other
+configured parent directory is protected from replacement at the next
+restart. Secure those parents with operating-system ownership and permissions.
 
 Place the source repository and Git object database, SQLite database/WAL,
-transaction worktrees and immutable verifier materializations under the
-transaction root, and evidence on a dedicated quota-controlled filesystem or
-coordinated dedicated volumes. Configure both a byte quota and an
-inode/file-count quota for every backing volume, reserve capacity for
+transaction staging root, immutable verifier materializations and evidence on
+a dedicated quota-controlled filesystem or coordinated dedicated volumes. The
+transaction staging root must remain outside and disjoint from the source
+repository: neither path may contain the other. Configure both a byte quota and
+an inode/file-count quota for every backing volume, reserve capacity for
 Git-object creation and SQLite/WAL recovery, and alert before any quota is
 exhausted. This is required: the writable agent workspace is a host bind mount,
 so OCI memory, tmpfs, PID, and image-storage limits do not stop an agent from
@@ -186,9 +217,19 @@ vouch approval keygen \
   --trust-file /etc/vouch/approval-trust.json
 ```
 
-Keep the private key with the reviewer. Give the daemon only the public trust
-document. Rotating that document changes the approval-trust digest and
-invalidates transactions prepared under the previous trust set.
+Give the daemon configuration only the public trust document. The current
+`tx approve` command reads the private key, fetches the pending package and
+submits the signed decision in one process. Because the socket accepts only the
+daemon account's effective UID, Vouch does not yet provide a separate offline
+sign-and-submit flow that keeps the reviewer key inaccessible to that OS
+account while approval runs. If that limitation is acceptable inside the
+trusted single-tenant host boundary, make the key available to the reviewer-
+authorized CLI process only for the command and remove it immediately
+afterward. If hard private-key custody separation is required, do not treat
+this profile as satisfying it until an offline or hardware-backed approval
+path exists. Restarting the daemon after rotating the public trust document
+loads a new snapshot, changes the approval-trust digest, and invalidates
+transactions prepared under the previous trust set.
 
 Configure `/etc/vouch/identity-trust.json` from the issuer metadata and JWKS.
 Vouch currently consumes a static trust document rather than performing OIDC
@@ -238,6 +279,23 @@ names, mutable image tags, empty arguments, trailing values, and files over
 15 minutes. Changing any profile requires transactions prepared under the old
 profile set to be prepared and approved again.
 
+Initialize the canonical repository once as the dedicated daemon account,
+using the exact agent profile that will be deployed:
+
+```sh
+vouch --repo /srv/vouch/repository runtime init \
+  --agent coding-agent \
+  --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  -- /usr/local/bin/agent
+```
+
+This creates `.vouch/runtime.json` with mode `0600` and writes local-state
+ignore rules. The identity must remain untracked. Commit the agent profile and
+`.vouch/.gitignore`, not the Runtime identity. A normal deployment from a Git
+clone therefore gets a new Runtime ID; do not seed a second independent
+Runtime by copying another deployment's ignored identity or ledger.
+
 Start the production daemon:
 
 ```sh
@@ -255,6 +313,15 @@ vouchd \
   --allowed-git-refs 'refs/heads/agent-release/*'
 ```
 
+Startup loads the Runtime identity and binds its exact ID plus the
+`production` profile to SQLite before creating the socket. It fails closed on
+a different Runtime ID, incompatible ledger profile, or nonempty legacy ledger
+without the required bindings. A rejected ledger validation can leave the
+required Runtime and database lock files plus validated private transaction
+root components, but does not mutate the rejected ledger, create a missing
+socket directory, create the socket path, or listen. Socket setup happens only
+after ledger validation and recovery succeed.
+
 The documented production profile runs the daemon as a dedicated non-root
 account and uses that same numeric UID/GID for agent and verifier containers.
 Linux bind-mounted worktrees and broker receipt directories must have the same
@@ -266,12 +333,32 @@ Set the caller's short-lived access token for every CLI process:
 
 ```sh
 export VOUCH_IDENTITY_TOKEN='eyJ…'
-vouch tx list --socket /run/vouch/vouchd.sock --namespace engineering
+vouch --repo /srv/vouch/repository tx list \
+  --socket /run/vouch/vouchd.sock \
+  --namespace engineering
 ```
 
 The actor ID and kind passed by a mutation command must match the token.
 Approval commands additionally require the `approver` role and a signed
 approver whose issuer exactly matches the OIDC issuer.
+
+The product CLI also loads this repository's `.vouch/runtime.json` and adds its
+exact ID to requests from the `run`, transaction, low-level `kernel` and
+`action` surfaces, including reads, lifecycle changes and long-running agent
+or verifier calls. Preflight and admission v1 validate the same binding in
+their versioned bodies. Direct API clients must provide the equivalent
+`Vouch-Runtime-ID` header for other configured-daemon requests.
+
+With the daemon running, verify its exact Runtime ID and enforcement profile
+through authoritative preflight:
+
+```sh
+vouch --repo /srv/vouch/repository doctor \
+  --socket /run/vouch/vouchd.sock \
+  --namespace engineering \
+  --agent coding-agent \
+  --require-enforcement-profile production
+```
 
 For hosted-model agents, preload the digest-pinned broker image, provide the
 provider secret only to the daemon, and add:
@@ -292,9 +379,10 @@ the internal broker URL as `OPENAI_BASE_URL`; it never sees the provider key.
 Model access is still absent by default. Admit it for one task with:
 
 ```sh
-vouch --repo /srv/vouch/service run \
+vouch --repo /srv/vouch/repository run \
   --socket /run/vouch/vouchd.sock \
   --namespace engineering \
+  --require-enforcement-profile production \
   --intent "Fix the approved authentication regression" \
   --agent coding-agent \
   --model-provider openai
@@ -315,6 +403,25 @@ owned by the daemon account. OIDC protects API requests, but the current server
 still has no network listener, TLS termination, distributed rate limiting, or
 multi-tenant control-plane hardening. Do not expose it through an ad-hoc
 network proxy.
+
+Runtime preflight correlates the caller's expected Runtime ID with the daemon
+and ledger reached through that socket; it is not cryptographic daemon
+attestation. Before sending HTTP or a bearer token, the client requires a
+stable private socket path and verifies that the connected process's
+kernel-reported UID owns that socket. The daemon likewise accepts only clients
+with its own effective UID. The protected parent and same OS account remain
+part of this same-host boundary; same-UID malware or root can still impersonate
+the daemon. Run the daemon under a dedicated OS account; neither peer-UID
+checks nor `Vouch-Runtime-ID` provide cryptographic same-UID attestation.
+Operators, reviewers and releasers must therefore invoke the connected CLI
+under that same OS account. Their OIDC tokens preserve logical separation of
+duties, but do not create an OS-account boundary.
+
+For OCI tasks, preflight completes before task admission or worktree creation.
+Admission v1 then persists the exact Runtime ID and daemon enforcement profile
+with the transaction. The kernel independently checks those bindings again;
+preflight itself grants no authority. Subsequent lifecycle and read requests
+must present the matching Runtime header before their handlers execute.
 
 `GET /healthz` reports process liveness. `GET /readyz` performs a bounded
 SQLite read and a rollback-only metadata write, runs the OCI engine's
@@ -370,6 +477,7 @@ debugging.
 
 Treat the following as one recovery set:
 
+- The local `.vouch/runtime.json` Runtime identity.
 - SQLite database and its WAL state.
 - Transaction worktree/evidence root.
 - Source Git repository and released refs.
@@ -388,10 +496,20 @@ process owns the database lock, then snapshot the complete recovery set. Do not
 copy only the SQLite main file while the daemon is running; committed pages may
 still be in the WAL.
 
-Restore the complete set to the same paths and start one daemon. Startup
-verifies every transaction event chain before recovery. If an agent execution
-was active, Vouch removes its deterministic container and appends an
-`interrupted` receipt. A cleanup or ledger-integrity failure prevents startup.
+Restore the complete set to the same paths and start exactly one daemon.
+Preserving both `.vouch/runtime.json` and its bound ledger restores the same
+logical Runtime. Never run the original and restored copy concurrently on
+different hosts: `.vouch/runtime.lock` and the ledger lock are same-host and
+same-UID only. Startup verifies every transaction event chain before recovery.
+If an agent execution was active, Vouch removes its deterministic container and
+appends an `interrupted` receipt. A cleanup or ledger-integrity failure
+prevents startup.
+
+To create a separate Runtime, start from a normal Git clone, run
+`vouch runtime init` to create a new ignored identity and use a new empty
+ledger. Deliberately copying both the ignored identity and ledger deliberately
+clones the trust target; the local identity mechanism does not detect that
+cross-host operation.
 
 ## Operations and incidents
 
@@ -421,9 +539,19 @@ acceptable:
 
 - One daemon, one security tenant, and one local SQLite ledger on a dedicated
   trusted host or VM; no HA, failover or Vouch Control Plane.
+- Runtime identity prevents accidental repository/ledger/socket confusion and
+  the repository-local Runtime lock prevents same-host, same-UID duplicate
+  ownership for that repository. It does
+  not provide cross-UID or cross-host uniqueness, hardware-backed identity,
+  cryptographic same-UID attestation, organization enrollment or fleet
+  revocation.
 - A trusted dedicated daemon account and same-UID container boundary. Vouch
   does not protect against a malicious host administrator, OCI-engine operator,
   or identity able to replace configured parent paths.
+- Every connected CLI, including approval and release, must use the daemon
+  account's effective UID. The current approval command has no separate offline
+  signing/submission or hardware-key interface, so logical reviewer separation
+  does not provide filesystem-level private-key isolation from that account.
 - Mandatory OS byte and inode quotas covering the source Git object database,
   SQLite/WAL, bind-mounted transaction worktrees, immutable verifier
   materializations, and evidence. Host filesystem exhaustion is not contained
@@ -456,7 +584,12 @@ acceptable:
   remain trusted operator-controlled inputs.
 - Legacy transaction creation and client-supervised execution/verification
   mutation APIs are disabled in production; transaction authority begins at
-  atomic task admission. The mediated filesystem API cannot access `.git` or
+  Runtime/profile-bound v1 task admission. A development-adopted ledger may
+  replay an already-persisted v0 admission with exact idempotency input, but a
+  configured Runtime cannot create new v0 authority and production does not
+  adopt an unbound nonempty ledger. Replayed v0 history cannot mutate a run or
+  transaction, compile capabilities, execute an action, or yield live
+  execution authority. The mediated filesystem API cannot access `.git` or
   `.vouch` control state.
 - OCI launch revalidates live admission authority and atomically pins the
   admitted run and transaction heads while recording execution start before
@@ -471,4 +604,5 @@ single-tenant Git runtime is the hardened production execution profile. This
 does not imply stable product packaging or fleet operations. The compiler's
 wider product surface remains experimental. Additional effect connectors,
 enterprise administration, multi-tenancy and HA are planned and unimplemented,
-not beta features of this profile.
+not beta features of this profile. Cross-host Runtime enrollment, attestation
+and revocation belong to the future Control Plane.
