@@ -38,7 +38,7 @@ func TestRunRejectsRuntimeMismatchBeforeSocketOrLedgerMutation(t *testing.T) {
 	if ledgerRuntimeID == identity.RuntimeID {
 		ledgerRuntimeID = "runtime:" + strings.Repeat("e", 64)
 	}
-	databasePath := filepath.Join(repository, ".vouch", "kernel.db")
+	databasePath := filepath.Join(repository, ".gatemole", "kernel.db")
 	kernelStore, err := store.OpenSQLiteForRuntime(
 		ctx,
 		databasePath,
@@ -85,6 +85,75 @@ func TestRunRejectsRuntimeMismatchBeforeSocketOrLedgerMutation(t *testing.T) {
 	after := daemonSQLiteArtifactsSnapshot(t, databasePath)
 	if !equalDaemonSQLiteArtifactSnapshots(before, after) {
 		t.Fatal("Runtime mismatch changed ledger bytes or sidecars")
+	}
+}
+
+func TestRunRejectsLegacyVouchStateBeforeSocketOrLedgerMutation(t *testing.T) {
+	ctx := context.Background()
+	repository := t.TempDir()
+	initializeDaemonRuntime(t, repository)
+	identityPath := filepath.Join(
+		repository,
+		filepath.FromSlash(runtimeidentity.IdentityRelativePath),
+	)
+	identityBefore, err := os.ReadFile(identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacyDirectory := filepath.Join(
+		repository,
+		runtimeidentity.LegacyControlDirectory,
+	)
+	if err := os.Mkdir(legacyDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacySentinel := filepath.Join(legacyDirectory, "sentinel")
+	if err := os.WriteFile(
+		legacySentinel,
+		[]byte("do not rewrite"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	databasePath := filepath.Join(
+		repository,
+		runtimeidentity.ControlDirectory,
+		"kernel.db",
+	)
+	socketDirectory := filepath.Join(repository, "socket-must-not-exist")
+	socketPath := filepath.Join(socketDirectory, "vouchd.sock")
+	err = Run(ctx, Config{
+		DatabasePath:    databasePath,
+		SocketPath:      socketPath,
+		RepositoryRoot:  repository,
+		TransactionRoot: filepath.Join(t.TempDir(), "transactions"),
+		RuntimeEngine:   filepath.Join(repository, "missing-oci-engine"),
+	})
+	if err == nil ||
+		!strings.Contains(err.Error(), "legacy Vouch control state") {
+		t.Fatalf("daemon did not reject legacy state: %v", err)
+	}
+	if _, statErr := os.Lstat(databasePath); !errors.Is(
+		statErr,
+		os.ErrNotExist,
+	) {
+		t.Fatalf("legacy rejection created a ledger: %v", statErr)
+	}
+	if _, statErr := os.Lstat(socketDirectory); !errors.Is(
+		statErr,
+		os.ErrNotExist,
+	) {
+		t.Fatalf("legacy rejection created a socket directory: %v", statErr)
+	}
+	identityAfter, err := os.ReadFile(identityPath)
+	if err != nil || !bytes.Equal(identityBefore, identityAfter) {
+		t.Fatalf("legacy rejection changed Runtime identity: err=%v", err)
+	}
+	legacyAfter, err := os.ReadFile(legacySentinel)
+	if err != nil || string(legacyAfter) != "do not rewrite" {
+		t.Fatalf("legacy rejection changed legacy state: data=%q err=%v", legacyAfter, err)
 	}
 }
 
@@ -298,7 +367,7 @@ func initializeDaemonRuntime(t *testing.T, repository string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := file.WriteString("\n/.vouch/runtime.json\n"); err != nil {
+	if _, err := file.WriteString("\n/.gatemole/runtime.json\n"); err != nil {
 		_ = file.Close()
 		t.Fatal(err)
 	}
@@ -812,7 +881,7 @@ func TestProcessLockRejectsASecondDaemonForTheSameDatabase(t *testing.T) {
 
 func TestRuntimeLockRejectsSameRuntimeAcrossDifferentLedgers(t *testing.T) {
 	repository := t.TempDir()
-	if err := os.Mkdir(filepath.Join(repository, ".vouch"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(repository, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	runtimeID := "runtime:" + strings.Repeat("8", 64)
@@ -845,7 +914,7 @@ func TestRuntimeLockRejectsSameRuntimeAcrossDifferentLedgers(t *testing.T) {
 		!strings.Contains(err.Error(), "already owned") {
 		t.Fatalf("second ledger reused a live Runtime identity: %v", err)
 	}
-	info, err := os.Lstat(filepath.Join(repository, ".vouch", "runtime.lock"))
+	info, err := os.Lstat(filepath.Join(repository, ".gatemole", "runtime.lock"))
 	if err != nil {
 		t.Fatal(err)
 	}

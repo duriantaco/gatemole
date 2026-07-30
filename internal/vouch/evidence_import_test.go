@@ -9,7 +9,7 @@ import (
 
 func TestEvidenceImportJUnitAndManifestlessGate(t *testing.T) {
 	repo := bootstrapFixture(t)
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="pytest" tests="1" failures="0" errors="0" skipped="0">
   <testcase classname="tests.auth.test_password_reset" name="test_token_expiry" file="tests/auth/test_password_reset.py"></testcase>
 </testsuite>
@@ -26,13 +26,13 @@ func TestEvidenceImportJUnitAndManifestlessGate(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Main([]string{"--repo", repo, "evidence", "import", "junit", ".vouch/artifacts/pytest.xml"}, &stdout, &stderr); code != 0 {
+	if code := Main([]string{"--repo", repo, "evidence", "import", "junit", ".gatemole/artifacts/pytest.xml"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("evidence import failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Linked obligations: 1") {
 		t.Fatalf("unexpected import output: %s", stdout.String())
 	}
-	manifest := mustLoadEvidenceManifest(t, filepath.Join(repo, ".vouch", "evidence", "manifest.json"))
+	manifest := mustLoadEvidenceManifest(t, filepath.Join(repo, ".gatemole", "evidence", "manifest.json"))
 	if len(manifest.Links) != 1 {
 		t.Fatalf("expected one evidence link, got %#v", manifest.Links)
 	}
@@ -61,7 +61,7 @@ func TestEvidenceImportJUnitAndManifestlessGate(t *testing.T) {
 		"Why:",
 		"tests cover required-test obligations only",
 		"Next:",
-		"Review .vouch/intents/auth.password_reset.yaml",
+		"Review .gatemole/intents/auth.password_reset.yaml",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected gate output to contain %q, got:\n%s", want, out)
@@ -102,14 +102,14 @@ func TestEvidenceImportJUnitAndManifestlessGate(t *testing.T) {
 
 func TestEvidenceImportJUnitRejectsBeforeCompile(t *testing.T) {
 	repo := bootstrapFixture(t)
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="pytest" tests="1">
   <testcase classname="tests.auth.test_password_reset" name="test_token_expiry" file="tests/auth/test_password_reset.py"></testcase>
 </testsuite>
 `)
 	var stdout, stderr bytes.Buffer
 
-	code := Main([]string{"--repo", repo, "evidence", "import", "junit", ".vouch/artifacts/pytest.xml"}, &stdout, &stderr)
+	code := Main([]string{"--repo", repo, "evidence", "import", "junit", ".gatemole/artifacts/pytest.xml"}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("expected import to fail before compile: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}

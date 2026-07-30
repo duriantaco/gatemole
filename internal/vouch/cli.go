@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 	bootstrap "github.com/duriantaco/vouch/internal/vouch/bootstrap"
 )
 
@@ -25,6 +26,10 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	absRepo, err := filepath.Abs(common.repo)
 	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	if err := runtimeidentity.RejectLegacyControlState(absRepo); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
@@ -234,7 +239,7 @@ func initCommand(repo string, args []string, jsonOut bool, stdout io.Writer, std
 	flags := flag.NewFlagSet("init", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	profile := flags.String("profile", "auto", "profile to use: auto, python, node, go, rust, generic")
-	force := flags.Bool("force", false, "overwrite .vouch/config.json")
+	force := flags.Bool("force", false, "overwrite .gatemole/config.json")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}

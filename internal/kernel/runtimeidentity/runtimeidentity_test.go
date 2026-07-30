@@ -70,6 +70,148 @@ func TestCreateOrLoadIsStrictPrivateAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestLegacyVouchControlStateFailsClosedWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name       string
+		create     func(*testing.T, string)
+		currentDir bool
+	}{
+		{
+			name: "directory",
+			create: func(t *testing.T, repository string) {
+				t.Helper()
+				legacy := filepath.Join(repository, LegacyControlDirectory)
+				if err := os.Mkdir(legacy, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(
+					filepath.Join(legacy, "sentinel"),
+					[]byte("do not rewrite"),
+					0o600,
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "file",
+			create: func(t *testing.T, repository string) {
+				t.Helper()
+				if err := os.WriteFile(
+					filepath.Join(repository, LegacyControlDirectory),
+					[]byte("do not rewrite"),
+					0o600,
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "symlink",
+			create: func(t *testing.T, repository string) {
+				t.Helper()
+				if runtime.GOOS == "windows" {
+					t.Skip("symlink control-state shape is a Unix boundary")
+				}
+				target := filepath.Join(t.TempDir(), "legacy-target")
+				if err := os.WriteFile(target, []byte("do not rewrite"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(
+					target,
+					filepath.Join(repository, LegacyControlDirectory),
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name:       "both current and legacy roots",
+			currentDir: true,
+			create: func(t *testing.T, repository string) {
+				t.Helper()
+				if err := os.Mkdir(
+					filepath.Join(repository, LegacyControlDirectory),
+					0o700,
+				); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := newGitRepository(
+				t,
+				filepath.Join(t.TempDir(), "repository"),
+			)
+			if test.currentDir {
+				if err := os.Mkdir(
+					filepath.Join(repository, ControlDirectory),
+					0o700,
+				); err != nil {
+					t.Fatal(err)
+				}
+			}
+			test.create(t, repository)
+
+			operations := []struct {
+				name string
+				run  func() error
+			}{
+				{
+					name: "create or load",
+					run: func() error {
+						_, _, err := CreateOrLoad(context.Background(), repository)
+						return err
+					},
+				},
+				{
+					name: "load",
+					run: func() error {
+						_, err := Load(context.Background(), repository)
+						return err
+					},
+				},
+				{
+					name: "ensure private directory",
+					run: func() error {
+						return EnsurePrivateDirectory(context.Background(), repository)
+					},
+				},
+			}
+			for _, operation := range operations {
+				err := operation.run()
+				if err == nil ||
+					!strings.Contains(err.Error(), "legacy Vouch control state") ||
+					!strings.Contains(err.Error(), LegacyControlDirectory) {
+					t.Errorf("%s did not fail closed: %v", operation.name, err)
+				}
+			}
+
+			if _, err := os.Lstat(
+				filepath.Join(repository, LegacyControlDirectory),
+			); err != nil {
+				t.Fatalf("legacy state was changed or removed: %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(
+				repository,
+				filepath.FromSlash(IdentityRelativePath),
+			)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("Gatemole identity was created after rejection: %v", err)
+			}
+			if !test.currentDir {
+				if _, err := os.Lstat(
+					filepath.Join(repository, ControlDirectory),
+				); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("Gatemole control state was created after rejection: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestRuntimeIDsUseCryptographicRandomness(t *testing.T) {
 	parent := t.TempDir()
 	first, _, err := CreateOrLoad(
@@ -145,7 +287,7 @@ func TestIdentityRemainsStableWhenRepositoryMoves(t *testing.T) {
 	// cannot distinguish that from moving/restoring the same Runtime. Normal
 	// Git clones do not copy the file and therefore receive distinct IDs.
 	copied := newGitRepository(t, filepath.Join(parent, "copied"))
-	if err := os.Mkdir(filepath.Join(copied, ".vouch"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(copied, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
@@ -214,31 +356,31 @@ func TestLoadRejectsUnsafeFileAndDirectoryShapes(t *testing.T) {
 		}
 		repository := newGitRepository(t, filepath.Join(parent, "repository"))
 		if err := os.Symlink(
-			filepath.Join(source, ".vouch"),
-			filepath.Join(repository, ".vouch"),
+			filepath.Join(source, ".gatemole"),
+			filepath.Join(repository, ".gatemole"),
 		); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := CreateOrLoad(
 			context.Background(), repository,
 		); err == nil || !strings.Contains(err.Error(), "real directory") {
-			t.Fatalf("symlink .vouch directory was accepted: %v", err)
+			t.Fatalf("symlink .gatemole directory was accepted: %v", err)
 		}
 		if _, err := Load(
 			context.Background(), repository,
 		); err == nil || !strings.Contains(err.Error(), "real directory") {
-			t.Fatalf("Load accepted a symlink .vouch directory: %v", err)
+			t.Fatalf("Load accepted a symlink .gatemole directory: %v", err)
 		}
 	})
 	t.Run("writable vouch directory", func(t *testing.T) {
 		repository, _ := createdIdentityPath(t)
-		if err := os.Chmod(filepath.Join(repository, ".vouch"), 0o770); err != nil {
+		if err := os.Chmod(filepath.Join(repository, ".gatemole"), 0o770); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := Load(
 			context.Background(), repository,
 		); err == nil || !strings.Contains(err.Error(), "group- or world-writable") {
-			t.Fatalf("writable .vouch directory was accepted: %v", err)
+			t.Fatalf("writable .gatemole directory was accepted: %v", err)
 		}
 	})
 }
@@ -376,7 +518,7 @@ func newGitRepository(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := file.WriteString("\n/.vouch/runtime.json\n"); err != nil {
+	if _, err := file.WriteString("\n/.gatemole/runtime.json\n"); err != nil {
 		_ = file.Close()
 		t.Fatal(err)
 	}

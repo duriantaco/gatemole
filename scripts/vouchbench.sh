@@ -390,7 +390,7 @@ PY
 set_test_artifact_exit_code() {
   local repo="$1"
   local out="$2"
-  python3 - "$repo/.vouch/manifests/pass.json" "$repo/$out" <<'PY'
+  python3 - "$repo/.gatemole/manifests/pass.json" "$repo/$out" <<'PY'
 import json
 import sys
 
@@ -414,7 +414,7 @@ PY
 disable_canary_manifest() {
   local repo="$1"
   local out="$2"
-  python3 - "$repo/.vouch/manifests/pass.json" "$repo/$out" <<'PY'
+  python3 - "$repo/.gatemole/manifests/pass.json" "$repo/$out" <<'PY'
 import json
 import sys
 
@@ -619,12 +619,12 @@ write_platform_artifacts() {
   local runtime_ids="$5"
   local rollback_ids="$6"
 
-  mkdir -p "$repo/.vouch/artifacts"
-  write_obligation_json "$repo/.vouch/artifacts/platform-behavior.json" "$behavior_ids"
-  write_obligation_json "$repo/.vouch/artifacts/platform-security.json" "$security_ids"
-  write_junit_obligations "$repo/.vouch/artifacts/platform-tests.xml" "$test_ids"
-  write_obligation_json "$repo/.vouch/artifacts/platform-runtime.json" "$runtime_ids"
-  write_obligation_json "$repo/.vouch/artifacts/platform-rollback.json" "$rollback_ids"
+  mkdir -p "$repo/.gatemole/artifacts"
+  write_obligation_json "$repo/.gatemole/artifacts/platform-behavior.json" "$behavior_ids"
+  write_obligation_json "$repo/.gatemole/artifacts/platform-security.json" "$security_ids"
+  write_junit_obligations "$repo/.gatemole/artifacts/platform-tests.xml" "$test_ids"
+  write_obligation_json "$repo/.gatemole/artifacts/platform-runtime.json" "$runtime_ids"
+  write_obligation_json "$repo/.gatemole/artifacts/platform-rollback.json" "$rollback_ids"
 }
 
 attach_platform_artifacts() {
@@ -632,11 +632,11 @@ attach_platform_artifacts() {
   local manifest="$2"
   local dir="$3"
 
-  attach_artifact "$repo" "$manifest" platform-behavior behavior_trace .vouch/artifacts/platform-behavior.json "$dir/attach-platform-behavior.stdout"
-  attach_artifact "$repo" "$manifest" platform-security security_check .vouch/artifacts/platform-security.json "$dir/attach-platform-security.stdout"
-  attach_artifact "$repo" "$manifest" platform-tests test_coverage .vouch/artifacts/platform-tests.xml "$dir/attach-platform-tests.stdout"
-  attach_artifact "$repo" "$manifest" platform-runtime runtime_metric .vouch/artifacts/platform-runtime.json "$dir/attach-platform-runtime.stdout"
-  attach_artifact "$repo" "$manifest" platform-rollback rollback_plan .vouch/artifacts/platform-rollback.json "$dir/attach-platform-rollback.stdout"
+  attach_artifact "$repo" "$manifest" platform-behavior behavior_trace .gatemole/artifacts/platform-behavior.json "$dir/attach-platform-behavior.stdout"
+  attach_artifact "$repo" "$manifest" platform-security security_check .gatemole/artifacts/platform-security.json "$dir/attach-platform-security.stdout"
+  attach_artifact "$repo" "$manifest" platform-tests test_coverage .gatemole/artifacts/platform-tests.xml "$dir/attach-platform-tests.stdout"
+  attach_artifact "$repo" "$manifest" platform-runtime runtime_metric .gatemole/artifacts/platform-runtime.json "$dir/attach-platform-runtime.stdout"
+  attach_artifact "$repo" "$manifest" platform-rollback rollback_plan .gatemole/artifacts/platform-rollback.json "$dir/attach-platform-rollback.stdout"
 }
 
 add_auth_tests_only() {
@@ -721,7 +721,7 @@ add_auth_partial_release_evidence() {
   }"
 
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  run_gate "$dir" "$repo" ".vouch/manifests/blocked.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/blocked.json"
   assert_scenario "$dir"
 }
 
@@ -759,7 +759,7 @@ add_auth_manifest_traceability_block() {
   }"
 
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  run_gate "$dir" "$repo" ".vouch/manifests/traceability-blocked.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/traceability-blocked.json"
   assert_scenario "$dir"
 }
 
@@ -801,8 +801,8 @@ add_auth_nonzero_test_artifact() {
   }"
 
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  set_test_artifact_exit_code "$repo" ".vouch/manifests/nonzero-test-artifact.json"
-  run_gate "$dir" "$repo" ".vouch/manifests/nonzero-test-artifact.json"
+  set_test_artifact_exit_code "$repo" ".gatemole/manifests/nonzero-test-artifact.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/nonzero-test-artifact.json"
   assert_scenario "$dir"
 }
 
@@ -839,7 +839,7 @@ add_auth_full_release_evidence() {
   }"
 
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  run_gate "$dir" "$repo" ".vouch/manifests/pass.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/pass.json"
   assert_scenario "$dir"
 }
 
@@ -876,8 +876,8 @@ add_auth_full_release_without_canary() {
   }"
 
   "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  disable_canary_manifest "$repo" ".vouch/manifests/no-canary.json"
-  run_gate "$dir" "$repo" ".vouch/manifests/no-canary.json"
+  disable_canary_manifest "$repo" ".gatemole/manifests/no-canary.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/no-canary.json"
   assert_scenario "$dir"
 }
 
@@ -934,15 +934,15 @@ add_platform_multi_component_partial_evidence() {
     --changed-file internal/api/users.py \
     --external-effect charges_card \
     --external-effect sends_email \
-    --out .vouch/manifests/platform-partial.json > "$dir/manifest.stdout"
+    --out .gatemole/manifests/platform-partial.json > "$dir/manifest.stdout"
   write_platform_artifacts "$repo" \
     "$platform_behavior_all_ids" \
     "$platform_security_partial_ids" \
     "$platform_tests_all_ids" \
     "$platform_runtime_partial_ids" \
     "$platform_rollback_partial_ids"
-  attach_platform_artifacts "$repo" ".vouch/manifests/platform-partial.json" "$dir"
-  run_gate "$dir" "$repo" ".vouch/manifests/platform-partial.json"
+  attach_platform_artifacts "$repo" ".gatemole/manifests/platform-partial.json" "$dir"
+  run_gate "$dir" "$repo" ".gatemole/manifests/platform-partial.json"
   assert_scenario "$dir"
 }
 
@@ -988,15 +988,15 @@ add_platform_multi_component_full_canary() {
     --changed-file internal/api/users.py \
     --external-effect charges_card \
     --external-effect sends_email \
-    --out .vouch/manifests/platform-full.json > "$dir/manifest.stdout"
+    --out .gatemole/manifests/platform-full.json > "$dir/manifest.stdout"
   write_platform_artifacts "$repo" \
     "$platform_behavior_all_ids" \
     "$platform_security_full_ids" \
     "$platform_tests_all_ids" \
     "$platform_runtime_full_ids" \
     "$platform_rollback_full_ids"
-  attach_platform_artifacts "$repo" ".vouch/manifests/platform-full.json" "$dir"
-  run_gate "$dir" "$repo" ".vouch/manifests/platform-full.json"
+  attach_platform_artifacts "$repo" ".gatemole/manifests/platform-full.json" "$dir"
+  run_gate "$dir" "$repo" ".gatemole/manifests/platform-full.json"
   assert_scenario "$dir"
 }
 
@@ -1038,15 +1038,15 @@ add_platform_medium_api_auto_merge() {
     --agent codex \
     --run-id platform-api \
     --changed-file internal/api/users.py \
-    --out .vouch/manifests/platform-api.json > "$dir/manifest.stdout"
+    --out .gatemole/manifests/platform-api.json > "$dir/manifest.stdout"
   write_platform_artifacts "$repo" \
     "$platform_api_behavior_ids" \
     "$platform_api_security_ids" \
     "$platform_api_tests_ids" \
     "$platform_api_runtime_ids" \
     "$platform_api_rollback_ids"
-  attach_platform_artifacts "$repo" ".vouch/manifests/platform-api.json" "$dir"
-  run_gate "$dir" "$repo" ".vouch/manifests/platform-api.json"
+  attach_platform_artifacts "$repo" ".gatemole/manifests/platform-api.json" "$dir"
+  run_gate "$dir" "$repo" ".gatemole/manifests/platform-api.json"
   assert_scenario "$dir"
 }
 
@@ -1102,54 +1102,54 @@ add_docs_low_risk_full_evidence() {
     --agent codex \
     --run-id bench-docs \
     --changed-file README.md \
-    --out .vouch/manifests/docs.json > "$dir/manifest.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/manifest.stdout"
 
-  mkdir -p "$repo/.vouch/artifacts"
-  write_text_file "$repo/.vouch/artifacts/behavior.json" '{"status":"pass","obligations":["docs.readme.behavior.readme_documents_usage"]}'
-  write_text_file "$repo/.vouch/artifacts/security.json" '{"status":"pass","obligations":["docs.readme.security.no_secrets_introduced"]}'
-  write_text_file "$repo/.vouch/artifacts/runtime.json" '{"status":"pass","obligations":["docs.readme.runtime_signal.vouch_gate_decision"]}'
-  write_text_file "$repo/.vouch/artifacts/rollback.json" '{"status":"pass","obligations":["docs.readme.rollback.revert_change"]}'
-  write_text_file "$repo/.vouch/test-map.json" '{"version":"gatemole.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
-  write_text_file "$repo/.vouch/artifacts/tests.xml" '<testsuite name="docs" tests="1" failures="0" errors="0" skipped="0"><testcase classname="tests.docs.test_readme" name="test_documentation_smoke_check" file="tests/docs/test_readme.py"></testcase></testsuite>'
+  mkdir -p "$repo/.gatemole/artifacts"
+  write_text_file "$repo/.gatemole/artifacts/behavior.json" '{"status":"pass","obligations":["docs.readme.behavior.readme_documents_usage"]}'
+  write_text_file "$repo/.gatemole/artifacts/security.json" '{"status":"pass","obligations":["docs.readme.security.no_secrets_introduced"]}'
+  write_text_file "$repo/.gatemole/artifacts/runtime.json" '{"status":"pass","obligations":["docs.readme.runtime_signal.vouch_gate_decision"]}'
+  write_text_file "$repo/.gatemole/artifacts/rollback.json" '{"status":"pass","obligations":["docs.readme.rollback.revert_change"]}'
+  write_text_file "$repo/.gatemole/test-map.json" '{"version":"gatemole.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
+  write_text_file "$repo/.gatemole/artifacts/tests.xml" '<testsuite name="docs" tests="1" failures="0" errors="0" skipped="0"><testcase classname="tests.docs.test_readme" name="test_documentation_smoke_check" file="tests/docs/test_readme.py"></testcase></testsuite>'
 
   "$VOUCH" --repo "$repo" manifest attach-artifact \
-    --manifest .vouch/manifests/docs.json \
+    --manifest .gatemole/manifests/docs.json \
     --id behavior \
     --kind behavior_trace \
-    --path .vouch/artifacts/behavior.json \
+    --path .gatemole/artifacts/behavior.json \
     --exit-code 0 \
-    --out .vouch/manifests/docs.json > "$dir/attach-behavior.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/attach-behavior.stdout"
   "$VOUCH" --repo "$repo" manifest attach-artifact \
-    --manifest .vouch/manifests/docs.json \
+    --manifest .gatemole/manifests/docs.json \
     --id security \
     --kind security_check \
-    --path .vouch/artifacts/security.json \
+    --path .gatemole/artifacts/security.json \
     --exit-code 0 \
-    --out .vouch/manifests/docs.json > "$dir/attach-security.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/attach-security.stdout"
   "$VOUCH" --repo "$repo" manifest attach-artifact \
-    --manifest .vouch/manifests/docs.json \
+    --manifest .gatemole/manifests/docs.json \
     --id tests \
     --kind test_coverage \
-    --path .vouch/artifacts/tests.xml \
-    --test-map .vouch/test-map.json \
+    --path .gatemole/artifacts/tests.xml \
+    --test-map .gatemole/test-map.json \
     --exit-code 0 \
-    --out .vouch/manifests/docs.json > "$dir/attach-tests.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/attach-tests.stdout"
   "$VOUCH" --repo "$repo" manifest attach-artifact \
-    --manifest .vouch/manifests/docs.json \
+    --manifest .gatemole/manifests/docs.json \
     --id runtime \
     --kind runtime_metric \
-    --path .vouch/artifacts/runtime.json \
+    --path .gatemole/artifacts/runtime.json \
     --exit-code 0 \
-    --out .vouch/manifests/docs.json > "$dir/attach-runtime.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/attach-runtime.stdout"
   "$VOUCH" --repo "$repo" manifest attach-artifact \
-    --manifest .vouch/manifests/docs.json \
+    --manifest .gatemole/manifests/docs.json \
     --id rollback \
     --kind rollback_plan \
-    --path .vouch/artifacts/rollback.json \
+    --path .gatemole/artifacts/rollback.json \
     --exit-code 0 \
-    --out .vouch/manifests/docs.json > "$dir/attach-rollback.stdout"
+    --out .gatemole/manifests/docs.json > "$dir/attach-rollback.stdout"
 
-  run_gate "$dir" "$repo" ".vouch/manifests/docs.json"
+  run_gate "$dir" "$repo" ".gatemole/manifests/docs.json"
   assert_scenario "$dir"
 }
 

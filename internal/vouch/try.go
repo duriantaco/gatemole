@@ -488,7 +488,7 @@ func tryNextSteps(result TryResult, opts tryOptions) []string {
 		steps = append(steps, "write drafts with: vouch try --repo "+shellQuotePath(result.Repo)+" --write")
 	}
 	if opts.JUnit == "" {
-		steps = append(steps, "link tests with: vouch try --repo "+shellQuotePath(result.Repo)+" --test-command \"pytest --junitxml .vouch/artifacts/pytest.xml\" --junit .vouch/artifacts/pytest.xml")
+		steps = append(steps, "link tests with: vouch try --repo "+shellQuotePath(result.Repo)+" --test-command \"pytest --junitxml .gatemole/artifacts/pytest.xml\" --junit .gatemole/artifacts/pytest.xml")
 	} else if result.GateDecision == "block" {
 		steps = append(steps, "add or attach missing security/runtime/rollback evidence, then rerun vouch gate")
 	}
@@ -529,7 +529,7 @@ func RenderTryResult(result TryResult) string {
 	fmt.Fprintf(&b, "  high-risk drafts: %d\n", result.RiskCounts[string(RiskHigh)])
 	fmt.Fprintf(&b, "  tests discovered: %d\n", result.TestsDiscovered)
 	if result.Mode == "write" {
-		b.WriteString("  wrote: .vouch/\n")
+		b.WriteString("  wrote: .gatemole/\n")
 	}
 
 	if len(result.TopDrafts) > 0 {

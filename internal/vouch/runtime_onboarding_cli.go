@@ -25,7 +25,7 @@ import (
 const (
 	runtimeDoctorVersion = "gatemole.runtime_doctor.v0"
 	runtimeInitVersion   = "gatemole.runtime_init.v0"
-	runtimeIgnoreFile    = ".vouch/.gitignore"
+	runtimeIgnoreFile    = ".gatemole/.gitignore"
 )
 
 var runtimeStateIgnore = []byte(`# Local Vouch Runtime state. Keep agent-profiles.json under version control.
@@ -1239,14 +1239,14 @@ func probeDaemonRuntime(
 }
 
 var runtimeLocalStatePaths = []string{
-	".vouch/runtime.json",
-	".vouch/kernel.db",
-	".vouch/kernel.db-journal",
-	".vouch/kernel.db-shm",
-	".vouch/kernel.db-wal",
-	".vouch/kernel.db.lock",
-	".vouch/runtime.lock",
-	".vouch/vouchd.sock",
+	".gatemole/runtime.json",
+	".gatemole/kernel.db",
+	".gatemole/kernel.db-journal",
+	".gatemole/kernel.db-shm",
+	".gatemole/kernel.db-wal",
+	".gatemole/kernel.db.lock",
+	".gatemole/runtime.lock",
+	".gatemole/vouchd.sock",
 }
 
 func trackedRuntimeState(

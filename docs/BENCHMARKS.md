@@ -75,8 +75,8 @@ For a repo that can produce JUnit:
 ```sh
 scripts/vouchbench-repo.sh \
   --repo /path/to/repo \
-  --test-command "pytest --junitxml .vouch/artifacts/pytest.xml" \
-  --junit .vouch/artifacts/pytest.xml \
+  --test-command "pytest --junitxml .gatemole/artifacts/pytest.xml" \
+  --junit .gatemole/artifacts/pytest.xml \
   --out /tmp/vouchbench-repo
 ```
 

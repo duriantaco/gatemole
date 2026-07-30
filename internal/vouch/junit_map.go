@@ -20,7 +20,7 @@ type JUnitMapOptions struct {
 }
 
 func DefaultTestMap(repo string) string {
-	return filepath.Join(repo, ".vouch", "test-map.json")
+	return filepath.Join(repo, ".gatemole", "test-map.json")
 }
 
 func AppendTestMapStubs(repo string, spec Spec) error {

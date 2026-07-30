@@ -28,23 +28,23 @@ test = { cmd = "pytest" }
 	if !contains(result.Profiles, "python") {
 		t.Fatalf("expected python profile, got %#v", result.Profiles)
 	}
-	for _, rel := range []string{".vouch/intents", ".vouch/specs", ".vouch/policy", ".vouch/manifests", ".vouch/artifacts", ".vouch/build"} {
+	for _, rel := range []string{".gatemole/intents", ".gatemole/specs", ".gatemole/policy", ".gatemole/manifests", ".gatemole/artifacts", ".gatemole/build"} {
 		if !dirExists(filepath.Join(repo, rel)) {
 			t.Fatalf("expected directory %s", rel)
 		}
 	}
-	policy := mustLoadPolicy(t, filepath.Join(repo, ".vouch", "policy", "release-policy.json"))
+	policy := mustLoadPolicy(t, filepath.Join(repo, ".gatemole", "policy", "release-policy.json"))
 	if policy.Version != PolicySchemaVersion || len(policy.Rules) == 0 {
 		t.Fatalf("expected default release policy, got %#v", policy)
 	}
-	config := mustLoadConfig(t, filepath.Join(repo, ".vouch", "config.json"))
+	config := mustLoadConfig(t, filepath.Join(repo, ".gatemole", "config.json"))
 	if config.Version != ConfigSchemaVersion {
 		t.Fatalf("unexpected config version %s", config.Version)
 	}
 	if config.AllowedSigners == nil {
 		t.Fatalf("expected allowed_signers to render as an array, got nil")
 	}
-	if !contains(config.Commands, "fyn run pytest --junitxml .vouch/artifacts/junit.xml") {
+	if !contains(config.Commands, "fyn run pytest --junitxml .gatemole/artifacts/junit.xml") {
 		t.Fatalf("expected pytest command, got %#v", config.Commands)
 	}
 
@@ -91,7 +91,7 @@ func TestContractCreateAndManifestCreateMapChangedFilesToOwnedSpec(t *testing.T)
 		RunnerIdentity:   "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main",
 		RunnerOIDCIssuer: "https://token.actions.githubusercontent.com",
 		ChangedFiles:     []string{"src/app/service.py", "tests/test_app.py"},
-		Out:              ".vouch/manifests/agent-1.json",
+		Out:              ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestContractCreateAndManifestCreateMapChangedFilesToOwnedSpec(t *testing.T)
 	if !manifest.Runtime.Canary.Enabled || manifest.Runtime.Canary.InitialPercent != 5 {
 		t.Fatalf("expected high-risk manifest to enable canary: %#v", manifest.Runtime.Canary)
 	}
-	loaded := mustLoadManifest(t, filepath.Join(repo, ".vouch", "manifests", "agent-1.json"))
+	loaded := mustLoadManifest(t, filepath.Join(repo, ".gatemole", "manifests", "agent-1.json"))
 	if loaded.Task.ID != "agent-1" {
 		t.Fatalf("manifest was not written: %#v", loaded.Task)
 	}
@@ -129,7 +129,7 @@ func TestManifestCreateRejectsRiskDowngrade(t *testing.T) {
 		RunID:        "run-1",
 		Risk:         RiskLow,
 		ChangedFiles: []string{"src/app/service.py"},
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err == nil || !strings.Contains(err.Error(), "cannot be lower") {
 		t.Fatalf("expected risk downgrade error, got %v", err)
@@ -146,7 +146,7 @@ func TestManifestCreateAllowsUnownedFilesForCompilerTraceabilityBlock(t *testing
 		Agent:        "codex",
 		RunID:        "run-1",
 		ChangedFiles: []string{"docs/README.md"},
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -179,7 +179,7 @@ func TestManifestCreateUsesConfiguredBaseRef(t *testing.T) {
 		Summary: "change app service",
 		Agent:   "codex",
 		RunID:   "run-1",
-		Out:     ".vouch/manifests/agent-1.json",
+		Out:     ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -201,22 +201,22 @@ func TestAttachArtifactInfersCoveredObligations(t *testing.T) {
 		Agent:        "codex",
 		RunID:        "run-1",
 		ChangedFiles: []string{"src/app/service.py"},
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	behaviorID := obligationID(t, spec, ObligationBehavior, "service returns stable JSON")
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "behavior.json"), `{"status":"pass","obligations":["`+behaviorID+`"]}`)
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "behavior.json"), `{"status":"pass","obligations":["`+behaviorID+`"]}`)
 
 	updated, artifact, err := AttachArtifact(repo, AttachArtifactOptions{
-		ManifestPath: ".vouch/manifests/agent-1.json",
+		ManifestPath: ".gatemole/manifests/agent-1.json",
 		ID:           "behavior",
 		Kind:         EvidenceBehaviorTrace,
-		Path:         ".vouch/artifacts/behavior.json",
+		Path:         ".gatemole/artifacts/behavior.json",
 		Command:      "contract probe",
 		ExitCode:     0,
-		Out:          ".vouch/manifests/agent-1.with-artifact.json",
+		Out:          ".gatemole/manifests/agent-1.with-artifact.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -244,22 +244,22 @@ func TestAttachArtifactInfersSARIFSecurityObligations(t *testing.T) {
 		Agent:        "codex",
 		RunID:        "run-1",
 		ChangedFiles: []string{"src/app/service.py"},
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	securityID := obligationID(t, spec, ObligationSecurity, "project paths stay inside repo")
-	writeSARIFArtifact(t, repo, ".vouch/artifacts/security.sarif", sarifSecurityLog(securityID, nil))
+	writeSARIFArtifact(t, repo, ".gatemole/artifacts/security.sarif", sarifSecurityLog(securityID, nil))
 
 	_, artifact, err := AttachArtifact(repo, AttachArtifactOptions{
-		ManifestPath: ".vouch/manifests/agent-1.json",
+		ManifestPath: ".gatemole/manifests/agent-1.json",
 		ID:           "security",
 		Kind:         EvidenceSecurityCheck,
-		Path:         ".vouch/artifacts/security.sarif",
+		Path:         ".gatemole/artifacts/security.sarif",
 		Command:      "semgrep scan --sarif",
 		ExitCode:     0,
-		Out:          ".vouch/manifests/agent-1.with-security.json",
+		Out:          ".gatemole/manifests/agent-1.with-security.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -278,30 +278,30 @@ func TestAttachArtifactRejectsNonZeroExitAndPathEscape(t *testing.T) {
 		Agent:        "codex",
 		RunID:        "run-1",
 		ChangedFiles: []string{"src/app/service.py"},
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "behavior.json"), `{"status":"pass"}`)
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "behavior.json"), `{"status":"pass"}`)
 	_, _, err = AttachArtifact(repo, AttachArtifactOptions{
-		ManifestPath: ".vouch/manifests/agent-1.json",
+		ManifestPath: ".gatemole/manifests/agent-1.json",
 		ID:           "behavior",
 		Kind:         EvidenceBehaviorTrace,
-		Path:         ".vouch/artifacts/behavior.json",
+		Path:         ".gatemole/artifacts/behavior.json",
 		ExitCode:     1,
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err == nil || !strings.Contains(err.Error(), "exit code") {
 		t.Fatalf("expected exit code error, got %v", err)
 	}
 	_, _, err = AttachArtifact(repo, AttachArtifactOptions{
-		ManifestPath: ".vouch/manifests/agent-1.json",
+		ManifestPath: ".gatemole/manifests/agent-1.json",
 		ID:           "behavior",
 		Kind:         EvidenceBehaviorTrace,
 		Path:         "../outside.json",
 		ExitCode:     0,
-		Out:          ".vouch/manifests/agent-1.json",
+		Out:          ".gatemole/manifests/agent-1.json",
 	})
 	if err == nil || !strings.Contains(err.Error(), "escapes repo") {
 		t.Fatalf("expected path escape error, got %v", err)
@@ -346,7 +346,7 @@ testpaths = ["tests"]
 		"--agent", "codex",
 		"--run-id", "run-1",
 		"--changed-file", "src/app/service.py",
-		"--out", ".vouch/manifests/run.json",
+		"--out", ".gatemole/manifests/run.json",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("manifest create failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
@@ -354,23 +354,23 @@ testpaths = ["tests"]
 
 	spec := mustLoadSpecs(t, repo)["app.service"]
 	behaviorID := obligationID(t, spec, ObligationBehavior, "service returns stable JSON")
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "behavior.json"), `{"status":"pass","obligations":["`+behaviorID+`"]}`)
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "behavior.json"), `{"status":"pass","obligations":["`+behaviorID+`"]}`)
 	stdout.Reset()
 	stderr.Reset()
 	code = Main([]string{
 		"--repo", repo,
 		"manifest", "attach-artifact",
-		"--manifest", ".vouch/manifests/run.json",
+		"--manifest", ".gatemole/manifests/run.json",
 		"--id", "behavior",
 		"--kind", string(EvidenceBehaviorTrace),
-		"--path", ".vouch/artifacts/behavior.json",
+		"--path", ".gatemole/artifacts/behavior.json",
 		"--exit-code", "0",
-		"--out", ".vouch/manifests/run.with-artifact.json",
+		"--out", ".gatemole/manifests/run.with-artifact.json",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("attach-artifact failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
-	manifest := mustLoadManifest(t, filepath.Join(repo, ".vouch", "manifests", "run.with-artifact.json"))
+	manifest := mustLoadManifest(t, filepath.Join(repo, ".gatemole", "manifests", "run.with-artifact.json"))
 	if len(manifest.Verification.Artifacts) != 1 {
 		t.Fatalf("expected one attached artifact, got %#v", manifest.Verification.Artifacts)
 	}

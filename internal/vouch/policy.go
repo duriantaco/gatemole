@@ -11,7 +11,7 @@ import (
 const builtinPolicyPath = "builtin:default-release-policy"
 
 func DefaultPolicyPath(repo string) string {
-	return filepath.Join(repo, ".vouch", "policy", "release-policy.json")
+	return filepath.Join(repo, ".gatemole", "policy", "release-policy.json")
 }
 
 func DefaultReleasePolicy() ReleasePolicy {

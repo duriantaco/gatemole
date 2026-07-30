@@ -23,7 +23,7 @@ func Run(repo string, opts Options) (Result, error) {
 		Drafts:  draftsFromSignals(signals, opts),
 	}
 	for i := range result.Drafts {
-		result.Drafts[i].IntentPath = filepath.ToSlash(filepath.Join(".vouch", "intents", result.Drafts[i].Component+".yaml"))
+		result.Drafts[i].IntentPath = filepath.ToSlash(filepath.Join(".gatemole", "intents", result.Drafts[i].Component+".yaml"))
 	}
 	result.NeedsWrite = needsWrite(absRepo, result)
 	if !opts.DryRun && !opts.Check {
@@ -32,7 +32,7 @@ func Run(repo string, opts Options) (Result, error) {
 			return Result{}, err
 		}
 		result.Wrote = wrote
-		result.ReportPath = filepath.ToSlash(filepath.Join(".vouch", "build", "bootstrap-report.json"))
+		result.ReportPath = filepath.ToSlash(filepath.Join(".gatemole", "build", "bootstrap-report.json"))
 		result.NeedsWrite = false
 	}
 	return result, nil

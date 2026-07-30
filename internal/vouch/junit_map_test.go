@@ -12,7 +12,7 @@ func TestContractCreateWritesTestMapStubs(t *testing.T) {
 	spec := createSampleContract(t, repo, RiskMedium)
 	obligation := obligationID(t, spec, ObligationRequiredTest, "service json contract is stable")
 
-	testMap, err := LoadTestMap(filepath.Join(repo, ".vouch", "test-map.json"))
+	testMap, err := LoadTestMap(filepath.Join(repo, ".gatemole", "test-map.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,9 +30,9 @@ func TestJUnitMapConvertsRawPytestJUnitToObligationJUnit(t *testing.T) {
 
 	result, err := MapJUnitEvidence(repo, JUnitMapOptions{
 		ManifestPath: manifestPath,
-		JUnitPath:    ".vouch/artifacts/pytest.xml",
-		TestMapPath:  ".vouch/test-map.json",
-		Out:          ".vouch/artifacts/vouch-junit.xml",
+		JUnitPath:    ".gatemole/artifacts/pytest.xml",
+		TestMapPath:  ".gatemole/test-map.json",
+		Out:          ".gatemole/artifacts/vouch-junit.xml",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestJUnitMapConvertsRawPytestJUnitToObligationJUnit(t *testing.T) {
 	if result.Cases != 1 || !contains(result.CoveredObligations, obligation) {
 		t.Fatalf("expected mapped obligation %s, got %#v", obligation, result)
 	}
-	data := mustReadFile(t, filepath.Join(repo, ".vouch", "artifacts", "vouch-junit.xml"))
+	data := mustReadFile(t, filepath.Join(repo, ".gatemole", "artifacts", "vouch-junit.xml"))
 	if !bytes.Contains(data, []byte(`classname="`+obligation+`"`)) {
 		t.Fatalf("mapped JUnit does not contain obligation id: %s", string(data))
 	}
@@ -54,16 +54,16 @@ func TestAttachArtifactWithTestMapUsesMappedJUnit(t *testing.T) {
 		ManifestPath: manifestPath,
 		ID:           "pytest",
 		Kind:         EvidenceTestCoverage,
-		Path:         ".vouch/artifacts/pytest.xml",
-		TestMapPath:  ".vouch/test-map.json",
-		Command:      "pytest --junitxml .vouch/artifacts/pytest.xml",
+		Path:         ".gatemole/artifacts/pytest.xml",
+		TestMapPath:  ".gatemole/test-map.json",
+		Command:      "pytest --junitxml .gatemole/artifacts/pytest.xml",
 		ExitCode:     0,
-		Out:          ".vouch/manifests/run.with-tests.json",
+		Out:          ".gatemole/manifests/run.with-tests.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if artifact.Path != ".vouch/artifacts/pytest-vouch-junit.xml" {
+	if artifact.Path != ".gatemole/artifacts/pytest-vouch-junit.xml" {
 		t.Fatalf("expected mapped artifact path, got %s", artifact.Path)
 	}
 	if !contains(artifact.Obligations, obligation) {
@@ -83,9 +83,9 @@ func TestCLIJUnitMap(t *testing.T) {
 		"--repo", repo,
 		"junit", "map",
 		"--manifest", manifestPath,
-		"--junit", ".vouch/artifacts/pytest.xml",
-		"--test-map", ".vouch/test-map.json",
-		"--out", ".vouch/artifacts/vouch-junit.xml",
+		"--junit", ".gatemole/artifacts/pytest.xml",
+		"--test-map", ".gatemole/test-map.json",
+		"--out", ".gatemole/artifacts/vouch-junit.xml",
 		"--json",
 	}, &stdout, &stderr)
 	if code != 0 {
@@ -99,13 +99,13 @@ func TestCLIJUnitMap(t *testing.T) {
 func TestJUnitMapFailsWhenRequiredObligationHasNoSelector(t *testing.T) {
 	repo, manifestPath, _ := repoWithJUnitMapScenario(t)
 	writeRawPytestJUnit(t, repo)
-	writeText(t, filepath.Join(repo, ".vouch", "test-map.json"), `{"version":"gatemole.test_map.v0","mappings":{}}`)
+	writeText(t, filepath.Join(repo, ".gatemole", "test-map.json"), `{"version":"gatemole.test_map.v0","mappings":{}}`)
 
 	_, err := MapJUnitEvidence(repo, JUnitMapOptions{
 		ManifestPath: manifestPath,
-		JUnitPath:    ".vouch/artifacts/pytest.xml",
-		TestMapPath:  ".vouch/test-map.json",
-		Out:          ".vouch/artifacts/vouch-junit.xml",
+		JUnitPath:    ".gatemole/artifacts/pytest.xml",
+		TestMapPath:  ".gatemole/test-map.json",
+		Out:          ".gatemole/artifacts/vouch-junit.xml",
 	})
 	if err == nil || !strings.Contains(err.Error(), "has no test-map selectors") {
 		t.Fatalf("expected missing selector error, got %v", err)
@@ -123,12 +123,12 @@ func repoWithJUnitMapScenario(t *testing.T) (string, string, string) {
 		Agent:        "codex",
 		RunID:        "run-1",
 		ChangedFiles: []string{"src/app/service.py"},
-		Out:          ".vouch/manifests/run.json",
+		Out:          ".gatemole/manifests/run.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeText(t, filepath.Join(repo, ".vouch", "test-map.json"), `{
+	writeText(t, filepath.Join(repo, ".gatemole", "test-map.json"), `{
   "version": "gatemole.test_map.v0",
   "mappings": {
     "`+obligation+`": [
@@ -136,12 +136,12 @@ func repoWithJUnitMapScenario(t *testing.T) (string, string, string) {
     ]
   }
 }`)
-	return repo, ".vouch/manifests/run.json", obligation
+	return repo, ".gatemole/manifests/run.json", obligation
 }
 
 func writeRawPytestJUnit(t *testing.T, repo string) {
 	t.Helper()
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="pytest" tests="1" failures="0" errors="0" skipped="0">
   <testcase classname="tests.test_app" name="test_service_json_contract" file="tests/test_app.py" />
 </testsuite>

@@ -17,7 +17,7 @@ import (
 func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Writer) int {
 	flags := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	databasePath := flags.String("db", filepath.Join(repo, ".vouch", "kernel.db"), "SQLite kernel database path")
+	databasePath := flags.String("db", filepath.Join(repo, ".gatemole", "kernel.db"), "SQLite kernel database path")
 	socketPath := flags.String("socket", defaultKernelSocket(repo), "Unix socket path")
 	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
 	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")

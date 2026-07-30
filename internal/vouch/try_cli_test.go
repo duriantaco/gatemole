@@ -31,10 +31,10 @@ func TestTryUsesSnapshotByDefault(t *testing.T) {
 			t.Fatalf("expected try output to contain %q, got:\n%s", want, out)
 		}
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "intents", "auth.password_reset.yaml")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "intents", "auth.password_reset.yaml")) {
 		t.Fatal("try wrote generated intents into source repo without --write")
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "build", "obligations.ir.json")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "build", "obligations.ir.json")) {
 		t.Fatal("try wrote compiler output into source repo without --write")
 	}
 }
@@ -49,13 +49,13 @@ func TestTryWriteModeWritesVouchFiles(t *testing.T) {
 	}
 
 	out := stdout.String()
-	if !strings.Contains(out, "Mode: write to source repo") || !strings.Contains(out, "wrote: .vouch/") {
+	if !strings.Contains(out, "Mode: write to source repo") || !strings.Contains(out, "wrote: .gatemole/") {
 		t.Fatalf("expected write-mode output, got:\n%s", out)
 	}
-	if !fileExists(filepath.Join(repo, ".vouch", "intents", "auth.password_reset.yaml")) {
+	if !fileExists(filepath.Join(repo, ".gatemole", "intents", "auth.password_reset.yaml")) {
 		t.Fatal("try --write did not write generated intent")
 	}
-	if !fileExists(filepath.Join(repo, ".vouch", "build", "obligations.ir.json")) {
+	if !fileExists(filepath.Join(repo, ".gatemole", "build", "obligations.ir.json")) {
 		t.Fatal("try --write did not compile obligations")
 	}
 }
@@ -76,24 +76,24 @@ func TestTryJSONIsStableAndNonDestructive(t *testing.T) {
 	if result.Version != tryResultVersion || result.Mode != "snapshot" || result.Drafts != 1 || result.CompiledObligations != 5 {
 		t.Fatalf("unexpected try JSON result: %#v", result)
 	}
-	if len(result.TopDrafts) != 1 || result.TopDrafts[0].Edit != ".vouch/intents/auth.password_reset.yaml" {
+	if len(result.TopDrafts) != 1 || result.TopDrafts[0].Edit != ".gatemole/intents/auth.password_reset.yaml" {
 		t.Fatalf("expected top draft edit path in JSON, got %#v", result.TopDrafts)
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "intents", "auth.password_reset.yaml")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "intents", "auth.password_reset.yaml")) {
 		t.Fatal("try --json wrote generated intent into source repo")
 	}
 }
 
 func TestTryImportsJUnitAndShowsGateDecision(t *testing.T) {
 	repo := bootstrapFixture(t)
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="pytest" tests="1" failures="0" errors="0" skipped="0">
   <testcase classname="tests.auth.test_password_reset" name="test_token_expiry" file="tests/auth/test_password_reset.py"></testcase>
 </testsuite>
 `)
 	var stdout, stderr bytes.Buffer
 
-	code := Main([]string{"--repo", repo, "try", "--junit", ".vouch/artifacts/pytest.xml"}, &stdout, &stderr)
+	code := Main([]string{"--repo", repo, "try", "--junit", ".gatemole/artifacts/pytest.xml"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("try --junit failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
@@ -111,15 +111,15 @@ func TestTryImportsJUnitAndShowsGateDecision(t *testing.T) {
 			t.Fatalf("expected try --junit output to contain %q, got:\n%s", want, out)
 		}
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "evidence", "manifest.json")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "evidence", "manifest.json")) {
 		t.Fatal("try --junit wrote evidence manifest into source repo without --write")
 	}
 }
 
 func TestTryImportsIgnoredJUnitArtifactFromGitWorktree(t *testing.T) {
 	repo := bootstrapFixture(t)
-	writeText(t, filepath.Join(repo, ".gitignore"), ".vouch/\n")
-	writeText(t, filepath.Join(repo, ".vouch", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+	writeText(t, filepath.Join(repo, ".gitignore"), ".gatemole/\n")
+	writeText(t, filepath.Join(repo, ".gatemole", "artifacts", "pytest.xml"), `<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="pytest" tests="1" failures="0" errors="0" skipped="0">
   <testcase classname="tests.auth.test_password_reset" name="test_token_expiry" file="tests/auth/test_password_reset.py"></testcase>
 </testsuite>
@@ -131,14 +131,14 @@ func TestTryImportsIgnoredJUnitArtifactFromGitWorktree(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 
-	code := Main([]string{"--repo", repo, "try", "--junit", ".vouch/artifacts/pytest.xml"}, &stdout, &stderr)
+	code := Main([]string{"--repo", repo, "try", "--junit", ".gatemole/artifacts/pytest.xml"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("try --junit failed for ignored JUnit artifact: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "JUnit linked: 1 required-test obligations") {
 		t.Fatalf("expected ignored JUnit artifact to be copied into snapshot, got:\n%s", stdout.String())
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "evidence", "manifest.json")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "evidence", "manifest.json")) {
 		t.Fatal("try --junit wrote evidence manifest into source repo without --write")
 	}
 }

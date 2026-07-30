@@ -67,7 +67,7 @@ critical_paths=(
   internal/vouch/transaction_cli.go
   build/production-fixture.Dockerfile
   connectors/github/driver.go
-  .vouch/agent-profiles.json
+  .gatemole/agent-profiles.json
   .gitattributes
   scripts/vouchci-plan.sh
   .github/workflows/pr.yml

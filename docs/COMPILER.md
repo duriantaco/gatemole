@@ -19,7 +19,7 @@ the current runtime is also incomplete.
 
 ## Source Language
 
-The source language is human-owned YAML under `.vouch/intents/`.
+The source language is human-owned YAML under `.gatemole/intents/`.
 
 Example:
 
@@ -69,19 +69,19 @@ The parser accepts only the intent keys implemented in
 | Build IR | `vouch contracts ir build` | [`IRFromSpec`](../internal/vouch/ir.go) | `gatemole.ir.v0` obligations |
 | Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](../internal/vouch/plan.go) | `gatemole.plan.v0` verification plan |
 | Build artifacts | `vouch contracts artifacts build` | [`BuildArtifacts`](../internal/vouch/artifacts.go) | verifier packets, test obligations, release policy artifact |
-| Compile repo | `vouch contracts compile` | [`CompileRepo`](../internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
+| Compile repo | `vouch contracts compile` | [`CompileRepo`](../internal/vouch/compile.go) | `.gatemole/build/` compiler outputs |
 
 The CLI dispatcher for these commands is
 [`Main`](../internal/vouch/cli.go).
 
 ## Repo Compile Output
 
-`vouch contracts compile` reads `.vouch/intents/*.yaml` and writes:
+`vouch contracts compile` reads `.gatemole/intents/*.yaml` and writes:
 
-- `.vouch/build/ast/*.ast.json`
-- `.vouch/specs/*.spec.json`
-- `.vouch/build/obligations.ir.json`
-- `.vouch/build/verification-plan.json`
+- `.gatemole/build/ast/*.ast.json`
+- `.gatemole/specs/*.spec.json`
+- `.gatemole/build/obligations.ir.json`
+- `.gatemole/build/verification-plan.json`
 
 The repo-level compiler output structs live in
 [`internal/vouch/compile.go`](../internal/vouch/compile.go).
@@ -147,18 +147,18 @@ Manifest-backed artifacts are attached with:
 
 ```sh
 vouch --repo DIR contracts manifest attach-artifact \
-  --manifest .vouch/manifests/run-123.json \
+  --manifest .gatemole/manifests/run-123.json \
   --id pytest \
   --kind test_coverage \
-  --path .vouch/artifacts/pytest.xml \
+  --path .gatemole/artifacts/pytest.xml \
   --exit-code 0 \
-  --out .vouch/manifests/run-123.json
+  --out .gatemole/manifests/run-123.json
 ```
 
 The simpler JUnit path is:
 
 ```sh
-vouch --repo DIR contracts evidence import junit .vouch/artifacts/pytest.xml
+vouch --repo DIR contracts evidence import junit .gatemole/artifacts/pytest.xml
 vouch --repo DIR contracts gate
 ```
 

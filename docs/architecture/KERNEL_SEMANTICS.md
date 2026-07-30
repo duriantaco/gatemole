@@ -42,12 +42,12 @@ Rules:
 
 ## Runtime identity and preflight
 
-`vouch runtime init` creates an ignored `.vouch/runtime.json` containing one
+`vouch runtime init` creates an ignored `.gatemole/runtime.json` containing one
 random, opaque Runtime ID. The file identifies this local repository Runtime;
 it is not a user identity, signing key or fleet enrollment credential.
 
 Before listening, `vouchd` loads that identity, acquires the repository-local
-same-host, same-UID `.vouch/runtime.lock`, validates and canonicalizes the
+same-host, same-UID `.gatemole/runtime.lock`, validates and canonicalizes the
 transaction staging root, then acquires the separate ledger lock and opens
 SQLite with the expected Runtime ID and enforcement profile. Existing metadata
 is inspected before schema initialization. A conflicting Runtime ID,
@@ -72,7 +72,7 @@ the product client also sends the header when configured. Legacy v0 replay is
 the narrow no-new-authority compatibility exception described below.
 
 The product `run`, transaction, low-level `kernel` and `action` CLI surfaces
-load `.vouch/runtime.json` and keep the resulting client binding for all calls,
+load `.gatemole/runtime.json` and keep the resulting client binding for all calls,
 including long-running agent and verifier operations. Direct
 configured-daemon clients must set the same exact header. The header is
 correlation metadata, not authentication or a secret.

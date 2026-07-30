@@ -143,7 +143,7 @@ func TestCreateRejectsWorkspaceInsideSourceRepository(t *testing.T) {
 	_, err = manager.Create(
 		context.Background(),
 		repository,
-		filepath.Join(repository, ".vouch", "transactions"),
+		filepath.Join(repository, ".gatemole", "transactions"),
 		"tx:inside",
 		"HEAD",
 		time.Now(),

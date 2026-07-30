@@ -20,11 +20,11 @@ func writeResult(repo string, result Result) ([]string, error) {
 		}
 		wrote = append(wrote, draft.IntentPath)
 	}
-	reportPath := filepath.Join(repo, ".vouch", "build", "bootstrap-report.json")
+	reportPath := filepath.Join(repo, ".gatemole", "build", "bootstrap-report.json")
 	if err := writeJSON(reportPath, result); err != nil {
 		return nil, err
 	}
-	wrote = append(wrote, filepath.ToSlash(filepath.Join(".vouch", "build", "bootstrap-report.json")))
+	wrote = append(wrote, filepath.ToSlash(filepath.Join(".gatemole", "build", "bootstrap-report.json")))
 	return wrote, nil
 }
 

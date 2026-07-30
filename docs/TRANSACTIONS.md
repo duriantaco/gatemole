@@ -51,10 +51,10 @@ vouch --repo /path/to/service runtime init \
 ```
 
 Initialization writes the shareable agent profile and creates
-`.vouch/runtime.json`, a random identity for this local Runtime instance. Vouch
+`.gatemole/runtime.json`, a random identity for this local Runtime instance. Vouch
 adds ignore rules for the identity, SQLite/WAL state, locks and socket. Commit
-`.vouch/agent-profiles.json` and `.vouch/.gitignore`; do not commit
-`.vouch/runtime.json`.
+`.gatemole/agent-profiles.json` and `.gatemole/.gitignore`; do not commit
+`.gatemole/runtime.json`.
 
 Start the local daemon. The convenience command keeps its transaction root
 outside the repository:
@@ -99,10 +99,10 @@ vouch --repo /path/to/service tx events \
   --namespace payments --id <transaction-id>
 ```
 
-`vouch runtime init` writes `.vouch/agent-profiles.json` using the
+`vouch runtime init` writes `.gatemole/agent-profiles.json` using the
 [public profile schema](../schemas/gatemole.agent_profiles.v0.schema.json). The
 [checked-in fixture](../schemas/fixtures/runtime/valid/agent_profiles.json)
-shows the complete shareable document shape. `.vouch/runtime.json` is separate
+shows the complete shareable document shape. `.gatemole/runtime.json` is separate
 local control state, not part of that schema.
 
 Every primary `vouch run` persists a strict `gatemole.agent_task.v0` resource. It
@@ -135,7 +135,7 @@ Preflight and admission v1 carry the expected Runtime ID in validated request
 bodies. Every later lifecycle mutation and read against a configured daemon
 must carry the same ID in the `Vouch-Runtime-ID` header. The product `run`,
 transaction, low-level `kernel` and `action` commands load
-`.vouch/runtime.json` and use a bound client for every call, including
+`.gatemole/runtime.json` and use a bound client for every call, including
 long-running agent and verifier operations. Health and readiness are the
 deliberate unbound endpoints. The header prevents accidental cross-Runtime
 wiring; it is not an authentication secret.
@@ -321,19 +321,19 @@ Deep connectors will replace path/name heuristics with typed semantic facts.
   transaction, so a crash cannot expose a half-recorded ledger.
 - The API does not accept arbitrary client-authored effect events; the daemon
   re-inspects Git and authors authoritative effects.
-- The mediated filesystem API permanently denies `.git` and `.vouch` path
+- The mediated filesystem API permanently denies `.git` and `.gatemole` path
   components, independent of any capability grant.
 
 The development profile is still a local, same-user boundary. An agent with
 direct access to the source repository, daemon socket, credentials, or
 unrestricted network can bypass it.
 
-The repository-local `.vouch/runtime.lock` rejects two daemons under the same
+The repository-local `.gatemole/runtime.lock` rejects two daemons under the same
 OS UID for the same repository even if environment, socket or ledger paths
 differ; a separate ledger lock prevents one database from being opened by two
 daemons. These are not cryptographic same-UID daemon attestation or a
 cross-host identity system, so use a dedicated OS account for the hardened
-boundary. A normal Git clone receives a new ignored `.vouch/runtime.json`;
+boundary. A normal Git clone receives a new ignored `.gatemole/runtime.json`;
 deliberately copying the complete ignored identity and ledger state to another
 repository deliberately clones the trust target. Fleet enrollment,
 attestation and revocation remain Control Plane work.

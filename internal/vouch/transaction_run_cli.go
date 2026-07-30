@@ -146,7 +146,7 @@ func transactionRunNamed(
 	runtimeClass := flags.String("runtime", "oci", "execution runtime: oci or host")
 	image := flags.String("image", "", "digest-pinned OCI image")
 	agent := flags.String("agent", "", "named agent profile from the strict repo profile document")
-	agentProfiles := flags.String("agent-profiles", "", "agent profile document (default .vouch/agent-profiles.json)")
+	agentProfiles := flags.String("agent-profiles", "", "agent profile document (default .gatemole/agent-profiles.json)")
 	unsafeHost := flags.Bool("unsafe-host", false, "acknowledge that host execution is not a security boundary")
 	requiredEnforcementProfile := flags.String(
 		"require-enforcement-profile",

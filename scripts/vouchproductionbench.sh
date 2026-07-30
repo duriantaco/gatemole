@@ -22,7 +22,7 @@ esac
 
 bench_root=$(mktemp -d "${TMPDIR:-/tmp}/vouch-production-bench.XXXXXX")
 bench_root=$(cd "$bench_root" && pwd -P)
-touch "$bench_root/.vouch-production-bench-root"
+touch "$bench_root/.gatemole-production-bench-root"
 repo="$bench_root/repo"
 socket="$bench_root/vouchd.sock"
 database="$bench_root/kernel.db"
@@ -46,7 +46,7 @@ cleanup() {
   fi
   docker image rm "$broker_image_tag" >/dev/null 2>&1 || true
   if [ "$keep_bench" = 0 ] &&
-    [ -f "$bench_root/.vouch-production-bench-root" ]; then
+    [ -f "$bench_root/.gatemole-production-bench-root" ]; then
     case "${bench_root##*/}" in
       vouch-production-bench.*)
         rm -rf -- "$bench_root"
@@ -72,7 +72,7 @@ git -C "$repo" branch release/production-bench HEAD
 GOCACHE="$bench_root/go-build" go build -o "$bin_dir/vouch" ./cmd/vouch
 GOCACHE="$bench_root/go-build" go build -o "$bin_dir/vouchd" ./cmd/vouchd
 "$bin_dir/vouch" --repo "$repo" runtime init >/dev/null
-runtime_id=$(jq -r '.runtime_id' "$repo/.vouch/runtime.json")
+runtime_id=$(jq -r '.runtime_id' "$repo/.gatemole/runtime.json")
 broker_arch=$(docker version --format '{{.Server.Arch}}')
 CGO_ENABLED=0 GOOS=linux GOARCH="$broker_arch" \
   GOCACHE="$bench_root/go-build-linux" \
@@ -368,7 +368,7 @@ jq -e --arg issuer "$identity_issuer" '
   any(.[]; .actor.issuer == $issuer and
     (.actor.claims_digest | test("^sha256:[a-f0-9]{64}$")))
 ' "$bench_root/events.json" >/dev/null
-if grep -R -E -q 'sensitive benchmark prompt|provider-secret-must-never-reach-agent' "$transactions/.vouch-model-evidence"; then
+if grep -R -E -q 'sensitive benchmark prompt|provider-secret-must-never-reach-agent' "$transactions/.gatemole-model-evidence"; then
   echo "model receipt ledger leaked a prompt or provider secret" >&2
   exit 1
 fi

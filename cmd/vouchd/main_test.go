@@ -52,12 +52,12 @@ func TestDaemonConfigDefaultsStayWithRepositoryOutsideWorkingDirectory(t *testin
 	if configA.RepositoryRoot != canonicalA {
 		t.Fatalf("repository root = %q, want %q", configA.RepositoryRoot, canonicalA)
 	}
-	assertPathEqual(t, "database", configA.DatabasePath, filepath.Join(canonicalA, ".vouch", "kernel.db"))
-	assertPathEqual(t, "socket", configA.SocketPath, filepath.Join(canonicalA, ".vouch", "vouchd.sock"))
-	if configA.DatabasePath == filepath.Join(workingDirectory, ".vouch", "kernel.db") {
+	assertPathEqual(t, "database", configA.DatabasePath, filepath.Join(canonicalA, ".gatemole", "kernel.db"))
+	assertPathEqual(t, "socket", configA.SocketPath, filepath.Join(canonicalA, ".gatemole", "vouchd.sock"))
+	if configA.DatabasePath == filepath.Join(workingDirectory, ".gatemole", "kernel.db") {
 		t.Fatalf("database path was redirected to caller working directory: %q", configA.DatabasePath)
 	}
-	if configA.SocketPath == filepath.Join(workingDirectory, ".vouch", "vouchd.sock") {
+	if configA.SocketPath == filepath.Join(workingDirectory, ".gatemole", "vouchd.sock") {
 		t.Fatalf("socket path was redirected to caller working directory: %q", configA.SocketPath)
 	}
 

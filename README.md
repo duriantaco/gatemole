@@ -156,10 +156,16 @@ vouch --repo /path/to/service runtime init \
 
 `--source-digest` identifies the source or build input used for that image; it
 is deliberately not invented by Vouch. Initialization also creates
-`.vouch/runtime.json`, a random local Runtime instance identity, and rules that
+`.gatemole/runtime.json`, a random local Runtime instance identity, and rules that
 keep it, SQLite/WAL files, locks and the daemon socket out of Git. Commit
-`.vouch/agent-profiles.json` and `.vouch/.gitignore`; do not commit
-`.vouch/runtime.json`.
+`.gatemole/agent-profiles.json` and `.gatemole/.gitignore`; do not commit
+`.gatemole/runtime.json`.
+
+This is a hard pre-1.0 state cutover. If a repository still contains `.vouch`,
+Gatemole fails before writing any new state; it never merges, renames, or
+rehashes old configuration, ledgers, evidence, or signatures automatically.
+Archive or remove the legacy directory deliberately, then initialize
+`.gatemole`.
 
 Start the repository-local development daemon in one terminal:
 
@@ -213,7 +219,7 @@ exec /opt/my-agent --task-file "$VOUCH_TASK_PATH"
 ```
 
 `vouch runtime init` writes the strict, repository-owned
-`.vouch/agent-profiles.json` and local-only `.vouch/runtime.json`. Select the
+`.gatemole/agent-profiles.json` and local-only `.gatemole/runtime.json`. Select the
 agent profile by name:
 
 ```sh
@@ -234,7 +240,7 @@ that Runtime ID and the daemon's actual enforcement profile into the durable
 transaction. Daemon-owned OCI agents receive the task envelope read-only at
 `/vouch/task.json`.
 
-The product CLI loads `.vouch/runtime.json` and binds every daemon call from
+The product CLI loads `.gatemole/runtime.json` and binds every daemon call from
 the `run`, transaction, low-level `kernel` and `action` surfaces to that ID.
 Preflight and current task admission carry the expected ID in their validated
 bodies; lifecycle mutations, reads and long-running agent/verifier operations
@@ -352,7 +358,7 @@ versioned release packaging is also still pending. The exact host, storage,
 identity, quota and acceptance requirements are documented in
 [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
-The Runtime identity, repository-local `.vouch/runtime.lock`, and ledger lock
+The Runtime identity, repository-local `.gatemole/runtime.lock`, and ledger lock
 prevent an accidental same-host, same-UID daemon or ledger mix-up even when
 environment or database paths differ. They are not fleet enrollment,
 cryptographic same-UID daemon attestation or cross-host attestation. Use a
@@ -375,9 +381,9 @@ module:
 ```sh
 vouch --repo /path/to/service contracts try --write
 vouch --repo /path/to/service contracts compile
-pytest --junitxml .vouch/artifacts/pytest.xml
+pytest --junitxml .gatemole/artifacts/pytest.xml
 vouch --repo /path/to/service contracts evidence import junit \
-  .vouch/artifacts/pytest.xml
+  .gatemole/artifacts/pytest.xml
 vouch --repo /path/to/service contracts gate
 ```
 

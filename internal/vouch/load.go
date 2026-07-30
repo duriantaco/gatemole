@@ -29,11 +29,11 @@ func LoadJSON[T any](path string) (T, error) {
 }
 
 func DefaultManifest(repo string) string {
-	return filepath.Join(repo, ".vouch", "change-manifest.json")
+	return filepath.Join(repo, ".gatemole", "change-manifest.json")
 }
 
 func LoadSpecs(repo string) (map[string]Spec, error) {
-	specDir := filepath.Join(repo, ".vouch", "specs")
+	specDir := filepath.Join(repo, ".gatemole", "specs")
 	paths, err := filepath.Glob(filepath.Join(specDir, "*.json"))
 	if err != nil {
 		return nil, err

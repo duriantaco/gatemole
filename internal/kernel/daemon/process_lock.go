@@ -40,7 +40,7 @@ func acquireRuntimeLock(
 			"vouchd: Runtime lock requires an absolute repository root",
 		)
 	}
-	directory := filepath.Join(repositoryRoot, ".vouch")
+	directory := filepath.Join(repositoryRoot, ".gatemole")
 	info, err := os.Lstat(directory)
 	if err != nil {
 		return nil, fmt.Errorf(

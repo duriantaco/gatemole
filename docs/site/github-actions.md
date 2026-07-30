@@ -61,9 +61,9 @@ permissions:
   contents: read
 
 env:
-  VOUCH_MANIFEST: .vouch/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
-  VOUCH_GATE_RESULT: .vouch/build/gate-result.json
-  VOUCH_JUNIT: .vouch/artifacts/pytest.xml
+  VOUCH_MANIFEST: .gatemole/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
+  VOUCH_GATE_RESULT: .gatemole/build/gate-result.json
+  VOUCH_JUNIT: .gatemole/artifacts/pytest.xml
 
 jobs:
   vouch:
@@ -105,7 +105,7 @@ jobs:
       - name: Run tests for evidence
         id: tests
         run: |
-          mkdir -p .vouch/artifacts
+          mkdir -p .gatemole/artifacts
           set +e
           pytest --junitxml "$VOUCH_JUNIT"
           exit_code=$?
@@ -134,9 +134,9 @@ jobs:
         with:
           name: vouch-shadow-pr-${{ github.event.pull_request.number }}
           path: |
-            .vouch/manifests/
-            .vouch/build/
-            .vouch/artifacts/
+            .gatemole/manifests/
+            .gatemole/build/
+            .gatemole/artifacts/
           if-no-files-found: ignore
 ```
 
@@ -146,9 +146,9 @@ the team switches to enforced mode.
 
 Upload these paths for every shadow run:
 
-- `.vouch/manifests/`: PR manifest and attached artifact references.
-- `.vouch/build/`: compiler outputs and `gate-result.json`.
-- `.vouch/artifacts/`: raw evidence such as JUnit XML or SARIF.
+- `.gatemole/manifests/`: PR manifest and attached artifact references.
+- `.gatemole/build/`: compiler outputs and `gate-result.json`.
+- `.gatemole/artifacts/`: raw evidence such as JUnit XML or SARIF.
 
 ## Code References
 

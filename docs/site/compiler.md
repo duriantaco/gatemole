@@ -13,7 +13,7 @@ the current runtime is also incomplete.
 
 ## Source Language
 
-Source files live under `.vouch/intents/*.yaml`. The parser accepts the keys
+Source files live under `.gatemole/intents/*.yaml`. The parser accepts the keys
 implemented in
 [`internal/vouch/intent.go`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/intent.go):
 `version`, `feature`, `owner`, `owned_paths`, `risk`, `goal`, `behavior`,
@@ -51,19 +51,19 @@ rollback:
 | Build IR | `vouch contracts ir build` | [`IRFromSpec`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/ir.go) | `gatemole.ir.v0` obligations |
 | Build plan | `vouch contracts plan build` | [`VerificationPlanFromIR`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/plan.go) | `gatemole.plan.v0` verification plan |
 | Build artifacts | `vouch contracts artifacts build` | [`BuildArtifacts`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/artifacts.go) | verifier packets, test obligations, release-policy artifact |
-| Compile repo | `vouch contracts compile` | [`CompileRepo`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/compile.go) | `.vouch/build/` compiler outputs |
+| Compile repo | `vouch contracts compile` | [`CompileRepo`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/compile.go) | `.gatemole/build/` compiler outputs |
 
 The CLI dispatcher for these commands is
 [`Main`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/cli.go).
 
 ## Repo Compile Output
 
-`vouch contracts compile` reads `.vouch/intents/*.yaml` and writes:
+`vouch contracts compile` reads `.gatemole/intents/*.yaml` and writes:
 
-- `.vouch/build/ast/*.ast.json`
-- `.vouch/specs/*.spec.json`
-- `.vouch/build/obligations.ir.json`
-- `.vouch/build/verification-plan.json`
+- `.gatemole/build/ast/*.ast.json`
+- `.gatemole/specs/*.spec.json`
+- `.gatemole/build/obligations.ir.json`
+- `.gatemole/build/verification-plan.json`
 
 ## Obligation IR
 

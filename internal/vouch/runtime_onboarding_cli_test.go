@@ -125,7 +125,7 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 	}
 
 	mergeRepo := runtimeGitRepoForTest(t)
-	if err := os.Mkdir(filepath.Join(mergeRepo, ".vouch"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(mergeRepo, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	mergeIgnore := filepath.Join(mergeRepo, runtimeIgnoreFile)
@@ -162,7 +162,7 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 
 func TestRuntimeInitIdentityOnlyPreservesExistingProfiles(t *testing.T) {
 	repo := runtimeGitRepoForTest(t)
-	if err := os.Mkdir(filepath.Join(repo, ".vouch"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(repo, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	first := validAgentProfileForTest()
@@ -267,7 +267,7 @@ func TestRuntimeInitRejectsPartialProfileRegistration(t *testing.T) {
 			stderr.String(),
 		)
 	}
-	if _, err := os.Lstat(filepath.Join(repo, ".vouch")); !errors.Is(
+	if _, err := os.Lstat(filepath.Join(repo, ".gatemole")); !errors.Is(
 		err,
 		os.ErrNotExist,
 	) {
@@ -284,7 +284,7 @@ func TestRuntimeInitPreservesContractsInitAndRefusesSymlink(t *testing.T) {
 	); code != 0 {
 		t.Fatalf("legacy Contracts init failed: code=%d stderr=%s", code, stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".vouch", "config.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(repo, ".gatemole", "config.json")); err != nil {
 		t.Fatalf("legacy Contracts config is missing: %v", err)
 	}
 
@@ -312,7 +312,7 @@ func TestRuntimeInitRejectsUnsafeOrMalformedControlStateBeforeWrites(
 ) {
 	t.Run("group-writable directory", func(t *testing.T) {
 		repo := runtimeGitRepoForTest(t)
-		directory := filepath.Join(repo, ".vouch")
+		directory := filepath.Join(repo, ".gatemole")
 		if err := os.Mkdir(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -345,7 +345,7 @@ func TestRuntimeInitRejectsUnsafeOrMalformedControlStateBeforeWrites(
 
 	t.Run("malformed existing identity", func(t *testing.T) {
 		repo := runtimeGitRepoForTest(t)
-		directory := filepath.Join(repo, ".vouch")
+		directory := filepath.Join(repo, ".gatemole")
 		if err := os.Mkdir(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -565,7 +565,7 @@ func TestRuntimeDoctorUsesDaemonPreflightAsAuthority(t *testing.T) {
 	identity := initializeRuntimeIdentityForDoctorTest(t, repo)
 	profile := validAgentProfileForTest()
 	profilesPath := writeAgentProfilesForTest(t, repo, profile)
-	socketPath := filepath.Join(repo, ".vouch", "vouchd.sock")
+	socketPath := filepath.Join(repo, ".gatemole", "vouchd.sock")
 
 	preflightCalls := 0
 	probes := runtimeDoctorProbes{
@@ -662,7 +662,7 @@ func TestRuntimeDoctorClassifiesProfileRejectionBeforeEngine(
 ) {
 	repo := runtimeGitRepoForTest(t)
 	identity := initializeRuntimeIdentityForDoctorTest(t, repo)
-	socketPath := filepath.Join(repo, ".vouch", "vouchd.sock")
+	socketPath := filepath.Join(repo, ".gatemole", "vouchd.sock")
 	probes := runtimeDoctorProbes{
 		gitRoot: func(context.Context, string) (string, error) {
 			return repo, nil
@@ -730,7 +730,7 @@ func TestRuntimeInitAndDoctorRejectTrackedLocalState(t *testing.T) {
 		t.Fatalf("runtime init code=%d stderr=%s", code, stderr.String())
 	}
 
-	trackedPath := filepath.Join(repo, ".vouch", "kernel.db")
+	trackedPath := filepath.Join(repo, ".gatemole", "kernel.db")
 	if err := os.WriteFile(trackedPath, []byte("not-a-ledger"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -741,7 +741,7 @@ func TestRuntimeInitAndDoctorRejectTrackedLocalState(t *testing.T) {
 		"add",
 		"--force",
 		"--",
-		".vouch/kernel.db",
+		".gatemole/kernel.db",
 	)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("track local Runtime state: %v: %s", err, output)
@@ -875,7 +875,7 @@ func initializeRuntimeIdentityForDoctorTest(
 	repo string,
 ) runtimeidentity.Identity {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Join(repo, ".vouch"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(repo, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(

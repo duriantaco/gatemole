@@ -264,7 +264,7 @@ func writeFile(root *os.Root, relative string, data []byte) (Result, error) {
 	if _, err := rand.Read(random); err != nil {
 		return Result{}, fmt.Errorf("generate temporary file name: %w", err)
 	}
-	temporary := path.Join(directory, ".vouch-write-"+hex.EncodeToString(random))
+	temporary := path.Join(directory, ".gatemole-write-"+hex.EncodeToString(random))
 	temporary = filepath.FromSlash(temporary)
 	file, err := root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

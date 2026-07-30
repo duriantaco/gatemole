@@ -354,7 +354,7 @@ func (manager *Manager) preflightWorktree(
 	}
 	indexDirectory, err := privateTemporaryDirectory(
 		workspace,
-		".vouch-gitstage-preflight-index-",
+		".gatemole-gitstage-preflight-index-",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create private Git preflight index directory: %w", err)
@@ -458,7 +458,7 @@ func (manager *Manager) materializeTree(
 	workspace Workspace,
 	changes []change,
 ) (treeRevision string, returnErr error) {
-	indexDirectory, err := privateTemporaryDirectory(workspace, ".vouch-gitstage-index-")
+	indexDirectory, err := privateTemporaryDirectory(workspace, ".gatemole-gitstage-index-")
 	if err != nil {
 		return "", fmt.Errorf("create private Git index directory: %w", err)
 	}

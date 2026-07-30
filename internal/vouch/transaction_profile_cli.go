@@ -18,7 +18,7 @@ import (
 
 const (
 	agentProfilesVersion  = "gatemole.agent_profiles.v0"
-	defaultAgentProfiles  = ".vouch/agent-profiles.json"
+	defaultAgentProfiles  = ".gatemole/agent-profiles.json"
 	maxAgentProfilesBytes = 1 << 20
 	maxAgentProfiles      = 128
 )

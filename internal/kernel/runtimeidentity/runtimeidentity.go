@@ -24,9 +24,15 @@ import (
 const (
 	// IdentityVersion identifies the strict local Runtime identity document.
 	IdentityVersion = "gatemole.runtime_identity.v0"
+	// ControlDirectory is the only supported repository-local control-state
+	// namespace. Legacy Vouch state is deliberately not read or rewritten.
+	ControlDirectory = ".gatemole"
+	// LegacyControlDirectory remains reserved so stale Vouch state cannot be
+	// mistaken for an ordinary agent-writable directory.
+	LegacyControlDirectory = ".vouch"
 	// IdentityRelativePath is repository-relative and must never be resolved
 	// against an agent-controlled working directory.
-	IdentityRelativePath = ".vouch/runtime.json"
+	IdentityRelativePath = ControlDirectory + "/runtime.json"
 	// HTTPHeader carries a client's expected Runtime identity on requests that
 	// do not otherwise have a versioned Runtime binding in their body.
 	HTTPHeader = "Vouch-Runtime-ID"
@@ -80,6 +86,9 @@ func createOrLoad(
 ) (Identity, bool, error) {
 	root, err := resolveRepository(ctx, repositoryRoot)
 	if err != nil {
+		return Identity{}, false, err
+	}
+	if err := RejectLegacyControlState(root); err != nil {
 		return Identity{}, false, err
 	}
 	if random == nil {
@@ -164,6 +173,9 @@ func Load(ctx context.Context, repositoryRoot string) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
+	if err := RejectLegacyControlState(root); err != nil {
+		return Identity{}, err
+	}
 	if err := validateIdentityDirectory(root); err != nil {
 		return Identity{}, err
 	}
@@ -175,7 +187,7 @@ func Load(ctx context.Context, repositoryRoot string) (Identity, error) {
 	))
 }
 
-// EnsurePrivateDirectory creates or validates the repository-local .vouch
+// EnsurePrivateDirectory creates or validates the repository-local .gatemole
 // directory before onboarding writes any profile or ignore file into it.
 func EnsurePrivateDirectory(
 	ctx context.Context,
@@ -185,7 +197,33 @@ func EnsurePrivateDirectory(
 	if err != nil {
 		return err
 	}
+	if err := RejectLegacyControlState(root); err != nil {
+		return err
+	}
 	return ensureIdentityDirectory(root)
+}
+
+// RejectLegacyControlState fails closed when pre-cutover Vouch state exists.
+// Gatemole cannot safely infer whether those bytes are configuration, mutable
+// Runtime state, or signed evidence, so migration must be an explicit operator
+// decision outside the running product.
+func RejectLegacyControlState(repositoryRoot string) error {
+	if strings.TrimSpace(repositoryRoot) == "" {
+		return errors.New("repository root is required")
+	}
+	legacyPath := filepath.Join(repositoryRoot, LegacyControlDirectory)
+	_, err := os.Lstat(legacyPath)
+	switch {
+	case err == nil:
+		return fmt.Errorf(
+			"legacy Vouch control state exists at %s; Gatemole will not read or rewrite .vouch automatically; archive or remove it, then initialize .gatemole",
+			legacyPath,
+		)
+	case errors.Is(err, os.ErrNotExist):
+		return nil
+	default:
+		return fmt.Errorf("inspect legacy Vouch control state at %s: %w", legacyPath, err)
+	}
 }
 
 func loadResolved(path string) (Identity, error) {
@@ -256,12 +294,12 @@ func validateIdentityFileInfo(info os.FileInfo) error {
 }
 
 func ensureIdentityDirectory(root string) error {
-	path := filepath.Join(root, ".vouch")
+	path := filepath.Join(root, ControlDirectory)
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.Mkdir(path, 0o700); err != nil &&
 			!errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("create .vouch directory: %w", err)
+			return fmt.Errorf("create %s directory: %w", ControlDirectory, err)
 		}
 		info, err = os.Lstat(path)
 	}
@@ -269,25 +307,25 @@ func ensureIdentityDirectory(root string) error {
 }
 
 func validateIdentityDirectory(root string) error {
-	info, err := os.Lstat(filepath.Join(root, ".vouch"))
+	info, err := os.Lstat(filepath.Join(root, ControlDirectory))
 	return validateIdentityDirectoryInfo(info, err)
 }
 
 func validateIdentityDirectoryInfo(info os.FileInfo, err error) error {
 	if err != nil {
-		return fmt.Errorf("inspect .vouch directory: %w", err)
+		return fmt.Errorf("inspect %s directory: %w", ControlDirectory, err)
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New(".vouch must be a real directory, not a symlink")
+		return fmt.Errorf("%s must be a real directory, not a symlink", ControlDirectory)
 	}
 	if !ownedByCurrentUser(info) {
-		return errors.New(".vouch must be owned by the current user")
+		return fmt.Errorf("%s must be owned by the current user", ControlDirectory)
 	}
 	if info.Mode().Perm()&0o022 != 0 {
-		return errors.New(".vouch must not be group- or world-writable")
+		return fmt.Errorf("%s must not be group- or world-writable", ControlDirectory)
 	}
 	if info.Mode().Perm()&0o300 != 0o300 {
-		return errors.New(".vouch must be writable and searchable by the current user")
+		return fmt.Errorf("%s must be writable and searchable by the current user", ControlDirectory)
 	}
 	return nil
 }

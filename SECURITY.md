@@ -65,7 +65,8 @@ High-priority reports include:
 - A verifier receiving bytes other than the exact frozen Git tree, accepting a
   gitlink/submodule, or exceeding tree scan/materialization bounds.
 - Production acceptance of client-supervised execution/verification mutation,
-  or mediated filesystem access to `.git` or `.vouch` control state.
+  or mediated filesystem access to `.git`, `.gatemole`, or the permanently
+  reserved legacy `.vouch` control-state namespace.
 
 Vouch's documented deployment limits remain relevant when assessing a report.
 For example, direct host access granted outside Vouch is not considered a

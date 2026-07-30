@@ -19,7 +19,7 @@ func TestContractsNamespaceForwardsToExistingModuleCommands(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("contracts init code=%d stderr=%s", code, stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".vouch", "config.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(repo, ".gatemole", "config.json")); err != nil {
 		t.Fatalf("contracts namespace did not forward init: %v", err)
 	}
 

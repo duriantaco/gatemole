@@ -6,10 +6,13 @@
 /.tmp/
 /_site/
 
-# Vouch output when dogfooding this repo itself
-/.vouch/build/
-/.vouch/artifacts/
-/.vouch/manifests/
+# Gatemole output when dogfooding this repo itself
+/.gatemole/build/
+/.gatemole/artifacts/
+/.gatemole/manifests/
+
+# Never stage pre-cutover Vouch control state.
+/.vouch/
 
 # Go build/test output
 /bin/

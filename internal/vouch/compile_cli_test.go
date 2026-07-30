@@ -30,22 +30,22 @@ func TestCompileCommandBuildsRepoCompilerPipeline(t *testing.T) {
 		"Pipeline: repo signals -> contracts -> obligation IR -> verification plan",
 		"HIGH auth.password_reset",
 		"required_test.token_expiry",
-		".vouch/specs/auth.password_reset.spec.json",
-		".vouch/build/obligations.ir.json",
-		".vouch/build/verification-plan.json",
+		".gatemole/specs/auth.password_reset.spec.json",
+		".gatemole/build/obligations.ir.json",
+		".gatemole/build/verification-plan.json",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected compile output to contain %q, got:\n%s", want, out)
 		}
 	}
-	if !fileExists(filepath.Join(repo, ".vouch", "build", "ast", "auth.password_reset.ast.json")) {
+	if !fileExists(filepath.Join(repo, ".gatemole", "build", "ast", "auth.password_reset.ast.json")) {
 		t.Fatal("compile did not write AST artifact")
 	}
-	spec := mustLoadSpecFile(t, filepath.Join(repo, ".vouch", "specs", "auth.password_reset.spec.json"))
+	spec := mustLoadSpecFile(t, filepath.Join(repo, ".gatemole", "specs", "auth.password_reset.spec.json"))
 	if spec.ID != "auth.password_reset" || spec.Risk != RiskHigh {
 		t.Fatalf("unexpected compiled spec: %#v", spec)
 	}
-	ir := mustLoadIRBundle(t, filepath.Join(repo, ".vouch", "build", "obligations.ir.json"))
+	ir := mustLoadIRBundle(t, filepath.Join(repo, ".gatemole", "build", "obligations.ir.json"))
 	requiredTest := findBundleObligation(ir, "auth.password_reset.required_test.token_expiry")
 	if requiredTest == nil {
 		t.Fatalf("missing compiled required-test obligation: %#v", ir.Obligations)
@@ -53,7 +53,7 @@ func TestCompileCommandBuildsRepoCompilerPipeline(t *testing.T) {
 	if requiredTest.Generated == nil || requiredTest.Generated.By != "gatemole.bootstrap" {
 		t.Fatalf("generated provenance was not preserved: %#v", requiredTest)
 	}
-	plan := mustLoadPlanBundle(t, filepath.Join(repo, ".vouch", "build", "verification-plan.json"))
+	plan := mustLoadPlanBundle(t, filepath.Join(repo, ".gatemole", "build", "verification-plan.json"))
 	if len(plan.Plans) != 1 || plan.Plans[0].Feature != "auth.password_reset" {
 		t.Fatalf("unexpected verification plan bundle: %#v", plan)
 	}
@@ -82,7 +82,7 @@ func TestCompileEmitIRPrintsAggregateIR(t *testing.T) {
 
 func TestCompileRequiresVersionedIntents(t *testing.T) {
 	repo := initializedRepo(t)
-	writeText(t, filepath.Join(repo, ".vouch", "intents", "legacy.yaml"), `feature: legacy.service
+	writeText(t, filepath.Join(repo, ".gatemole", "intents", "legacy.yaml"), `feature: legacy.service
 owner: platform
 owned_paths:
   - src/legacy/**
@@ -107,7 +107,7 @@ rollback:
 	if !strings.Contains(stderr.String(), "compile.required_version") {
 		t.Fatalf("expected missing version diagnostic, got stderr:\n%s", stderr.String())
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "specs", "legacy.service.spec.json")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "specs", "legacy.service.spec.json")) {
 		t.Fatal("compile wrote spec despite missing version")
 	}
 }

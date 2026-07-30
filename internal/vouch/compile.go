@@ -81,14 +81,14 @@ func CompileRepo(repo string) (RepoCompileOutput, error) {
 	}
 
 	if _, _, err := LoadReleasePolicy(absRepo, ""); err != nil {
-		output.Result.Diagnostics = append(output.Result.Diagnostics, diagnostic("error", "compile.policy_missing", err.Error(), ".vouch/policy/release-policy.json", SourceSpan{}))
+		output.Result.Diagnostics = append(output.Result.Diagnostics, diagnostic("error", "compile.policy_missing", err.Error(), ".gatemole/policy/release-policy.json", SourceSpan{}))
 	}
 	intentPaths, err := repoIntentFiles(absRepo)
 	if err != nil {
 		return output, err
 	}
 	if len(intentPaths) == 0 {
-		output.Result.Diagnostics = append(output.Result.Diagnostics, diagnostic("error", "compile.no_intents", "no intent YAML files found under .vouch/intents", ".vouch/intents", SourceSpan{}))
+		output.Result.Diagnostics = append(output.Result.Diagnostics, diagnostic("error", "compile.no_intents", "no intent YAML files found under .gatemole/intents", ".gatemole/intents", SourceSpan{}))
 	}
 	if HasErrorDiagnostics(output.Result.Diagnostics) {
 		return output, DiagnosticError{Diagnostics: output.Result.Diagnostics}
@@ -181,8 +181,8 @@ func compileIntentForRepo(repo string, intentPath string, generated generatedInd
 		},
 	})
 	relIntent := repoRelativePath(repo, intentPath)
-	astPath := filepath.ToSlash(filepath.Join(".vouch", "build", "ast", spec.ID+".ast.json"))
-	specPath := filepath.ToSlash(filepath.Join(".vouch", "specs", spec.ID+".spec.json"))
+	astPath := filepath.ToSlash(filepath.Join(".gatemole", "build", "ast", spec.ID+".ast.json"))
+	specPath := filepath.ToSlash(filepath.Join(".gatemole", "specs", spec.ID+".spec.json"))
 	return &compiledIntent{
 		AST:  ast,
 		Spec: spec,
@@ -263,8 +263,8 @@ func writeRepoCompileOutput(repo string, output *RepoCompileOutput) error {
 		}
 		output.Result.Wrote = append(output.Result.Wrote, component.ASTPath, component.SpecPath)
 	}
-	irPath := filepath.ToSlash(filepath.Join(".vouch", "build", "obligations.ir.json"))
-	planPath := filepath.ToSlash(filepath.Join(".vouch", "build", "verification-plan.json"))
+	irPath := filepath.ToSlash(filepath.Join(".gatemole", "build", "obligations.ir.json"))
+	planPath := filepath.ToSlash(filepath.Join(".gatemole", "build", "verification-plan.json"))
 	if err := writeJSONFile(filepath.Join(repo, filepath.FromSlash(irPath)), output.IR); err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func RenderCompileResult(result RepoCompileResult) string {
 func repoIntentFiles(repo string) ([]string, error) {
 	var paths []string
 	for _, pattern := range []string{"*.yaml", "*.yml"} {
-		matches, err := filepath.Glob(filepath.Join(repo, ".vouch", "intents", pattern))
+		matches, err := filepath.Glob(filepath.Join(repo, ".gatemole", "intents", pattern))
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +380,7 @@ func loadBootstrapGenerated(repo string) generatedIndex {
 		byID:       map[string]GeneratedInfo{},
 		byKindText: map[string]GeneratedInfo{},
 	}
-	report, err := LoadJSON[bootstrap.Result](filepath.Join(repo, ".vouch", "build", "bootstrap-report.json"))
+	report, err := LoadJSON[bootstrap.Result](filepath.Join(repo, ".gatemole", "build", "bootstrap-report.json"))
 	if err != nil {
 		return index
 	}

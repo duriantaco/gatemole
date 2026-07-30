@@ -37,8 +37,8 @@ RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchkernelbench.XXXXXX")"
 REPO="$RUN_DIR/repo"
 VOUCH="$RUN_DIR/vouch"
 VOUCHD="$RUN_DIR/vouchd"
-SOCKET="$REPO/.vouch/vouchd.sock"
-DATABASE="$REPO/.vouch/kernel.db"
+SOCKET="$REPO/.gatemole/vouchd.sock"
+DATABASE="$REPO/.gatemole/kernel.db"
 DAEMON_PID=""
 
 stop_daemon() {

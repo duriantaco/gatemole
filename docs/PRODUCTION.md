@@ -17,7 +17,7 @@ profile.
 
 The daemon refuses to start unless it has:
 
-- A valid, local-only `.vouch/runtime.json` created for the exact repository
+- A valid, local-only `.gatemole/runtime.json` created for the exact repository
   root by `vouch runtime init`.
 - At least one digest-pinned OCI image in its allowlist.
 - An Ed25519 approval trust document with at least one trusted reviewer.
@@ -55,7 +55,7 @@ daemon cannot establish by itself:
 The production runtime:
 
 - Loads the repository's Runtime ID, acquires the repository-local
-  `.vouch/runtime.lock`, validates the canonical private transaction staging
+  `.gatemole/runtime.lock`, validates the canonical private transaction staging
   root, and opens the Runtime-bound SQLite ledger before creating its Unix
   listener.
 - Binds the exact Runtime ID and `production` enforcement profile to SQLite
@@ -116,7 +116,7 @@ The production runtime:
   results. Production agents and verifiers run through daemon-owned OCI
   endpoints.
 - Permanently denies mediated filesystem reads and writes through any `.git`
-  or `.vouch` path component, regardless of the requested capability.
+  or `.gatemole` path component, regardless of the requested capability.
 - Gives an agent model access only when admission explicitly declares the
   daemon provider, such as `vouch run --model-provider openai`. The
   transaction-specific broker remains a daemon ceiling: the agent receives no
@@ -290,11 +290,17 @@ vouch --repo /srv/vouch/repository runtime init \
   -- /usr/local/bin/agent
 ```
 
-This creates `.vouch/runtime.json` with mode `0600` and writes local-state
+This creates `.gatemole/runtime.json` with mode `0600` and writes local-state
 ignore rules. The identity must remain untracked. Commit the agent profile and
-`.vouch/.gitignore`, not the Runtime identity. A normal deployment from a Git
+`.gatemole/.gitignore`, not the Runtime identity. A normal deployment from a Git
 clone therefore gets a new Runtime ID; do not seed a second independent
 Runtime by copying another deployment's ignored identity or ledger.
+
+Gatemole does not auto-migrate pre-cutover `.vouch` state. If that legacy path
+exists as a directory, file, or symlink, CLI and daemon startup fail before
+creating a ledger or socket. Archive it for incident retention or remove it
+through an explicit operator procedure, then initialize `.gatemole`; never
+copy signed or digest-bound artifacts between namespaces.
 
 Start the production daemon:
 
@@ -342,7 +348,7 @@ The actor ID and kind passed by a mutation command must match the token.
 Approval commands additionally require the `approver` role and a signed
 approver whose issuer exactly matches the OIDC issuer.
 
-The product CLI also loads this repository's `.vouch/runtime.json` and adds its
+The product CLI also loads this repository's `.gatemole/runtime.json` and adds its
 exact ID to requests from the `run`, transaction, low-level `kernel` and
 `action` surfaces, including reads, lifecycle changes and long-running agent
 or verifier calls. Preflight and admission v1 validate the same binding in
@@ -477,7 +483,7 @@ debugging.
 
 Treat the following as one recovery set:
 
-- The local `.vouch/runtime.json` Runtime identity.
+- The local `.gatemole/runtime.json` Runtime identity.
 - SQLite database and its WAL state.
 - Transaction worktree/evidence root.
 - Source Git repository and released refs.
@@ -497,9 +503,9 @@ copy only the SQLite main file while the daemon is running; committed pages may
 still be in the WAL.
 
 Restore the complete set to the same paths and start exactly one daemon.
-Preserving both `.vouch/runtime.json` and its bound ledger restores the same
+Preserving both `.gatemole/runtime.json` and its bound ledger restores the same
 logical Runtime. Never run the original and restored copy concurrently on
-different hosts: `.vouch/runtime.lock` and the ledger lock are same-host and
+different hosts: `.gatemole/runtime.lock` and the ledger lock are same-host and
 same-UID only. Startup verifies every transaction event chain before recovery.
 If an agent execution was active, Vouch removes its deterministic container and
 appends an `interrupted` receipt. A cleanup or ledger-integrity failure
@@ -590,7 +596,7 @@ acceptable:
   adopt an unbound nonempty ledger. Replayed v0 history cannot mutate a run or
   transaction, compile capabilities, execute an action, or yield live
   execution authority. The mediated filesystem API cannot access `.git` or
-  `.vouch` control state.
+  `.gatemole` control state.
 - OCI launch revalidates live admission authority and atomically pins the
   admitted run and transaction heads while recording execution start before
   any workload. Run and transaction execution events are not yet advanced and

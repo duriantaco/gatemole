@@ -426,7 +426,7 @@ func readKernelFile[T any](repo, path string) (T, error) {
 }
 
 func defaultKernelSocket(repo string) string {
-	return filepath.Join(repo, ".vouch", "vouchd.sock")
+	return filepath.Join(repo, ".gatemole", "vouchd.sock")
 }
 
 func kernelEventID(runID string, sequence int64) string {

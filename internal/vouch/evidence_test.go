@@ -23,7 +23,7 @@ func repoRoot(t *testing.T) string {
 func TestBlockedManifestBlocksForMissingEvidence(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".vouch", "manifests", "blocked.json"))
+	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".gatemole", "manifests", "blocked.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestBlockedManifestBlocksForMissingEvidence(t *testing.T) {
 func TestPassingManifestCanaries(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestIntentCompilesToSpecAndIR(t *testing.T) {
 	tmp := t.TempDir()
 	specOut := filepath.Join(tmp, "auth.password_reset.json")
 	irOut := filepath.Join(tmp, "auth.password_reset.ir.json")
-	spec, err := CompileIntentFile(filepath.Join(demo, ".vouch", "intents", "auth.password_reset.yaml"), specOut)
+	spec, err := CompileIntentFile(filepath.Join(demo, ".gatemole", "intents", "auth.password_reset.yaml"), specOut)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestIntentCompilesToSpecAndIR(t *testing.T) {
 func TestIntentParsesToStableASTWithSourceSpans(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	ast, diagnostics, err := ParseIntentASTFile(filepath.Join(demo, ".vouch", "intents", "auth.password_reset.yaml"))
+	ast, diagnostics, err := ParseIntentASTFile(filepath.Join(demo, ".gatemole", "intents", "auth.password_reset.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ rollback:
 func TestIntentSemanticAnalyzerProducesTypedValuesWithSpans(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	ast, diagnostics, err := ParseIntentASTFile(filepath.Join(demo, ".vouch", "intents", "auth.password_reset.yaml"))
+	ast, diagnostics, err := ParseIntentASTFile(filepath.Join(demo, ".gatemole", "intents", "auth.password_reset.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,8 +321,8 @@ func TestVerificationPlanBuildsFromSpecAndManifest(t *testing.T) {
 	tmp := t.TempDir()
 	planOut := filepath.Join(tmp, "plan.json")
 	plan, err := BuildVerificationPlanFile(
-		filepath.Join(demo, ".vouch", "specs", "auth.password_reset.json"),
-		filepath.Join(demo, ".vouch", "manifests", "pass.json"),
+		filepath.Join(demo, ".gatemole", "specs", "auth.password_reset.json"),
+		filepath.Join(demo, ".gatemole", "manifests", "pass.json"),
 		planOut,
 	)
 	if err != nil {
@@ -350,7 +350,7 @@ func TestArtifactsBuildDeterministically(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
 	out := filepath.Join(t.TempDir(), "artifacts")
-	specPath := filepath.Join(demo, ".vouch", "specs", "auth.password_reset.json")
+	specPath := filepath.Join(demo, ".gatemole", "specs", "auth.password_reset.json")
 	if err := BuildArtifacts(specPath, out); err != nil {
 		t.Fatal(err)
 	}
@@ -390,19 +390,19 @@ func TestCLISmokeForNewCommands(t *testing.T) {
 	tmp := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Main([]string{"intent", "parse", "--intent", filepath.Join(demo, ".vouch", "intents", "auth.password_reset.yaml"), "--out", filepath.Join(tmp, "ast.json")}, &stdout, &stderr)
+	code := Main([]string{"intent", "parse", "--intent", filepath.Join(demo, ".gatemole", "intents", "auth.password_reset.yaml"), "--out", filepath.Join(tmp, "ast.json")}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("intent parse failed: %d stderr=%s", code, stderr.String())
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code = Main([]string{"plan", "build", "--spec", filepath.Join(demo, ".vouch", "specs", "auth.password_reset.json"), "--manifest", filepath.Join(demo, ".vouch", "manifests", "pass.json"), "--out", filepath.Join(tmp, "plan.json")}, &stdout, &stderr)
+	code = Main([]string{"plan", "build", "--spec", filepath.Join(demo, ".gatemole", "specs", "auth.password_reset.json"), "--manifest", filepath.Join(demo, ".gatemole", "manifests", "pass.json"), "--out", filepath.Join(tmp, "plan.json")}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("plan build failed: %d stderr=%s", code, stderr.String())
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code = Main([]string{"artifacts", "build", "--spec", filepath.Join(demo, ".vouch", "specs", "auth.password_reset.json"), "--out", filepath.Join(tmp, "artifacts")}, &stdout, &stderr)
+	code = Main([]string{"artifacts", "build", "--spec", filepath.Join(demo, ".gatemole", "specs", "auth.password_reset.json"), "--out", filepath.Join(tmp, "artifacts")}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("artifacts build failed: %d stderr=%s", code, stderr.String())
 	}
@@ -447,7 +447,7 @@ func TestLowRiskCompleteManifestAutoMerges(t *testing.T) {
 func TestHighRiskCompleteManifestWithoutCanaryEscalates(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	manifest.Runtime.Canary.Enabled = false
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "no-canary.json")
@@ -539,7 +539,7 @@ func TestMissingBehaviorTraceEvidenceBlocks(t *testing.T) {
 func TestManifestCannotDowngradeSpecRisk(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	manifest.Change.Risk = RiskLow
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "downgrade.json")
@@ -559,7 +559,7 @@ func TestManifestCannotDowngradeSpecRisk(t *testing.T) {
 func TestInvalidCanaryPercentBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	manifest.Runtime.Canary.InitialPercent = 101
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "bad-canary.json")
@@ -576,7 +576,7 @@ func TestInvalidCanaryPercentBlocks(t *testing.T) {
 func TestUnknownArtifactObligationBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	manifest.Verification.Artifacts[0].Obligations[0] = "auth.password_reset.behavior.not_declared"
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "bad-artifact-ref.json")
@@ -596,7 +596,7 @@ func TestUnknownArtifactObligationBlocks(t *testing.T) {
 func TestMissingArtifactPathBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	setArtifactPath(t, &manifest, "test-results", "artifacts/does-not-exist.xml")
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "missing-artifact.json")
@@ -616,7 +616,7 @@ func TestMissingArtifactPathBlocks(t *testing.T) {
 func TestArtifactSHA256MismatchBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	setArtifactSHA(t, &manifest, "test-results", strings.Repeat("0", 64))
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "bad-hash.json")
@@ -636,7 +636,7 @@ func TestArtifactSHA256MismatchBlocks(t *testing.T) {
 func TestNonZeroArtifactExitBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	setArtifactExitCode(t, &manifest, "test-results", 1)
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "non-zero-artifact.json")
@@ -656,7 +656,7 @@ func TestNonZeroArtifactExitBlocks(t *testing.T) {
 func TestMissingArtifactExitCodeBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	clearArtifactExitCode(t, &manifest, "test-results")
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "missing-exit-code.json")
@@ -676,7 +676,7 @@ func TestMissingArtifactExitCodeBlocks(t *testing.T) {
 func TestArtifactPathEscapeBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	setArtifactPath(t, &manifest, "test-results", "../README.md")
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "escaping-artifact.json")
@@ -696,7 +696,7 @@ func TestArtifactPathEscapeBlocks(t *testing.T) {
 func TestArtifactAbsolutePathBlocks(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	manifest := mustLoadManifest(t, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	manifest := mustLoadManifest(t, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	setArtifactPath(t, &manifest, "test-results", filepath.Join(t.TempDir(), "junit.xml"))
 	tmp := t.TempDir()
 	manifestPath := filepath.Join(tmp, "absolute-artifact.json")
@@ -1238,7 +1238,7 @@ func TestChangedFileOwnedByUntouchedSpecBlocksTraceability(t *testing.T) {
 		Runtime:  ManifestRuntime{Metrics: []string{"ui.rendered"}},
 		Rollback: ManifestRollback{Strategy: "revert_commit"},
 	})
-	writeJSON(t, filepath.Join(repo, ".vouch", "specs", "billing.invoice.json"), Spec{
+	writeJSON(t, filepath.Join(repo, ".gatemole", "specs", "billing.invoice.json"), Spec{
 		Version:    SpecSchemaVersion,
 		ID:         "billing.invoice",
 		Owner:      "finance",
@@ -1409,7 +1409,7 @@ func TestTrailingJSONBlocksCompilation(t *testing.T) {
 func TestGateResultJSONIsCompactAndDeterministic(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1468,14 +1468,14 @@ func TestGateCommandWritesGateResultFile(t *testing.T) {
 	})
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Main([]string{"--repo", repo, "--manifest", manifestPath, "gate", "--out", ".vouch/build/gate-result.json"}, &stdout, &stderr)
+	code := Main([]string{"--repo", repo, "--manifest", manifestPath, "gate", "--out", ".gatemole/build/gate-result.json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("gate failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Release decision: auto_merge") {
 		t.Fatalf("expected human gate output, got %s", stdout.String())
 	}
-	result, err := LoadJSON[GateResult](filepath.Join(repo, ".vouch", "build", "gate-result.json"))
+	result, err := LoadJSON[GateResult](filepath.Join(repo, ".gatemole", "build", "gate-result.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1499,7 +1499,7 @@ func TestCustomPolicyOverridesReleaseDecision(t *testing.T) {
 			Stop:     true,
 		}},
 	})
-	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"), CollectEvidenceOptions{PolicyPath: policyPath})
+	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"), CollectEvidenceOptions{PolicyPath: policyPath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1529,7 +1529,7 @@ func TestCustomPolicyCannotBypassSignedEvidenceFailures(t *testing.T) {
 			Stop:     true,
 		}},
 	})
-	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"), CollectEvidenceOptions{
+	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"), CollectEvidenceOptions{
 		RequireSigned: true,
 		PolicyPath:    policyPath,
 	})
@@ -1550,7 +1550,7 @@ func TestCustomPolicyCannotBypassSignedEvidenceFailures(t *testing.T) {
 func TestPolicyInputIncludesArtifactVerificationState(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"))
+	evidence, err := CollectEvidence(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1700,8 +1700,8 @@ func TestVerifierOutputDoesNotSatisfyRequiredEvidenceCoverage(t *testing.T) {
 
 func TestMissingDefaultPolicyFailsClosed(t *testing.T) {
 	repo := t.TempDir()
-	specDir := filepath.Join(repo, ".vouch", "specs")
-	manifestDir := filepath.Join(repo, ".vouch", "manifests")
+	specDir := filepath.Join(repo, ".gatemole", "specs")
+	manifestDir := filepath.Join(repo, ".gatemole", "manifests")
 	if err := os.MkdirAll(specDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1753,7 +1753,7 @@ func TestPolicySimulateCommandRendersResult(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Main([]string{
 		"--repo", demo,
-		"--manifest", filepath.Join(demo, ".vouch", "manifests", "pass.json"),
+		"--manifest", filepath.Join(demo, ".gatemole", "manifests", "pass.json"),
 		"policy", "simulate",
 	}, &stdout, &stderr)
 	if code != 0 {
@@ -1771,7 +1771,7 @@ func TestPolicySimulateRejectsUnexpectedArgs(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Main([]string{
 		"--repo", demo,
-		"--manifest", filepath.Join(demo, ".vouch", "manifests", "pass.json"),
+		"--manifest", filepath.Join(demo, ".gatemole", "manifests", "pass.json"),
 		"policy", "simulate", "unexpected",
 	}, &stdout, &stderr)
 	if code != 2 {
@@ -1790,7 +1790,7 @@ func TestPolicySimulateJSONIncludesInputAndResult(t *testing.T) {
 	code := Main([]string{
 		"--json",
 		"--repo", demo,
-		"--manifest", filepath.Join(demo, ".vouch", "manifests", "pass.json"),
+		"--manifest", filepath.Join(demo, ".gatemole", "manifests", "pass.json"),
 		"policy", "simulate",
 	}, &stdout, &stderr)
 	if code != 0 {
@@ -1808,7 +1808,7 @@ func TestPolicySimulateJSONIncludesInputAndResult(t *testing.T) {
 func TestRequireSignedBlocksUnsignedArtifacts(t *testing.T) {
 	root := repoRoot(t)
 	demo := filepath.Join(root, "demo_repo")
-	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".vouch", "manifests", "pass.json"), CollectEvidenceOptions{RequireSigned: true})
+	evidence, err := CollectEvidenceWithOptions(demo, filepath.Join(demo, ".gatemole", "manifests", "pass.json"), CollectEvidenceOptions{RequireSigned: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1890,7 +1890,7 @@ func TestRequireSignedAcceptsCosignVerifiedArtifacts(t *testing.T) {
 			Kind:             kind,
 			Producer:         "ci",
 			Path:             path,
-			EvidenceBundle:   "artifacts/" + id + ".vouch-bundle.json",
+			EvidenceBundle:   "artifacts/" + id + ".gatemole-bundle.json",
 			SignatureBundle:  "artifacts/" + id + ".sigstore.json",
 			SignerIdentity:   signerIdentity,
 			SignerOIDCIssuer: signerOIDCIssuer,
@@ -2296,7 +2296,7 @@ func attachSignedBundles(t *testing.T, repo string, manifestPath string, mutate 
 	}
 	for i := range manifest.Verification.Artifacts {
 		id := manifest.Verification.Artifacts[i].ID
-		manifest.Verification.Artifacts[i].EvidenceBundle = "artifacts/" + id + ".vouch-bundle.json"
+		manifest.Verification.Artifacts[i].EvidenceBundle = "artifacts/" + id + ".gatemole-bundle.json"
 		manifest.Verification.Artifacts[i].SignatureBundle = "artifacts/" + id + ".sigstore.json"
 		manifest.Verification.Artifacts[i].SignerIdentity = signerIdentity
 		manifest.Verification.Artifacts[i].SignerOIDCIssuer = signerOIDCIssuer
@@ -2320,7 +2320,7 @@ func writeAllowedSignerList(t *testing.T, repo string, signers []AllowedSigner) 
 	t.Helper()
 	config := LoadConfigOrDefault(repo)
 	config.AllowedSigners = append([]AllowedSigner(nil), signers...)
-	configPath := filepath.Join(repo, ".vouch", "config.json")
+	configPath := filepath.Join(repo, ".gatemole", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -2330,9 +2330,9 @@ func writeAllowedSignerList(t *testing.T, repo string, signers []AllowedSigner) 
 func writeScenario(t *testing.T, spec Spec, manifest Manifest) (string, string) {
 	t.Helper()
 	repo := t.TempDir()
-	specDir := filepath.Join(repo, ".vouch", "specs")
-	policyDir := filepath.Join(repo, ".vouch", "policy")
-	manifestDir := filepath.Join(repo, ".vouch", "manifests")
+	specDir := filepath.Join(repo, ".gatemole", "specs")
+	policyDir := filepath.Join(repo, ".gatemole", "policy")
+	manifestDir := filepath.Join(repo, ".gatemole", "manifests")
 	if err := os.MkdirAll(specDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -69,8 +69,8 @@ This development command creates the isolated worktree, runs the agent, freezes
 its Git effects and performs sequence validation. Production verification,
 approval and local-ref release require the hardened runtime configuration.
 Runtime initialization creates a strict repository-owned agent profile and an
-ignored local identity at `.vouch/runtime.json`. Commit the agent profile and
-`.vouch/.gitignore`, not the Runtime identity. For OCI execution, `vouch run`
+ignored local identity at `.gatemole/runtime.json`. Commit the agent profile and
+`.gatemole/.gitignore`, not the Runtime identity. For OCI execution, `vouch run`
 preflights the exact Runtime ID, daemon enforcement profile and selected image
 before creating authority or a worktree. Admission then durably binds the
 Runtime ID and actual profile with the transaction. Doctor reports warnings for

@@ -37,8 +37,8 @@ func run() int {
 func parseDaemonConfig(args []string, stderr io.Writer) (daemon.Config, int) {
 	flags := flag.NewFlagSet("vouchd", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	databasePath := flags.String("db", ".vouch/kernel.db", "SQLite kernel database path")
-	socketPath := flags.String("socket", ".vouch/vouchd.sock", "Unix socket path")
+	databasePath := flags.String("db", ".gatemole/kernel.db", "SQLite kernel database path")
+	socketPath := flags.String("socket", ".gatemole/vouchd.sock", "Unix socket path")
 	repositoryRoot := flags.String("repo", ".", "repository root for mediated workspaces")
 	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
 	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")

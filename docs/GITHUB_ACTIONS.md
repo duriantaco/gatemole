@@ -80,9 +80,9 @@ permissions:
   contents: read
 
 env:
-  VOUCH_MANIFEST: .vouch/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
-  VOUCH_GATE_RESULT: .vouch/build/gate-result.json
-  VOUCH_JUNIT: .vouch/artifacts/pytest.xml
+  VOUCH_MANIFEST: .gatemole/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
+  VOUCH_GATE_RESULT: .gatemole/build/gate-result.json
+  VOUCH_JUNIT: .gatemole/artifacts/pytest.xml
 
 jobs:
   vouch:
@@ -124,7 +124,7 @@ jobs:
       - name: Run tests for evidence
         id: tests
         run: |
-          mkdir -p .vouch/artifacts
+          mkdir -p .gatemole/artifacts
           set +e
           pytest --junitxml "$VOUCH_JUNIT"
           exit_code=$?
@@ -153,9 +153,9 @@ jobs:
         with:
           name: vouch-shadow-pr-${{ github.event.pull_request.number }}
           path: |
-            .vouch/manifests/
-            .vouch/build/
-            .vouch/artifacts/
+            .gatemole/manifests/
+            .gatemole/build/
+            .gatemole/artifacts/
           if-no-files-found: ignore
 ```
 
@@ -200,19 +200,19 @@ The renderer is [`RenderGitHubSummary`](../internal/vouch/render.go).
 
 Upload the whole Vouch bundle for each shadow run:
 
-- `.vouch/manifests/`: PR manifest and attached artifact references.
-- `.vouch/build/`: compiler outputs and `gate-result.json`.
-- `.vouch/artifacts/`: raw evidence such as JUnit XML or SARIF.
+- `.gatemole/manifests/`: PR manifest and attached artifact references.
+- `.gatemole/build/`: compiler outputs and `gate-result.json`.
+- `.gatemole/artifacts/`: raw evidence such as JUnit XML or SARIF.
 
-The compact gate result should be written to `.vouch/build/gate-result.json`.
+The compact gate result should be written to `.gatemole/build/gate-result.json`.
 That file uses `gatemole.gate_result.v0` and is the stable input for future status
 checks or GitHub Checks integrations.
 
 ### Contracts In CI
 
 Do not silently generate new contracts in an enforced workflow. Commit reviewed
-`.vouch/intents/*.yaml`, `.vouch/specs/*.json`, and
-`.vouch/policy/release-policy.json`.
+`.gatemole/intents/*.yaml`, `.gatemole/specs/*.json`, and
+`.gatemole/policy/release-policy.json`.
 
 For pilots, it is acceptable to run:
 
@@ -234,7 +234,7 @@ vouch contracts gate --require-signed --github-summary
 
 The signed-evidence checks are wired through `CollectEvidenceWithOptions` and
 artifact linking in [`internal/vouch/evidence.go`](../internal/vouch/evidence.go).
-Allowed signers are loaded from `.vouch/config.json`.
+Allowed signers are loaded from `.gatemole/config.json`.
 
 Use this only after your runners are producing Vouch evidence bundles and cosign
 signature bundles.

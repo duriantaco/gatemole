@@ -187,7 +187,7 @@ func gateWhyLines(evidence Evidence) []string {
 func gateNextSteps(evidence Evidence) []string {
 	var steps []string
 	if specID := firstMissingSpec(evidence); specID != "" {
-		steps = append(steps, "Review "+filepath.ToSlash(filepath.Join(".vouch", "intents", specID+".yaml")))
+		steps = append(steps, "Review "+filepath.ToSlash(filepath.Join(".gatemole", "intents", specID+".yaml")))
 	}
 	for _, kind := range firstMissingEvidenceKinds(evidence, 2) {
 		steps = append(steps, "Attach "+kind+" evidence")

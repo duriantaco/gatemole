@@ -39,14 +39,14 @@ func DefaultConfig(repo string) Config {
 		Version:        ConfigSchemaVersion,
 		Profiles:       profiles,
 		Commands:       commands,
-		ArtifactDir:    ".vouch/artifacts",
-		ManifestDir:    ".vouch/manifests",
-		BuildDir:       ".vouch/build",
+		ArtifactDir:    ".gatemole/artifacts",
+		ManifestDir:    ".gatemole/manifests",
+		BuildDir:       ".gatemole/build",
 		AllowedSigners: []AllowedSigner{},
 		IgnoredPaths: []string{
 			".git/**",
-			".vouch/artifacts/**",
-			".vouch/build/**",
+			".gatemole/artifacts/**",
+			".gatemole/build/**",
 			"node_modules/**",
 			"vendor/**",
 			"dist/**",
@@ -70,10 +70,10 @@ func InitRepo(repo string, profileOverride string, force bool) (InitResult, erro
 		config.Commands = DetectCommands(absRepo, config.Profiles)
 	}
 	dirs := []string{
-		".vouch",
-		".vouch/intents",
-		".vouch/specs",
-		".vouch/policy",
+		".gatemole",
+		".gatemole/intents",
+		".gatemole/specs",
+		".gatemole/policy",
 		config.ManifestDir,
 		config.ArtifactDir,
 		config.BuildDir,
@@ -88,7 +88,7 @@ func InitRepo(repo string, profileOverride string, force bool) (InitResult, erro
 			return InitResult{}, err
 		}
 	}
-	configPath := filepath.Join(absRepo, ".vouch", "config.json")
+	configPath := filepath.Join(absRepo, ".gatemole", "config.json")
 	created := false
 	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) || force {
 		if err := writeJSONFile(configPath, config); err != nil {
@@ -118,7 +118,7 @@ func InitRepo(repo string, profileOverride string, force bool) (InitResult, erro
 }
 
 func LoadConfigOrDefault(repo string) Config {
-	configPath := filepath.Join(repo, ".vouch", "config.json")
+	configPath := filepath.Join(repo, ".gatemole", "config.json")
 	config, err := LoadJSON[Config](configPath)
 	if err == nil && config.Version == ConfigSchemaVersion {
 		return config
@@ -235,8 +235,8 @@ func CreateContract(repo string, intent Intent, force bool) (Spec, string, strin
 		}
 	}
 	fileName := intent.Feature + ".yaml"
-	intentPath := filepath.Join(absRepo, ".vouch", "intents", fileName)
-	specPath := filepath.Join(absRepo, ".vouch", "specs", intent.Feature+".json")
+	intentPath := filepath.Join(absRepo, ".gatemole", "intents", fileName)
+	specPath := filepath.Join(absRepo, ".gatemole", "specs", intent.Feature+".json")
 	if !force {
 		if fileExists(intentPath) {
 			return Spec{}, "", "", fmt.Errorf("intent already exists: %s", intentPath)
@@ -512,7 +512,7 @@ func defaultMappedJUnitArtifactPath(artifactID string) string {
 	if name == "" {
 		name = "test"
 	}
-	return filepath.ToSlash(filepath.Join(".vouch", "artifacts", name+"-vouch-junit.xml"))
+	return filepath.ToSlash(filepath.Join(".gatemole", "artifacts", name+"-vouch-junit.xml"))
 }
 
 func supportedProfile(profile string) bool {
@@ -536,7 +536,7 @@ func detectPythonCommands(repo string) []string {
 			}
 		}
 		if strings.Contains(text, "pytest") || dirExists(filepath.Join(repo, "tests")) {
-			commands = append(commands, "fyn run pytest --junitxml .vouch/artifacts/junit.xml")
+			commands = append(commands, "fyn run pytest --junitxml .gatemole/artifacts/junit.xml")
 		}
 		return commands
 	}
@@ -547,7 +547,7 @@ func detectPythonCommands(repo string) []string {
 		commands = append(commands, "mypy src")
 	}
 	if strings.Contains(text, "pytest") || dirExists(filepath.Join(repo, "tests")) {
-		commands = append(commands, "pytest --junitxml .vouch/artifacts/junit.xml")
+		commands = append(commands, "pytest --junitxml .gatemole/artifacts/junit.xml")
 	}
 	return commands
 }

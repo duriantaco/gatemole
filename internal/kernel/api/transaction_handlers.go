@@ -572,7 +572,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		}
 		receiptDirectory := filepath.Join(
 			s.transactionStaging,
-			".vouch-model-evidence",
+			".gatemole-model-evidence",
 			sandbox.ModelBrokerContainerName(
 				transactionID,
 				executionPlan.RunID,
@@ -713,7 +713,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	if runErr == nil {
 		outcome, runErr = (verification.Runner{
-			EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-agent-evidence"),
+			EvidenceRoot: filepath.Join(s.transactionStaging, ".gatemole-agent-evidence"),
 		}).Run(authorityContext, config, execution.ID)
 	}
 	if brokerSession != nil {
@@ -863,7 +863,7 @@ func materializeAgentTask(
 			Resource: task.ID, Message: "transaction staging root must be absolute",
 		}
 	}
-	parent := filepath.Join(stagingRoot, ".vouch-agent-tasks")
+	parent := filepath.Join(stagingRoot, ".gatemole-agent-tasks")
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return "", nil, &model.KernelError{
 			Code: model.ErrorDriverUnavailable, Operation: "materialize_agent_task",
@@ -1412,7 +1412,7 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	verifierWorkspace, cleanupVerifierWorkspace, err := s.gitStage.MaterializeSnapshot(
 		r.Context(),
 		frozenSnapshot,
-		filepath.Join(s.transactionStaging, ".vouch-verifier-trees"),
+		filepath.Join(s.transactionStaging, ".gatemole-verifier-trees"),
 	)
 	if err != nil {
 		writeError(w, &model.KernelError{
@@ -1453,7 +1453,7 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	)
 	defer cancel()
 	outcome, runErr := (verification.Runner{
-		EvidenceRoot: filepath.Join(s.transactionStaging, ".vouch-evidence"),
+		EvidenceRoot: filepath.Join(s.transactionStaging, ".gatemole-evidence"),
 	}).Run(processContext, config, request.Name)
 	cleanupErr := cleanupVerifierWorkspace()
 	cleanupPending = false

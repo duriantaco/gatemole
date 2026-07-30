@@ -32,10 +32,10 @@ func TestBootstrapDryRunDraftsConservativeContracts(t *testing.T) {
 			t.Fatalf("expected dry-run output to contain %q, got:\n%s", want, out)
 		}
 	}
-	if _, err := LoadJSON[bootstrap.Result](filepath.Join(repo, ".vouch", "build", "bootstrap-report.json")); err == nil {
+	if _, err := LoadJSON[bootstrap.Result](filepath.Join(repo, ".gatemole", "build", "bootstrap-report.json")); err == nil {
 		t.Fatal("dry-run wrote bootstrap report")
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "intents", "auth.password_reset.yaml")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "intents", "auth.password_reset.yaml")) {
 		t.Fatal("dry-run wrote intent file")
 	}
 }
@@ -49,9 +49,9 @@ func TestBootstrapWritesIntentReportAndCompileCompatibleContract(t *testing.T) {
 		t.Fatalf("bootstrap failed: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 
-	intentPath := filepath.Join(repo, ".vouch", "intents", "auth.password_reset.yaml")
-	reportPath := filepath.Join(repo, ".vouch", "build", "bootstrap-report.json")
-	if !fileExists(filepath.Join(repo, ".vouch", "policy", "release-policy.json")) {
+	intentPath := filepath.Join(repo, ".gatemole", "intents", "auth.password_reset.yaml")
+	reportPath := filepath.Join(repo, ".gatemole", "build", "bootstrap-report.json")
+	if !fileExists(filepath.Join(repo, ".gatemole", "policy", "release-policy.json")) {
 		t.Fatal("bootstrap did not initialize the default release policy")
 	}
 	if !fileExists(intentPath) {
@@ -88,7 +88,7 @@ func TestBootstrapWritesIntentReportAndCompileCompatibleContract(t *testing.T) {
 		t.Fatalf("expected structured provenance on obligation, got %#v", obligations[0])
 	}
 
-	spec, err := CompileIntentFile(intentPath, filepath.Join(repo, ".vouch", "specs", "auth.password_reset.spec.json"))
+	spec, err := CompileIntentFile(intentPath, filepath.Join(repo, ".gatemole", "specs", "auth.password_reset.spec.json"))
 	if err != nil {
 		t.Fatalf("generated intent did not compile: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestBootstrapReviewRanksAndBoundsOutput(t *testing.T) {
 		"HIGH auth.session",
 		"MED api.users",
 		"review: owner, risk",
-		"edit: .vouch/intents/auth.session.yaml",
+		"edit: .gatemole/intents/auth.session.yaml",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected review output to contain %q, got:\n%s", want, out)
@@ -158,7 +158,7 @@ func TestBootstrapReviewRanksAndBoundsOutput(t *testing.T) {
 	if strings.Contains(out, "LOW docs.readme") {
 		t.Fatalf("expected default review output to hide low-priority overflow draft, got:\n%s", out)
 	}
-	if fileExists(filepath.Join(repo, ".vouch", "intents", "auth.session.yaml")) {
+	if fileExists(filepath.Join(repo, ".gatemole", "intents", "auth.session.yaml")) {
 		t.Fatal("bootstrap --review wrote generated intent")
 	}
 }

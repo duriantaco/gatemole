@@ -11,7 +11,7 @@ import (
 )
 
 func DefaultEvidenceManifest(repo string) string {
-	return filepath.Join(repo, ".vouch", "evidence", "manifest.json")
+	return filepath.Join(repo, ".gatemole", "evidence", "manifest.json")
 }
 
 type EvidenceImportOptions struct {
@@ -173,7 +173,7 @@ func CollectEvidenceFromEvidenceManifest(repo string, manifestPath string, opts 
 }
 
 func loadCompiledRequiredTests(repo string) ([]Obligation, error) {
-	path := filepath.Join(repo, ".vouch", "build", "obligations.ir.json")
+	path := filepath.Join(repo, ".gatemole", "build", "obligations.ir.json")
 	bundle, err := LoadJSON[ObligationIRBundle](path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -824,7 +824,7 @@ func TestVerificationUsesReadOnlySnapshotAndRecordsMutationAttempt(t *testing.T)
 	if !bytes.Contains(sourceContent, []byte("return false")) {
 		t.Fatalf("transaction or verifier mutated the source worktree: %q", sourceContent)
 	}
-	materializationRoot := filepath.Join(stagingRoot, ".vouch-verifier-trees")
+	materializationRoot := filepath.Join(stagingRoot, ".gatemole-verifier-trees")
 	entries, err := os.ReadDir(materializationRoot)
 	if err != nil {
 		t.Fatal(err)
@@ -863,11 +863,11 @@ func transactionRunRepository(t *testing.T) string {
 		"-c", "user.email=vouch@example.invalid",
 		"commit", "-m", "fixture",
 	)
-	if err := os.Mkdir(filepath.Join(repo, ".vouch"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(repo, ".gatemole"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(
-		filepath.Join(repo, ".vouch", ".gitignore"),
+		filepath.Join(repo, ".gatemole", ".gitignore"),
 		[]byte("runtime.json\n"),
 		0o600,
 	); err != nil {
