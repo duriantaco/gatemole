@@ -102,6 +102,118 @@ func TestTaskAdmissionPersistsAtomicallyAndReplaysIdempotently(t *testing.T) {
 	assertAdmissionRows(t, reopened, []int{1, 1, 1, 3, 1, 1, 1})
 }
 
+func TestBoundRuntimeRejectsMissingAndMismatchedAdmissionWithoutWrites(
+	t *testing.T,
+) {
+	t.Parallel()
+	ctx := context.Background()
+	kernelStore := openTestStore(t)
+	boundRuntimeID := runtimeMetadataTestID("5")
+	if err := kernelStore.BindRuntimeMetadata(
+		ctx,
+		boundRuntimeID,
+		EnforcementProfileDevelopment,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name      string
+		runtimeID string
+	}{
+		{name: "missing"},
+		{name: "different", runtimeID: runtimeMetadataTestID("6")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			prepared := prepareStoreAdmissionForRuntime(
+				t,
+				"runtime-"+test.name,
+				test.runtimeID,
+			)
+			_, _, err := kernelStore.AdmitTask(ctx, prepared)
+			assertKernelCode(
+				t,
+				err,
+				model.ErrorCheckpointIncompatible,
+			)
+			assertAdmissionRows(
+				t,
+				kernelStore,
+				[]int{0, 0, 0, 0, 0, 0, 0},
+			)
+		})
+	}
+
+	prepared := prepareStoreAdmissionForRuntime(
+		t,
+		"runtime-matching",
+		boundRuntimeID,
+	)
+	if _, created, err := kernelStore.AdmitTask(
+		ctx,
+		prepared,
+	); err != nil || !created {
+		t.Fatalf("matching Runtime admission=(created=%t, err=%v)", created, err)
+	}
+}
+
+func TestDevelopmentRuntimeBindingKeepsLegacyV0AdmissionReadable(
+	t *testing.T,
+) {
+	t.Parallel()
+	ctx := context.Background()
+	kernelStore := openTestStore(t)
+	prepared := prepareStoreAdmission(t, "legacy-runtime-adoption")
+	if prepared.Result.Version != admission.LegacyResultVersion ||
+		prepared.Result.RuntimeID != "" {
+		t.Fatalf("fixture is not a legacy v0 admission: %#v", prepared.Result)
+	}
+	if _, created, err := kernelStore.AdmitTask(
+		ctx,
+		prepared,
+	); err != nil || !created {
+		t.Fatalf("legacy admission=(created=%t, err=%v)", created, err)
+	}
+	if err := kernelStore.BindRuntimeMetadata(
+		ctx,
+		runtimeMetadataTestID("7"),
+		EnforcementProfileDevelopment,
+	); err != nil {
+		t.Fatalf("development could not adopt legacy ledger: %v", err)
+	}
+	loaded, requestDigest, err := kernelStore.GetTaskAdmission(
+		ctx,
+		prepared.Namespace,
+		prepared.IdempotencyKey,
+	)
+	if err != nil {
+		t.Fatalf("adopted legacy admission is unreadable: %v", err)
+	}
+	if loaded.Version != admission.LegacyResultVersion ||
+		loaded.RuntimeID != "" ||
+		requestDigest != prepared.RequestDigest {
+		t.Fatalf("legacy admission changed during adoption: %#v", loaded)
+	}
+	if _, err := kernelStore.db.ExecContext(
+		ctx,
+		`UPDATE kernel_metadata SET value = ?
+		 WHERE key = ?`,
+		EnforcementProfileProduction,
+		enforcementProfileMetadataKey,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := kernelStore.GetTaskAdmission(
+		ctx,
+		prepared.Namespace,
+		prepared.IdempotencyKey,
+	); err == nil {
+		t.Fatal("production-bound ledger replayed legacy v0 admission")
+	} else {
+		assertKernelCode(t, err, model.ErrorCheckpointIncompatible)
+	}
+}
+
 func TestTaskAdmissionFaultsRollBackEveryPersistenceStep(t *testing.T) {
 	t.Parallel()
 	for _, point := range admissionFaultPoints {
@@ -377,17 +489,36 @@ func TestGetTaskAdmissionDetectsAuthoritativeProjectionMismatch(t *testing.T) {
 
 func prepareStoreAdmission(t *testing.T, suffix string) admission.Prepared {
 	t.Helper()
+	return prepareStoreAdmissionForRuntime(t, suffix, "")
+}
+
+func prepareStoreAdmissionForRuntime(
+	t *testing.T,
+	suffix string,
+	runtimeID string,
+) admission.Prepared {
+	t.Helper()
 	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
 	maxTools := int64(8)
 	deadline := now.Add(2 * time.Hour)
+	version := admission.RequestVersion
+	if runtimeID == "" {
+		version = admission.LegacyRequestVersion
+	}
+	enforcementProfile := ""
+	if runtimeID != "" {
+		enforcementProfile = EnforcementProfileDevelopment
+	}
 	prepared, err := admission.Prepare(
 		"store-test",
 		admission.Request{
-			Version:        admission.RequestVersion,
-			IdempotencyKey: "admission:" + suffix,
-			TransactionID:  "tx:" + suffix,
-			RunID:          "run:" + suffix,
-			Intent:         "Make the exact bounded fixture change.",
+			Version:                    version,
+			ExpectedRuntimeID:          runtimeID,
+			ExpectedEnforcementProfile: enforcementProfile,
+			IdempotencyKey:             "admission:" + suffix,
+			TransactionID:              "tx:" + suffix,
+			RunID:                      "run:" + suffix,
+			Intent:                     "Make the exact bounded fixture change.",
 			AgentProfile: model.AgentTaskProfileBinding{
 				ID:            "agent-profile:store-test",
 				Digest:        "sha256:" + strings.Repeat("a", 64),

@@ -60,9 +60,11 @@ func TestAgentTransactionAdmissionBindingIsOptionalButStrict(t *testing.T) {
 	t.Parallel()
 	transaction := validAgentTaskTransaction(t)
 	transaction.Admission = &TransactionAdmissionBinding{
-		TaskDigest:     transaction.Task.Digest,
-		RunID:          transaction.Task.RunID,
-		ContractDigest: "sha256:" + strings.Repeat("d", 64),
+		RuntimeID:          "runtime:" + strings.Repeat("a", 64),
+		EnforcementProfile: "development",
+		TaskDigest:         transaction.Task.Digest,
+		RunID:              transaction.Task.RunID,
+		ContractDigest:     "sha256:" + strings.Repeat("d", 64),
 	}
 	if err := transaction.Validate(); err != nil {
 		t.Fatalf("valid admission binding: %v", err)
@@ -78,6 +80,18 @@ func TestAgentTransactionAdmissionBindingIsOptionalButStrict(t *testing.T) {
 		name string
 		edit func(*AgentTransaction)
 	}{
+		{
+			name: "invalid Runtime ID",
+			edit: func(value *AgentTransaction) {
+				value.Admission.RuntimeID = "runtime:not-canonical"
+			},
+		},
+		{
+			name: "invalid enforcement profile",
+			edit: func(value *AgentTransaction) {
+				value.Admission.EnforcementProfile = "Development"
+			},
+		},
 		{
 			name: "missing task",
 			edit: func(value *AgentTransaction) {

@@ -2,8 +2,6 @@ package daemon
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +20,8 @@ import (
 	"github.com/duriantaco/vouch/internal/kernel/broker"
 	"github.com/duriantaco/vouch/internal/kernel/identity"
 	"github.com/duriantaco/vouch/internal/kernel/modelbroker"
+	"github.com/duriantaco/vouch/internal/kernel/peercred"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
 	"github.com/duriantaco/vouch/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
@@ -121,52 +121,47 @@ func Run(ctx context.Context, config Config) error {
 	if err := configureModelBroker(config, &executionPolicy); err != nil {
 		return err
 	}
-	if config.RuntimeProfile == "production" &&
-		strings.TrimSpace(config.ApprovalTrustFile) != "" {
-		if err := validateProductionConfigFile(
-			config.ApprovalTrustFile, "approval trust",
-		); err != nil {
-			return err
+	production := config.RuntimeProfile == "production"
+	approvalTrust := approval.EmptyTrustStore()
+	if approvalTrustPath := strings.TrimSpace(
+		config.ApprovalTrustFile,
+	); approvalTrustPath != "" {
+		snapshot, snapshotErr := readConfigFileSnapshot(
+			approvalTrustPath,
+			"approval trust",
+			production,
+		)
+		if snapshotErr != nil {
+			return snapshotErr
 		}
+		approvalTrust, err = approval.ParseTrustDocument(snapshot.Data)
+		if err != nil {
+			return fmt.Errorf("vouchd: decode approval trust: %w", err)
+		}
+		executionPolicy.ApprovalTrustDigest = snapshot.Digest
 	}
-	approvalTrust, err := approval.LoadTrustFile(config.ApprovalTrustFile)
-	if err != nil {
-		return fmt.Errorf("vouchd: %w", err)
-	}
-	if config.RuntimeProfile == "production" && approvalTrust.Len() == 0 {
+	if production && approvalTrust.Len() == 0 {
 		return errors.New("vouchd: production profile requires at least one trusted approval key")
 	}
-	if strings.TrimSpace(config.ApprovalTrustFile) != "" {
-		executionPolicy.ApprovalTrustDigest, err = digestConfigFile(
-			config.ApprovalTrustFile,
-			"approval trust",
-		)
-		if err != nil {
-			return err
-		}
-	}
 	var identityVerifier *identity.Verifier
-	if strings.TrimSpace(config.IdentityTrustFile) != "" {
-		if config.RuntimeProfile == "production" {
-			if err := validateProductionConfigFile(
-				config.IdentityTrustFile, "OIDC identity trust",
-			); err != nil {
-				return err
-			}
-		}
-		identityVerifier, err = identity.LoadTrustFile(config.IdentityTrustFile)
-		if err != nil {
-			return fmt.Errorf("vouchd: %w", err)
-		}
-		executionPolicy.IdentityTrustDigest, err = digestConfigFile(
-			config.IdentityTrustFile,
+	if identityTrustPath := strings.TrimSpace(
+		config.IdentityTrustFile,
+	); identityTrustPath != "" {
+		snapshot, snapshotErr := readConfigFileSnapshot(
+			identityTrustPath,
 			"OIDC identity trust",
+			production,
 		)
-		if err != nil {
-			return err
+		if snapshotErr != nil {
+			return snapshotErr
 		}
+		identityVerifier, err = identity.ParseTrustDocument(snapshot.Data)
+		if err != nil {
+			return fmt.Errorf("vouchd: decode OIDC identity trust: %w", err)
+		}
+		executionPolicy.IdentityTrustDigest = snapshot.Digest
 	}
-	if config.RuntimeProfile == "production" && identityVerifier == nil {
+	if production && identityVerifier == nil {
 		return errors.New("vouchd: production profile requires an OIDC identity trust document")
 	}
 	releasePolicy, err := releaseRuntimePolicy(config.RuntimeProfile, config.AllowedGitRefs)
@@ -174,22 +169,24 @@ func Run(ctx context.Context, config Config) error {
 		return err
 	}
 	var verifierProfiles *verification.ProfileSet
-	if strings.TrimSpace(config.VerifierProfilesFile) != "" {
-		if config.RuntimeProfile == "production" {
-			if err := validateProductionConfigFile(
-				config.VerifierProfilesFile, "verifier profiles",
-			); err != nil {
-				return err
-			}
-		}
-		verifierProfiles, err = verification.LoadProfiles(
-			config.VerifierProfilesFile,
+	if profilesPath := strings.TrimSpace(
+		config.VerifierProfilesFile,
+	); profilesPath != "" {
+		snapshot, snapshotErr := readConfigFileSnapshot(
+			profilesPath,
+			"verifier profiles",
+			production,
 		)
-		if err != nil {
-			return fmt.Errorf("vouchd: %w", err)
+		if snapshotErr != nil {
+			return snapshotErr
 		}
+		verifierProfiles, err = verification.ParseProfiles(snapshot.Data)
+		if err != nil {
+			return fmt.Errorf("vouchd: decode verifier profiles: %w", err)
+		}
+		executionPolicy.VerifierProfilesSourceDigest = snapshot.Digest
 	}
-	if config.RuntimeProfile == "production" && verifierProfiles == nil {
+	if production && verifierProfiles == nil {
 		return errors.New("vouchd: production profile requires daemon-owned verifier profiles")
 	}
 	if verifierProfiles != nil {
@@ -203,19 +200,93 @@ func Run(ctx context.Context, config Config) error {
 		}
 	}
 	executionPolicy.VerifierProfiles = verifierProfiles
-	executionPolicy.RequireVerifierProfiles = config.RuntimeProfile == "production"
+	executionPolicy.RequireVerifierProfiles = production
 	stdout := config.Stdout
 	if stdout == nil {
 		stdout = io.Discard
 	}
-	if err := os.MkdirAll(filepath.Dir(config.SocketPath), 0o750); err != nil {
-		return fmt.Errorf("vouchd: create socket directory: %w", err)
+	repositoryRoot := config.RepositoryRoot
+	if repositoryRoot == "" {
+		repositoryRoot = "."
+	}
+	runtimeIdentity, err := runtimeidentity.Load(ctx, repositoryRoot)
+	if err != nil {
+		return fmt.Errorf(
+			"vouchd: load Runtime identity; run `vouch runtime init` first: %w",
+			err,
+		)
+	}
+	repositoryRoot, err = filepath.EvalSymlinks(repositoryRoot)
+	if err != nil {
+		return fmt.Errorf("vouchd: canonicalize repository root: %w", err)
+	}
+	repositoryRoot, err = filepath.Abs(repositoryRoot)
+	if err != nil {
+		return fmt.Errorf("vouchd: resolve repository root: %w", err)
+	}
+	runtimeLock, err := acquireRuntimeLock(
+		repositoryRoot,
+		runtimeIdentity.RuntimeID,
+	)
+	if err != nil {
+		return err
+	}
+	defer runtimeLock.Close()
+	transactionRoot, err := prepareTransactionRootForRepository(
+		config.TransactionRoot,
+		repositoryRoot,
+	)
+	if err != nil {
+		return err
 	}
 	daemonLock, err := acquireProcessLock(config.DatabasePath)
 	if err != nil {
 		return err
 	}
 	defer daemonLock.Close()
+	kernelStore, err := store.OpenSQLiteForRuntime(
+		ctx,
+		config.DatabasePath,
+		runtimeIdentity.RuntimeID,
+		enforcementProfile,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"vouchd: open Runtime-bound ledger: %w",
+			err,
+		)
+	}
+	defer kernelStore.Close()
+	recoveredExecutions, err := recoverAgentExecutions(
+		ctx,
+		kernelStore,
+		engineExecutionCleanup(executionPolicy.EnginePath),
+		time.Now,
+	)
+	if err != nil {
+		return fmt.Errorf("vouchd: recover interrupted agent executions: %w", err)
+	}
+	if recoveredExecutions > 0 {
+		fmt.Fprintf(stdout, "vouchd marked %d interrupted agent execution(s)\n", recoveredExecutions)
+	}
+	actionBroker, err := broker.New(kernelStore, repositoryRoot)
+	if err != nil {
+		return fmt.Errorf("vouchd: configure action broker: %w", err)
+	}
+	recovered, err := actionBroker.Recover(ctx)
+	if err != nil {
+		return fmt.Errorf("vouchd: recover interrupted actions: %w", err)
+	}
+	if recovered > 0 {
+		fmt.Fprintf(stdout, "vouchd marked %d interrupted action(s) for reconciliation\n", recovered)
+	}
+	transactionManager, err := gitstage.New()
+	if err != nil {
+		return fmt.Errorf("vouchd: configure transaction staging: %w", err)
+	}
+	if err := ensurePrivateSocketDirectory(config.SocketPath); err != nil {
+		return err
+	}
 	if err := prepareSocketPath(config.SocketPath); err != nil {
 		return err
 	}
@@ -239,51 +310,6 @@ func Run(ctx context.Context, config Config) error {
 	if err := os.Chmod(config.SocketPath, 0o600); err != nil {
 		return fmt.Errorf("vouchd: restrict socket permissions: %w", err)
 	}
-	kernelStore, err := store.OpenSQLite(config.DatabasePath)
-	if err != nil {
-		return err
-	}
-	defer kernelStore.Close()
-	if err := kernelStore.BindEnforcementProfile(
-		ctx, enforcementProfile,
-	); err != nil {
-		return fmt.Errorf(
-			"vouchd: bind ledger enforcement profile: %w",
-			err,
-		)
-	}
-	recoveredExecutions, err := recoverAgentExecutions(
-		ctx,
-		kernelStore,
-		engineExecutionCleanup(executionPolicy.EnginePath),
-		time.Now,
-	)
-	if err != nil {
-		return fmt.Errorf("vouchd: recover interrupted agent executions: %w", err)
-	}
-	if recoveredExecutions > 0 {
-		fmt.Fprintf(stdout, "vouchd marked %d interrupted agent execution(s)\n", recoveredExecutions)
-	}
-	repositoryRoot := config.RepositoryRoot
-	if repositoryRoot == "" {
-		repositoryRoot = "."
-	}
-	actionBroker, err := broker.New(kernelStore, repositoryRoot)
-	if err != nil {
-		return fmt.Errorf("vouchd: configure action broker: %w", err)
-	}
-	recovered, err := actionBroker.Recover(ctx)
-	if err != nil {
-		return fmt.Errorf("vouchd: recover interrupted actions: %w", err)
-	}
-	if recovered > 0 {
-		fmt.Fprintf(stdout, "vouchd marked %d interrupted action(s) for reconciliation\n", recovered)
-	}
-	transactionRoot := config.TransactionRoot
-	transactionManager, err := gitstage.New()
-	if err != nil {
-		return fmt.Errorf("vouchd: configure transaction staging: %w", err)
-	}
 
 	server := &http.Server{
 		Handler: kernelapi.NewServer(
@@ -295,6 +321,7 @@ func Run(ctx context.Context, config Config) error {
 				transactionRoot,
 				transactionreducer.BaselinePolicy{},
 			),
+			kernelapi.WithRuntimeIdentity(runtimeIdentity.RuntimeID),
 			kernelapi.WithExecutionRuntimePolicy(executionPolicy),
 			kernelapi.WithApprovalTrustStore(approvalTrust),
 			kernelapi.WithReleasePolicy(releasePolicy),
@@ -319,8 +346,71 @@ func Run(ctx context.Context, config Config) error {
 		}
 	}()
 	fmt.Fprintf(stdout, "vouchd listening on %s\n", config.SocketPath)
-	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	authenticatedListener := &peerAuthenticatedUnixListener{
+		UnixListener: listener,
+		expectedUID:  uint32(os.Geteuid()),
+	}
+	if err := server.Serve(authenticatedListener); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("vouchd: serve: %w", err)
+	}
+	return nil
+}
+
+type peerAuthenticatedUnixListener struct {
+	*net.UnixListener
+	expectedUID uint32
+}
+
+func (listener *peerAuthenticatedUnixListener) Accept() (net.Conn, error) {
+	for {
+		connection, err := listener.AcceptUnix()
+		if err != nil {
+			return nil, err
+		}
+		uid, credentialErr := peercred.UID(connection)
+		if credentialErr != nil {
+			_ = connection.Close()
+			return nil, fmt.Errorf(
+				"vouchd: authenticate Unix client: %w",
+				credentialErr,
+			)
+		}
+		if uid != listener.expectedUID {
+			_ = connection.Close()
+			continue
+		}
+		return connection, nil
+	}
+}
+
+func ensurePrivateSocketDirectory(socketPath string) error {
+	directory := filepath.Dir(socketPath)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return fmt.Errorf("vouchd: create socket directory: %w", err)
+	}
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return fmt.Errorf("vouchd: inspect socket directory: %w", err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New(
+			"vouchd: socket directory must be a real directory",
+		)
+	}
+	ownerUID, err := peercred.FileOwnerUID(info)
+	if err != nil {
+		return fmt.Errorf("vouchd: inspect socket directory owner: %w", err)
+	}
+	if ownerUID != uint32(os.Geteuid()) {
+		return errors.New(
+			"vouchd: socket directory must be owned by the daemon user",
+		)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return errors.New(
+			"vouchd: socket directory must not be group- or world-writable",
+		)
 	}
 	return nil
 }
@@ -435,24 +525,18 @@ func configureModelBroker(config Config, executionPolicy *kernelapi.ExecutionRun
 		policyPath = absolute
 	}
 	production := config.RuntimeProfile == "production"
-	if production {
-		if err := validateProductionConfigFile(policyPath, "model broker policy"); err != nil {
-			return err
-		}
-	}
-	policy, err := modelbroker.LoadPolicy(policyPath, production)
+	snapshot, err := readConfigFileSnapshot(
+		policyPath,
+		"model broker policy",
+		production,
+	)
 	if err != nil {
-		return fmt.Errorf("vouchd: %w", err)
+		return err
 	}
-	policyData, err := os.ReadFile(policyPath)
+	policy, err := modelbroker.ParsePolicy(snapshot.Data, production)
 	if err != nil {
-		return fmt.Errorf("vouchd: read model broker policy for digest: %w", err)
+		return fmt.Errorf("vouchd: decode model broker policy: %w", err)
 	}
-	if len(policyData) > 2<<20 {
-		return errors.New("vouchd: model broker policy exceeds 2 MiB")
-	}
-	sum := sha256.Sum256(policyData)
-	policyDigest := "sha256:" + hex.EncodeToString(sum[:])
 	tokenEnvironment := strings.TrimSpace(config.ModelTokenEnv)
 	if tokenEnvironment == "" {
 		tokenEnvironment = "OPENAI_API_KEY"
@@ -462,36 +546,11 @@ func configureModelBroker(config Config, executionPolicy *kernelapi.ExecutionRun
 		return fmt.Errorf("vouchd: model provider credential environment %s is not set", tokenEnvironment)
 	}
 	executionPolicy.ModelBroker = &kernelapi.ModelBrokerRuntimePolicy{
-		Image: image, PolicyPath: policyPath, PolicyDigest: policyDigest,
-		Policy: policy, ProviderBearerToken: providerToken,
+		Image: image, PolicyData: cloneConfigBytes(snapshot.Data),
+		PolicyDigest: snapshot.Digest, Policy: policy,
+		ProviderBearerToken: providerToken,
 	}
 	return nil
-}
-
-func validateProductionConfigFile(filePath, label string) error {
-	info, err := os.Lstat(filePath)
-	if err != nil {
-		return fmt.Errorf("vouchd: inspect production %s file: %w", label, err)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("vouchd: production %s must be a regular non-symlink file", label)
-	}
-	if info.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("vouchd: production %s must not be group- or world-writable", label)
-	}
-	return nil
-}
-
-func digestConfigFile(filePath, label string) (string, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("vouchd: read %s for digest: %w", label, err)
-	}
-	if len(data) > 2<<20 {
-		return "", fmt.Errorf("vouchd: %s exceeds 2 MiB", label)
-	}
-	sum := sha256.Sum256(data)
-	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func releaseRuntimePolicy(profile string, allowedGitRefs []string) (kernelapi.ReleasePolicy, error) {

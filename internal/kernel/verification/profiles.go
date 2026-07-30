@@ -115,25 +115,41 @@ func LoadProfiles(path string) (*ProfileSet, error) {
 			MaxVerifierProfilesFileBytes,
 		)
 	}
+	profiles, err := ParseProfiles(data)
+	if err != nil {
+		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+	}
+	return profiles, nil
+}
+
+// ParseProfiles validates and digests one already-bounded verifier-profile
+// snapshot. The returned set digest is derived from these exact parsed bytes.
+func ParseProfiles(data []byte) (*ProfileSet, error) {
+	if int64(len(data)) > MaxVerifierProfilesFileBytes {
+		return nil, fmt.Errorf(
+			"verifier profiles must be no larger than %d bytes",
+			MaxVerifierProfilesFileBytes,
+		)
+	}
 	if !utf8.Valid(data) {
-		return nil, errors.New("decode verifier profiles: JSON must be valid UTF-8")
+		return nil, errors.New("JSON must be valid UTF-8")
 	}
 	if err := rejectDuplicateJSONKeys(data); err != nil {
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 
 	var document profileDocument
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("trailing JSON value")
 		}
-		return nil, fmt.Errorf("decode verifier profiles: %w", err)
+		return nil, err
 	}
 	return newProfileSet(document)
 }

@@ -16,7 +16,7 @@ import (
 type ModelBrokerConfig struct {
 	EnginePath          string
 	Image               string
-	PolicyPath          string
+	PolicyData          []byte
 	PolicyDigest        string
 	ReceiptDirectory    string
 	TransactionID       string
@@ -48,16 +48,20 @@ func (config ModelBrokerConfig) Validate() error {
 	if _, err := ImageDigest(config.Image); err != nil {
 		return fmt.Errorf("model broker image: %w", err)
 	}
-	for name, value := range map[string]string{
-		"policy path":       config.PolicyPath,
-		"receipt directory": config.ReceiptDirectory,
-	} {
-		if !filepath.IsAbs(value) || strings.ContainsAny(value, ",\x00") {
-			return fmt.Errorf("model broker %s must be an absolute bind-safe path", name)
-		}
+	if !filepath.IsAbs(config.ReceiptDirectory) ||
+		strings.ContainsAny(config.ReceiptDirectory, ",\x00") {
+		return errors.New(
+			"model broker receipt directory must be an absolute bind-safe path",
+		)
 	}
 	if !digestPattern.MatchString(config.PolicyDigest) {
 		return errors.New("model broker policy digest must be sha256")
+	}
+	if len(config.PolicyData) == 0 || len(config.PolicyData) > 2<<20 ||
+		digestValue(config.PolicyData) != config.PolicyDigest {
+		return errors.New(
+			"model broker policy snapshot does not match its digest",
+		)
 	}
 	if config.TransactionID == "" || config.RunID == "" {
 		return errors.New("model broker transaction and run IDs are required")
@@ -84,6 +88,7 @@ func (config ModelBrokerConfig) Validate() error {
 }
 
 func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBrokerSession, error) {
+	config.PolicyData = append([]byte(nil), config.PolicyData...)
 	if err := config.Validate(); err != nil {
 		return ModelBrokerSession{}, err
 	}
@@ -107,13 +112,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 			return ModelBrokerSession{}, fmt.Errorf("assign model broker receipt ownership: %w", err)
 		}
 	}
-	policyData, err := os.ReadFile(config.PolicyPath)
-	if err != nil {
-		return ModelBrokerSession{}, fmt.Errorf("read model broker policy: %w", err)
-	}
-	if len(policyData) > 2<<20 || digestValue(policyData) != config.PolicyDigest {
-		return ModelBrokerSession{}, errors.New("model broker policy changed after its digest was approved")
-	}
+	policyData := config.PolicyData
 	runtimePolicyPath := filepath.Join(config.ReceiptDirectory, "model-policy.json")
 	if existing, err := os.ReadFile(runtimePolicyPath); err == nil {
 		if digestValue(existing) != config.PolicyDigest {

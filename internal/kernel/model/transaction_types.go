@@ -167,9 +167,11 @@ type ModelBrokerExecution struct {
 // were admitted together. It is optional so transaction projections created
 // before atomic task admission remain readable.
 type TransactionAdmissionBinding struct {
-	TaskDigest     string `json:"task_digest"`
-	RunID          string `json:"run_id"`
-	ContractDigest string `json:"contract_digest"`
+	RuntimeID          string `json:"runtime_id,omitempty"`
+	EnforcementProfile string `json:"enforcement_profile,omitempty"`
+	TaskDigest         string `json:"task_digest"`
+	RunID              string `json:"run_id"`
+	ContractDigest     string `json:"contract_digest"`
 }
 
 type AgentTransaction struct {

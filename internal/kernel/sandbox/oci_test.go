@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -312,16 +313,27 @@ exit 0
 	if err := os.WriteFile(policyPath, policyData, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	policySnapshot, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	config := ModelBrokerConfig{
 		EnginePath: engine,
 		Image:      "broker@sha256:" + strings.Repeat("b", 64),
-		PolicyPath: policyPath, PolicyDigest: digestValue(policyData),
+		PolicyData: policySnapshot, PolicyDigest: digestValue(policySnapshot),
 		ReceiptDirectory: filepath.Join(root, "receipts"),
 		TransactionID:    "tx:broker-sidecar", RunID: "run:broker-sidecar",
 		AgentToken:          "agent-token-000000000000000000000000000000",
 		ProviderBearerToken: "provider-secret-never-in-engine-arguments",
 		UID:                 1000, GID: 1000, MemoryBytes: 512 << 20,
 		CPUMillis: 1000, PIDsLimit: 64, TmpfsBytes: 64 << 20,
+	}
+	if err := os.WriteFile(
+		policyPath,
+		[]byte(`{"version":"replaced-after-snapshot"}`),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
 	}
 	session, err := StartModelBroker(context.Background(), config)
 	if err != nil {
@@ -348,6 +360,20 @@ exit 0
 	}
 	if strings.Contains(logged, config.ProviderBearerToken) {
 		t.Fatal("provider credential leaked into engine process arguments")
+	}
+	frozenPolicy, err := os.ReadFile(filepath.Join(
+		config.ReceiptDirectory,
+		"model-policy.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frozenPolicy, policySnapshot) {
+		t.Fatalf(
+			"frozen policy=%s, want original snapshot=%s",
+			frozenPolicy,
+			policySnapshot,
+		)
 	}
 	if _, err := os.Stat(filepath.Join(config.ReceiptDirectory, "broker.env")); !os.IsNotExist(err) {
 		t.Fatalf("broker secret environment file was retained: %v", err)

@@ -68,6 +68,24 @@ func (transaction AgentTransaction) Validate() error {
 	}
 	if transaction.Admission != nil {
 		admission := transaction.Admission
+		if admission.RuntimeID != "" &&
+			!IsRuntimeID(admission.RuntimeID) {
+			return invalid(
+				resource,
+				"admission.runtime_id",
+				"Runtime ID must be canonical",
+			)
+		}
+		if (admission.RuntimeID == "") !=
+			(admission.EnforcementProfile == "") ||
+			(admission.EnforcementProfile != "" &&
+				!IsEnforcementProfile(admission.EnforcementProfile)) {
+			return invalid(
+				resource,
+				"admission.enforcement_profile",
+				"Runtime ID and enforcement profile must form one valid binding",
+			)
+		}
 		if err := validateDigest(resource, "admission.task_digest", admission.TaskDigest); err != nil {
 			return err
 		}

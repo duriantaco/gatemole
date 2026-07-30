@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/duriantaco/vouch/internal/kernel/approval"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/vouch/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
@@ -60,6 +62,7 @@ func TestTransactionRunSupervisesStagesAndValidatesAgent(t *testing.T) {
 	failingStore := &failTransactionAppendStore{Store: kernelStore}
 	handler := kernelapi.NewServer(
 		failingStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
 		),
@@ -67,7 +70,7 @@ func TestTransactionRunSupervisesStagesAndValidatesAgent(t *testing.T) {
 		kernelapi.WithExecutionRuntimePolicy(verifierExecutionPolicy(fakeRuntime)),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	secretArgument := "operator-secret-must-not-enter-ledger"
 	script := "printf 'package auth\\n\\nfunc Allowed() bool { return true }\\n' > internal/auth/middleware.go; " +
@@ -364,13 +367,14 @@ func TestTransactionRunPersistsFailedAgentWithoutStaging(t *testing.T) {
 	fakeRuntime := writeFakeOCIRuntime(t)
 	handler := kernelapi.NewServer(
 		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
 		),
 		kernelapi.WithExecutionRuntimePolicy(verifierExecutionPolicy(fakeRuntime)),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	stdout, stderr, code := invokeTransactionRunCLI(
 		repo, newClient, true,
@@ -417,13 +421,14 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	executionPolicy.MaxAgentTimeoutSecs = 60
 	handler := kernelapi.NewServer(
 		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
 		),
 		kernelapi.WithExecutionRuntimePolicy(executionPolicy),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	intent := "Change authentication through the mounted Vouch task"
 	image := "registry.example.invalid/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -493,6 +498,140 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	}
 }
 
+func TestTransactionRunPreflightFailureDoesNotCreateAuthorityOrWorktree(
+	t *testing.T,
+) {
+	repo := transactionRunRepository(t)
+	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = kernelStore.Close() })
+	manager, err := gitstage.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagingRoot := t.TempDir()
+	engine := filepath.Join(t.TempDir(), "rejecting-oci-runtime")
+	if err := os.WriteFile(
+		engine,
+		[]byte(`#!/bin/sh
+if [ "$1" = "info" ]; then
+  exit 0
+fi
+if [ "$1" = "image" ]; then
+  echo "private engine diagnostic" >&2
+  exit 1
+fi
+exit 0
+`),
+		0o700,
+	); err != nil {
+		t.Fatal(err)
+	}
+	policy := verifierExecutionPolicy(engine)
+	policy.MaxAgentTimeoutSecs = 60
+	handler := kernelapi.NewServer(
+		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
+		kernelapi.WithTransactionRuntime(
+			manager,
+			repo,
+			stagingRoot,
+			transactionreducer.BaselinePolicy{},
+		),
+		kernelapi.WithExecutionRuntimePolicy(policy),
+	).Handler()
+	newClient := func(string) transactionClient {
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
+	}
+
+	_, stderr, code := invokeTransactionRunCLI(
+		repo,
+		newClient,
+		true,
+		"run",
+		"--id", "tx:preflight-rejected",
+		"--namespace", "payments",
+		"--intent", "Do not create authority when the image is unavailable",
+		"--run", "run:preflight-rejected",
+		"--runtime", "oci",
+		"--image", "registry.example.invalid/agent@"+testAgentImageDigest,
+		"--timeout", "30s",
+		"--",
+		"/bin/sh", "-c", "exit 0",
+	)
+	if code != 1 ||
+		!strings.Contains(stderr, "Runtime preflight failed") ||
+		strings.Contains(stderr, "private engine diagnostic") {
+		t.Fatalf(
+			"preflight failure code=%d stderr=%s",
+			code,
+			stderr,
+		)
+	}
+	if _, err := kernelStore.GetTransaction(
+		context.Background(),
+		"payments",
+		"tx:preflight-rejected",
+	); err == nil {
+		t.Fatal("failed preflight persisted a transaction")
+	} else {
+		var kernelErr *model.KernelError
+		if !errors.As(err, &kernelErr) ||
+			kernelErr.Code != model.ErrorNotFound {
+			t.Fatalf("load rejected transaction: %v", err)
+		}
+	}
+	entries, err := os.ReadDir(stagingRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("failed preflight created staging state: %#v", entries)
+	}
+
+	_, stderr, code = invokeTransactionRunCLI(
+		repo,
+		newClient,
+		true,
+		"run",
+		"--id", "tx:profile-downgrade-rejected",
+		"--namespace", "payments",
+		"--intent", "Require production enforcement before creating authority",
+		"--run", "run:profile-downgrade-rejected",
+		"--runtime", "oci",
+		"--require-enforcement-profile", "production",
+		"--image", "registry.example.invalid/agent@"+testAgentImageDigest,
+		"--timeout", "30s",
+		"--",
+		"/bin/sh", "-c", "exit 0",
+	)
+	if code != 1 ||
+		!strings.Contains(stderr, "Runtime preflight failed") ||
+		!strings.Contains(stderr, "enforcement profile") {
+		t.Fatalf(
+			"profile downgrade code=%d stderr=%s",
+			code,
+			stderr,
+		)
+	}
+	if _, err := kernelStore.GetTransaction(
+		context.Background(),
+		"payments",
+		"tx:profile-downgrade-rejected",
+	); err == nil {
+		t.Fatal("profile downgrade persisted a transaction")
+	}
+	entries, err = os.ReadDir(stagingRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("profile downgrade created staging state: %#v", entries)
+	}
+}
+
 func TestTransactionRunNamedProfileEnforcesDeclaredEntrypoint(t *testing.T) {
 	repo := transactionRunRepository(t)
 	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
@@ -509,13 +648,14 @@ func TestTransactionRunNamedProfileEnforcesDeclaredEntrypoint(t *testing.T) {
 	executionPolicy.MaxAgentTimeoutSecs = 60
 	handler := kernelapi.NewServer(
 		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
 		),
 		kernelapi.WithExecutionRuntimePolicy(executionPolicy),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	profile := validAgentProfileForTest()
 	profile.Descriptor.Runtime.Entrypoint = []string{"/bin/sh", "-c"}
@@ -566,6 +706,7 @@ func TestProductionRuntimePolicyRejectsHostExecution(t *testing.T) {
 	allowedDigest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	handler := kernelapi.NewServer(
 		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
 		),
@@ -575,7 +716,7 @@ func TestProductionRuntimePolicyRejectsHostExecution(t *testing.T) {
 		}),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	_, stderr, code := invokeTransactionRunCLI(
 		repo, newClient, true,
@@ -616,13 +757,14 @@ func TestVerificationUsesReadOnlySnapshotAndRecordsMutationAttempt(t *testing.T)
 	stagingRoot := t.TempDir()
 	handler := kernelapi.NewServer(
 		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
 		kernelapi.WithTransactionRuntime(
 			manager, repo, stagingRoot, transactionreducer.BaselinePolicy{},
 		),
 		kernelapi.WithExecutionRuntimePolicy(verifierExecutionPolicy(fakeRuntime)),
 	).Handler()
 	newClient := func(string) transactionClient {
-		return kernelclient.NewWithTransport(handlerTransport{handler: handler})
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
 	_, stderr, code := invokeTransactionRunCLI(
 		repo, newClient, true,
@@ -721,7 +863,84 @@ func transactionRunRepository(t *testing.T) string {
 		"-c", "user.email=vouch@example.invalid",
 		"commit", "-m", "fixture",
 	)
+	if err := os.Mkdir(filepath.Join(repo, ".vouch"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(repo, ".vouch", ".gitignore"),
+		[]byte("runtime.json\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runtimeidentity.CreateOrLoad(
+		context.Background(),
+		repo,
+	); err != nil {
+		t.Fatalf("create Runtime identity: %v", err)
+	}
 	return repo
+}
+
+func bindTransactionRuntimeForTest(
+	t *testing.T,
+	repo string,
+	kernelStore *store.SQLiteStore,
+) kernelapi.Option {
+	t.Helper()
+	identity, err := runtimeidentity.Load(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := kernelStore.BindRuntimeMetadata(
+		context.Background(),
+		identity.RuntimeID,
+		store.EnforcementProfileDevelopment,
+	); err != nil {
+		t.Fatal(err)
+	}
+	return kernelapi.WithRuntimeIdentity(identity.RuntimeID)
+}
+
+func runtimeBoundHandlerClientForTest(
+	t *testing.T,
+	repo string,
+	handler http.Handler,
+) *kernelclient.Client {
+	t.Helper()
+	identity, err := runtimeidentity.Load(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kernelclient.NewWithTransport(
+		runtimeBoundHandlerTransport{
+			t:         t,
+			handler:   handler,
+			runtimeID: identity.RuntimeID,
+		},
+	).WithExpectedRuntimeID(identity.RuntimeID)
+}
+
+type runtimeBoundHandlerTransport struct {
+	t         *testing.T
+	handler   http.Handler
+	runtimeID string
+}
+
+func (transport runtimeBoundHandlerTransport) RoundTrip(
+	request *http.Request,
+) (*http.Response, error) {
+	transport.t.Helper()
+	if got := request.Header.Get(runtimeidentity.HTTPHeader); got !=
+		transport.runtimeID {
+		transport.t.Fatalf(
+			"client Runtime header=%q, want %q for %s",
+			got,
+			transport.runtimeID,
+			request.URL.Path,
+		)
+	}
+	return handlerTransport{handler: transport.handler}.RoundTrip(request)
 }
 
 func runGitForTransactionTest(t *testing.T, repo string, args ...string) {
@@ -746,6 +965,12 @@ func writeFakeOCIRuntime(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-oci-runtime")
 	script := `#!/bin/sh
+if [ "$1" = "info" ]; then
+  exit 0
+fi
+if [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
 if [ "$1" = "rm" ]; then
   exit 0
 fi

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -20,11 +21,21 @@ func TestGetExecutionAuthorityTracksLifecycleAndSurvivesRestart(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "kernel.db")
-	kernelStore, err := OpenSQLite(path)
+	runtimeID := runtimeMetadataTestID("8")
+	kernelStore, err := OpenSQLiteForRuntime(
+		ctx,
+		path,
+		runtimeID,
+		EnforcementProfileDevelopment,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	prepared := prepareStoreAdmission(t, "execution-authority")
+	prepared := prepareStoreAdmissionForRuntime(
+		t,
+		"execution-authority",
+		runtimeID,
+	)
 	initial, created, err := kernelStore.AdmitTask(ctx, prepared)
 	if err != nil || !created {
 		t.Fatalf("admit task: created=%v err=%v", created, err)
@@ -42,6 +53,17 @@ func TestGetExecutionAuthorityTracksLifecycleAndSurvivesRestart(t *testing.T) {
 	if !reflect.DeepEqual(fresh.Run, initial.Run) ||
 		!reflect.DeepEqual(fresh.Transaction, initial.Transaction) {
 		t.Fatal("fresh authority did not return admitted lifecycle projections")
+	}
+	freshByRun, err := kernelStore.GetExecutionAuthorityForRun(
+		ctx,
+		prepared.Namespace,
+		initial.Run.Run.ID,
+	)
+	if err != nil {
+		t.Fatalf("get fresh execution authority by run: %v", err)
+	}
+	if !reflect.DeepEqual(freshByRun, fresh) {
+		t.Fatal("run admission index resolved different execution authority")
 	}
 
 	currentRun, currentTransaction := advanceAuthorityLifecycle(
@@ -68,7 +90,12 @@ func TestGetExecutionAuthorityTracksLifecycleAndSurvivesRestart(t *testing.T) {
 	if err := kernelStore.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := OpenSQLite(path)
+	reopened, err := OpenSQLiteForRuntime(
+		ctx,
+		path,
+		runtimeID,
+		EnforcementProfileDevelopment,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +110,146 @@ func TestGetExecutionAuthorityTracksLifecycleAndSurvivesRestart(t *testing.T) {
 	}
 	if !reflect.DeepEqual(afterRestart, advanced) {
 		t.Fatal("execution authority changed across store restart")
+	}
+}
+
+func TestGetExecutionAuthorityRejectsDevelopmentAdoptedLegacyAdmission(
+	t *testing.T,
+) {
+	t.Parallel()
+	ctx := context.Background()
+	kernelStore := openTestStore(t)
+	prepared := prepareStoreAdmission(t, "legacy-execution-authority")
+	initial, created, err := kernelStore.AdmitTask(ctx, prepared)
+	if err != nil || !created {
+		t.Fatalf("admit legacy task: created=%v err=%v", created, err)
+	}
+	if initial.Version != admission.LegacyResultVersion ||
+		initial.RuntimeID != "" ||
+		initial.EnforcementProfile != "" {
+		t.Fatalf("fixture is not an unbound v0 admission: %#v", initial)
+	}
+
+	runtimeID := runtimeMetadataTestID("9")
+	if err := kernelStore.BindRuntimeMetadata(
+		ctx,
+		runtimeID,
+		EnforcementProfileDevelopment,
+	); err != nil {
+		t.Fatalf("adopt legacy ledger in development: %v", err)
+	}
+	readable, requestDigest, err := kernelStore.GetTaskAdmission(
+		ctx,
+		prepared.Namespace,
+		prepared.IdempotencyKey,
+	)
+	if err != nil {
+		t.Fatalf("read adopted legacy admission: %v", err)
+	}
+	if requestDigest != prepared.RequestDigest {
+		t.Fatalf(
+			"legacy request digest=%q want=%q",
+			requestDigest,
+			prepared.RequestDigest,
+		)
+	}
+	assertSameAdmission(t, readable, initial)
+
+	beforeRun, err := kernelStore.GetRun(
+		ctx,
+		prepared.Namespace,
+		initial.Run.Run.ID,
+	)
+	if err != nil {
+		t.Fatalf("get run before authority denial: %v", err)
+	}
+	beforeTransaction, err := kernelStore.GetTransaction(
+		ctx,
+		prepared.Namespace,
+		initial.Transaction.Transaction.ID,
+	)
+	if err != nil {
+		t.Fatalf("get transaction before authority denial: %v", err)
+	}
+
+	snapshot, err := kernelStore.GetExecutionAuthority(
+		ctx,
+		prepared.Namespace,
+		initial.Transaction.Transaction.ID,
+	)
+	if !reflect.DeepEqual(snapshot, ExecutionAuthoritySnapshot{}) {
+		t.Fatalf("denied legacy authority returned a snapshot: %#v", snapshot)
+	}
+	var kernelErr *model.KernelError
+	if !errors.As(err, &kernelErr) {
+		t.Fatalf("authority error=%T %v, want *model.KernelError", err, err)
+	}
+	if kernelErr.Code != model.ErrorCapabilityDenied ||
+		kernelErr.Operation != getExecutionAuthorityOperation ||
+		kernelErr.Resource != initial.Transaction.Transaction.ID {
+		t.Fatalf("unexpected authority denial: %#v", kernelErr)
+	}
+	snapshot, err = kernelStore.GetExecutionAuthorityForRun(
+		ctx,
+		prepared.Namespace,
+		initial.Run.Run.ID,
+	)
+	if !reflect.DeepEqual(snapshot, ExecutionAuthoritySnapshot{}) {
+		t.Fatalf(
+			"denied legacy run authority returned a snapshot: %#v",
+			snapshot,
+		)
+	}
+	if !errors.As(err, &kernelErr) ||
+		kernelErr.Code != model.ErrorCapabilityDenied {
+		t.Fatalf("unexpected legacy run authority denial: %#v", err)
+	}
+
+	afterRun, err := kernelStore.GetRun(
+		ctx,
+		prepared.Namespace,
+		initial.Run.Run.ID,
+	)
+	if err != nil {
+		t.Fatalf("get run after authority denial: %v", err)
+	}
+	afterTransaction, err := kernelStore.GetTransaction(
+		ctx,
+		prepared.Namespace,
+		initial.Transaction.Transaction.ID,
+	)
+	if err != nil {
+		t.Fatalf("get transaction after authority denial: %v", err)
+	}
+	if !reflect.DeepEqual(afterRun, beforeRun) ||
+		!reflect.DeepEqual(afterTransaction, beforeTransaction) {
+		t.Fatal("legacy authority denial mutated lifecycle projections")
+	}
+	replayed, replayDigest, err := kernelStore.GetTaskAdmission(
+		ctx,
+		prepared.Namespace,
+		prepared.IdempotencyKey,
+	)
+	if err != nil {
+		t.Fatalf("re-read adopted legacy admission: %v", err)
+	}
+	if replayDigest != requestDigest {
+		t.Fatalf("replayed request digest=%q want=%q", replayDigest, requestDigest)
+	}
+	assertSameAdmission(t, replayed, initial)
+	if err := kernelStore.VerifyRun(
+		ctx,
+		prepared.Namespace,
+		initial.Run.Run.ID,
+	); err != nil {
+		t.Fatalf("verify run after authority denial: %v", err)
+	}
+	if err := kernelStore.VerifyTransaction(
+		ctx,
+		prepared.Namespace,
+		initial.Transaction.Transaction.ID,
+	); err != nil {
+		t.Fatalf("verify transaction after authority denial: %v", err)
 	}
 }
 
@@ -254,7 +421,19 @@ func TestGetExecutionAuthorityRejectsTamperedAuthority(t *testing.T) {
 			ctx := context.Background()
 			kernelStore := openTestStore(t)
 			suffix := "tamper-" + strings.ReplaceAll(test.name, " ", "-")
-			prepared := prepareStoreAdmission(t, suffix)
+			runtimeID := runtimeMetadataTestID("a")
+			if err := kernelStore.BindRuntimeMetadata(
+				ctx,
+				runtimeID,
+				EnforcementProfileDevelopment,
+			); err != nil {
+				t.Fatal(err)
+			}
+			prepared := prepareStoreAdmissionForRuntime(
+				t,
+				suffix,
+				runtimeID,
+			)
 			initial, created, err := kernelStore.AdmitTask(ctx, prepared)
 			if err != nil || !created {
 				t.Fatalf("admit task: created=%v err=%v", created, err)

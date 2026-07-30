@@ -374,7 +374,7 @@ func validInput(
 	maxWall := int64(600)
 	budgets.MaxWallTimeSeconds = &maxWall
 	prepared, err := admission.Prepare("team", admission.Request{
-		Version:        admission.RequestVersion,
+		Version:        admission.LegacyRequestVersion,
 		IdempotencyKey: "admission:test",
 		TransactionID:  "tx:test",
 		RunID:          "run:test",

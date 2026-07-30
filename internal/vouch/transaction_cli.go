@@ -2,8 +2,6 @@ package vouch
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,12 +14,18 @@ import (
 	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 )
 
 type transactionClient interface {
+	PreflightRuntime(
+		context.Context,
+		string,
+		runtimepreflight.Request,
+	) (runtimepreflight.Result, error)
 	AdmitTask(context.Context, string, admission.Request) (admission.Result, error)
-	CreateTransaction(context.Context, model.TransactionEvent) (transactionreducer.Projection, error)
 	GetTransaction(context.Context, string, string) (transactionreducer.Projection, error)
 	ListTransactions(context.Context, string) ([]model.AgentTransaction, error)
 	TransactionEvents(context.Context, string, string, int64) ([]model.TransactionEvent, error)
@@ -43,27 +47,63 @@ type transactionClient interface {
 type transactionClientFactory func(string) transactionClient
 
 func transactionCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	return transactionCommandWithFactory(repo, args, jsonOut, stdout, stderr, func(socket string) transactionClient {
-		return kernelclient.New(socket)
-	})
+	factory, err := runtimeBoundTransactionClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "tx: %v\n", err)
+		return 1
+	}
+	return transactionCommandWithFactory(
+		repo, args, jsonOut, stdout, stderr, factory,
+	)
 }
 
 func transactionStatusCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	return transactionAliasCommandWithFactory("status", repo, args, jsonOut, stdout, stderr, func(socket string) transactionClient {
-		return kernelclient.New(socket)
-	})
+	factory, err := runtimeBoundTransactionClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "status: %v\n", err)
+		return 1
+	}
+	return transactionAliasCommandWithFactory(
+		"status", repo, args, jsonOut, stdout, stderr, factory,
+	)
 }
 
 func transactionApproveCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	return transactionAliasCommandWithFactory("approve", repo, args, jsonOut, stdout, stderr, func(socket string) transactionClient {
-		return kernelclient.New(socket)
-	})
+	factory, err := runtimeBoundTransactionClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "approve: %v\n", err)
+		return 1
+	}
+	return transactionAliasCommandWithFactory(
+		"approve", repo, args, jsonOut, stdout, stderr, factory,
+	)
 }
 
 func transactionReleaseCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	return transactionAliasCommandWithFactory("release", repo, args, jsonOut, stdout, stderr, func(socket string) transactionClient {
-		return kernelclient.New(socket)
-	})
+	factory, err := runtimeBoundTransactionClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "release: %v\n", err)
+		return 1
+	}
+	return transactionAliasCommandWithFactory(
+		"release", repo, args, jsonOut, stdout, stderr, factory,
+	)
+}
+
+func runtimeBoundTransactionClientFactory(
+	repo string,
+) (transactionClientFactory, error) {
+	identity, err := runtimeidentity.Load(context.Background(), repo)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"load Runtime identity; run `vouch runtime init` first: %w",
+			err,
+		)
+	}
+	return func(socket string) transactionClient {
+		return kernelclient.New(socket).
+			WithExpectedRuntimeID(identity.RuntimeID)
+	}, nil
 }
 
 // transactionAliasCommandWithFactory keeps the public runtime verbs as thin
@@ -204,41 +244,89 @@ func transactionCreate(repo string, args []string, jsonOut bool, stdout, stderr 
 		}
 		intentBytes = data
 	}
-	now := time.Now().UTC()
-	runIDs := []string{}
-	if *runID != "" {
-		runIDs = append(runIDs, *runID)
+	runtimeIdentity, err := runtimeidentity.Load(context.Background(), repo)
+	if err != nil {
+		fmt.Fprintf(
+			stderr,
+			"tx create: load Runtime identity; run `vouch runtime init` first: %v\n",
+			err,
+		)
+		return 1
 	}
-	transaction := model.AgentTransaction{
-		Version:                model.AgentTransactionVersion,
-		ID:                     *id,
-		Namespace:              *namespace,
-		IntentDigest:           transactionIntentDigest(intentBytes),
-		Sponsor:                model.Principal{ID: *sponsorID, Kind: model.PrincipalKind(*sponsorKind)},
-		AgentRunIDs:            runIDs,
-		StageBindings:          []model.StageBinding{},
-		State:                  model.TransactionCreated,
-		EffectIDs:              []string{},
-		VerificationResultIDs:  []string{},
-		OutstandingApprovalIDs: []string{},
-		EventSequence:          1,
-		CreatedAt:              now,
-		UpdatedAt:              now,
+	if *runID == "" {
+		*runID = "run:" + *id
 	}
-	event, err := transactionreducer.CreationEvent(
-		transaction,
-		model.Principal{ID: *actorID, Kind: model.PrincipalKind(*actorKind)},
+	manualProfile, err := resolveAdHocAgentProfile(
+		"host",
+		"",
+		[]string{"vouch-manual-transaction"},
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	projection, err := newClient(*socket).CreateTransaction(context.Background(), event)
+	profileBinding, err := manualProfile.binding()
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	return renderTransactionProjection(projection, jsonOut, "Created", stdout, stderr)
+	request := admission.Request{
+		Version:                    admission.RequestVersion,
+		ExpectedRuntimeID:          runtimeIdentity.RuntimeID,
+		ExpectedEnforcementProfile: "development",
+		IdempotencyKey:             *id,
+		TransactionID:              *id,
+		RunID:                      *runID,
+		Intent:                     string(intentBytes),
+		AgentProfile:               profileBinding,
+		Sponsor: model.Principal{
+			ID:   *sponsorID,
+			Kind: model.PrincipalKind(*sponsorKind),
+		},
+		Actor: model.Principal{
+			ID:   *actorID,
+			Kind: model.PrincipalKind(*actorKind),
+		},
+		Contract: admission.ContractSpec{
+			Risk: "high",
+			Resources: []model.ContractResource{{
+				ID: "workspace",
+				Selector: model.ResourceSelector{
+					Kind:    "filesystem",
+					Pattern: "workspace/**",
+				},
+				Operations: []string{
+					"filesystem.read",
+					"filesystem.write",
+				},
+				Conditions: model.CapabilityConditions{
+					WorkspaceRoot: "workspace",
+				},
+			}},
+		},
+	}
+	client := newClient(*socket)
+	if kernelClient, ok := client.(*kernelclient.Client); ok {
+		client = kernelClient.WithExpectedRuntimeID(
+			runtimeIdentity.RuntimeID,
+		)
+	}
+	admitted, err := client.AdmitTask(
+		context.Background(),
+		*namespace,
+		request,
+	)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return renderTransactionProjection(
+		admitted.Transaction,
+		jsonOut,
+		"Created",
+		stdout,
+		stderr,
+	)
 }
 
 func transactionStart(repo string, args []string, jsonOut bool, stdout, stderr io.Writer, newClient transactionClientFactory) int {
@@ -577,11 +665,6 @@ func parseTransactionTarget(command, repo string, args []string, stderr io.Write
 	}, true
 }
 
-func transactionIntentDigest(intent []byte) string {
-	sum := sha256.Sum256(intent)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
-
 func renderTransactionProjection(
 	projection transactionreducer.Projection,
 	jsonOut bool,
@@ -606,8 +689,8 @@ func renderTransactionProjection(
 
 func transactionUsage(out io.Writer) {
 	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] tx <command>")
-	fmt.Fprintln(out, "  tx run [--id ID] [--namespace NS] (--intent TEXT | --intent-file FILE) [--agent NAME | --image IMAGE] [--run RUN] -- [COMMAND_OR_AGENT_ARG...]")
-	fmt.Fprintln(out, "  tx create --id ID --namespace NS (--intent TEXT | --intent-file FILE) [--run RUN]")
+	fmt.Fprintln(out, "  tx run [--id ID] [--namespace NS] [--require-enforcement-profile development|production] (--intent TEXT | --intent-file FILE) [--agent NAME | --image IMAGE] [--run RUN] -- [COMMAND_OR_AGENT_ARG...]")
+	fmt.Fprintln(out, "  tx create --id ID --namespace NS (--intent TEXT | --intent-file FILE) [--run RUN] (development-only manual Runtime-bound v1 admission)")
 	fmt.Fprintln(out, "  tx start --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx worktree --namespace NS --id ID [--revision REV]")
 	fmt.Fprintln(out, "  tx stage --namespace NS --id ID")

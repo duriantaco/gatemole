@@ -40,6 +40,7 @@ type AdmissionStore interface {
 	AdmitTask(context.Context, admission.Prepared) (admission.Result, bool, error)
 	GetTaskAdmission(context.Context, string, string) (admission.Result, string, error)
 	GetExecutionAuthority(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
+	GetExecutionAuthorityForRun(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
 	AppendTransactionEventsIfRunCurrent(context.Context, string, int64, int64, string, []model.TransactionEvent) (transactionreducer.Projection, error)
 }
 

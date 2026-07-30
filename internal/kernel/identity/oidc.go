@@ -24,6 +24,8 @@ import (
 
 const TrustDocumentVersion = "vouch.oidc_trust.v0"
 
+const maxTrustDocumentBytes = 2 << 20
+
 type TrustDocument struct {
 	Version                 string   `json:"version"`
 	Issuer                  string   `json:"issuer"`
@@ -90,18 +92,38 @@ func LoadTrustFile(path string) (*Verifier, error) {
 	if err != nil {
 		return nil, fmt.Errorf("OIDC trust: stat %s: %w", path, err)
 	}
-	if !info.Mode().IsRegular() || info.Size() > 2<<20 {
+	if !info.Mode().IsRegular() || info.Size() > maxTrustDocumentBytes {
 		return nil, errors.New("OIDC trust must be a regular file no larger than 2 MiB")
 	}
-	decoder := json.NewDecoder(io.LimitReader(file, 2<<20))
+	data, err := io.ReadAll(io.LimitReader(file, maxTrustDocumentBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("OIDC trust: read %s: %w", path, err)
+	}
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("OIDC trust must be a regular file no larger than 2 MiB")
+	}
+	verifier, err := ParseTrustDocument(data)
+	if err != nil {
+		return nil, fmt.Errorf("OIDC trust: decode %s: %w", path, err)
+	}
+	return verifier, nil
+}
+
+// ParseTrustDocument validates one already-bounded OIDC trust snapshot.
+// Callers that also record a digest must hash these exact bytes.
+func ParseTrustDocument(data []byte) (*Verifier, error) {
+	if len(data) > maxTrustDocumentBytes {
+		return nil, errors.New("OIDC trust must be no larger than 2 MiB")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var document TrustDocument
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("OIDC trust: decode %s: %w", path, err)
+		return nil, err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, errors.New("OIDC trust: trailing JSON is not allowed")
+		return nil, errors.New("trailing JSON is not allowed")
 	}
 	return NewVerifier(document)
 }

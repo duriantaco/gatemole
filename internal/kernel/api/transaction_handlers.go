@@ -20,6 +20,7 @@ import (
 
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	kernelmodelbroker "github.com/duriantaco/vouch/internal/kernel/modelbroker"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 	"github.com/duriantaco/vouch/internal/kernel/transaction/gitstage"
@@ -435,13 +436,31 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	lock := s.runLock(namespace, "transaction:"+transactionID)
 	lock.Lock()
 	defer lock.Unlock()
-	projection, err := s.checkedTransaction(r, namespace, transactionID, request.ExpectedSequence)
+	// compileLiveExecutionAuthority performs the Runtime authority lookup and
+	// binds both transaction and run heads before any workload effect. Avoid a
+	// second earlier authority read so the launch-claim race check retains one
+	// coherent snapshot.
+	projection, err := s.transactionAtSequence(
+		r,
+		namespace,
+		transactionID,
+		request.ExpectedSequence,
+	)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	if projection.Transaction.State != model.TransactionRunning ||
 		len(projection.Transaction.StageBindings) != 1 {
+		if err := s.requireCurrentRuntimeAuthority(
+			r.Context(),
+			namespace,
+			transactionID,
+			projection,
+		); err != nil {
+			writeError(w, err)
+			return
+		}
 		writeError(w, transactionTransitionError("agent execution requires a running transaction with one stage boundary"))
 		return
 	}
@@ -560,8 +579,9 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			),
 		)
 		brokerConfig = &sandbox.ModelBrokerConfig{
-			EnginePath: s.executionPolicy.EnginePath,
-			Image:      brokerPolicy.Image, PolicyPath: brokerPolicy.PolicyPath,
+			EnginePath:          s.executionPolicy.EnginePath,
+			Image:               brokerPolicy.Image,
+			PolicyData:          append([]byte(nil), brokerPolicy.PolicyData...),
 			PolicyDigest:        brokerPolicy.PolicyDigest,
 			ReceiptDirectory:    receiptDirectory,
 			TransactionID:       transactionID,
@@ -2184,7 +2204,37 @@ func (s *Server) mutateTransactionState(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, next)
 }
 
+// checkedTransaction is the common gate for transaction mutation routes. The
+// daemon-run execution path compiles the same authority and launch claim in one
+// snapshot instead. A configured Runtime may inspect legacy history, but only a
+// current atomic v1 task admission can advance state or reach an external effect.
 func (s *Server) checkedTransaction(r *http.Request, namespace, transactionID string, expected int64) (transactionreducer.Projection, error) {
+	projection, err := s.transactionAtSequence(
+		r,
+		namespace,
+		transactionID,
+		expected,
+	)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	if err := s.requireCurrentRuntimeAuthority(
+		r.Context(),
+		namespace,
+		transactionID,
+		projection,
+	); err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	return projection, nil
+}
+
+func (s *Server) transactionAtSequence(
+	r *http.Request,
+	namespace string,
+	transactionID string,
+	expected int64,
+) (transactionreducer.Projection, error) {
 	projection, err := s.store.GetTransaction(r.Context(), namespace, transactionID)
 	if err != nil {
 		return transactionreducer.Projection{}, err
@@ -2204,12 +2254,23 @@ func (s *Server) verifiedAuthorityTransaction(
 	transactionID string,
 	expected int64,
 ) (transactionreducer.Projection, error) {
-	if err := s.store.VerifyTransaction(
-		r.Context(), namespace, transactionID,
-	); err != nil {
+	projection, err := s.checkedTransaction(
+		r,
+		namespace,
+		transactionID,
+		expected,
+	)
+	if err != nil {
 		return transactionreducer.Projection{}, err
 	}
-	return s.checkedTransaction(r, namespace, transactionID, expected)
+	if !runtimeidentity.IsRuntimeID(s.runtimeID) {
+		if err := s.store.VerifyTransaction(
+			r.Context(), namespace, transactionID,
+		); err != nil {
+			return transactionreducer.Projection{}, err
+		}
+	}
+	return projection, nil
 }
 
 func (s *Server) acquireWorkloadSlot(

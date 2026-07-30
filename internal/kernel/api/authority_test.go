@@ -227,6 +227,28 @@ func TestRequiredVerifierProfilesBindPreparationAndPolicyDigest(t *testing.T) {
 	}
 }
 
+func TestVerifierProfileSourceSnapshotDigestBindsAuthorityPolicy(t *testing.T) {
+	profiles := loadAuthorityProfiles(t, "verify", `["/verify","strict"]`)
+	policy := testVerifierExecutionPolicy(profiles)
+	policy.VerifierProfilesSourceDigest = testDigest("9")
+	server := &Server{
+		sequencePolicy:  transactionreducer.BaselinePolicy{},
+		executionPolicy: policy,
+	}
+	first, err := server.currentAuthorityPolicyDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.executionPolicy.VerifierProfilesSourceDigest = testDigest("a")
+	second, err := server.currentAuthorityPolicyDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("verifier-profile source snapshot change did not invalidate authority")
+	}
+}
+
 func TestAuthorityPolicyBindsEnforcementAndTrustInputs(t *testing.T) {
 	server := &Server{
 		sequencePolicy: transactionreducer.BaselinePolicy{},

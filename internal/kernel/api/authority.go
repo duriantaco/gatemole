@@ -22,7 +22,11 @@ func (s *Server) currentAuthorityPolicyDigest() (string, error) {
 	verifierProfileDigest := ""
 	verifierRuntimeDigest := ""
 	if s.executionPolicy.VerifierProfiles != nil {
-		verifierProfileDigest = s.executionPolicy.VerifierProfiles.Digest()
+		verifierProfileDigest =
+			s.executionPolicy.VerifierProfilesSourceDigest
+		if verifierProfileDigest == "" {
+			verifierProfileDigest = s.executionPolicy.VerifierProfiles.Digest()
+		}
 		verifierRuntimeDigest, err =
 			s.currentVerifierRuntimePolicyDigest()
 		if err != nil {

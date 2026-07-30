@@ -61,7 +61,7 @@ func TestRunAgentExecutionRejectsRunHeadChangingBeforeLaunchClaim(t *testing.T) 
 		},
 	)
 
-	response := requestJSON(
+	response := requestJSONWithRuntimeHeader(
 		t,
 		fixture.handler,
 		http.MethodPost,
@@ -77,6 +77,7 @@ func TestRunAgentExecutionRejectsRunHeadChangingBeforeLaunchClaim(t *testing.T) 
 			Command:          append([]string(nil), fixture.command...),
 			TimeoutSeconds:   1,
 		},
+		fixture.runtimeID,
 	)
 	if mutationErr := racingStore.MutationError(); mutationErr != nil {
 		t.Fatalf("change admitted run head: %v", mutationErr)
@@ -204,6 +205,7 @@ type runHeadChangingStore struct {
 
 	once        sync.Once
 	mu          sync.Mutex
+	armed       bool
 	mutated     bool
 	mutationErr error
 }
@@ -219,6 +221,12 @@ func (kernelStore *runHeadChangingStore) GetExecutionAuthority(
 	)
 	if err != nil {
 		return store.ExecutionAuthoritySnapshot{}, err
+	}
+	kernelStore.mu.Lock()
+	armed := kernelStore.armed
+	kernelStore.mu.Unlock()
+	if !armed {
+		return snapshot, nil
 	}
 	kernelStore.once.Do(func() {
 		event, eventErr := eventlog.Next(
@@ -246,6 +254,12 @@ func (kernelStore *runHeadChangingStore) GetExecutionAuthority(
 		kernelStore.mutationErr = eventErr
 	})
 	return snapshot, nil
+}
+
+func (kernelStore *runHeadChangingStore) Arm() {
+	kernelStore.mu.Lock()
+	defer kernelStore.mu.Unlock()
+	kernelStore.armed = true
 }
 
 func (kernelStore *runHeadChangingStore) Mutated() bool {
@@ -294,6 +308,9 @@ func newExecutionAuthorityRaceAPIFixture(
 		},
 	)
 	fixture.prepareRunningTransaction(t, admitted.Transaction)
+	if fixture.armAuthorityRace != nil {
+		fixture.armAuthorityRace()
+	}
 	fixture.captureEventHeads(t)
 	return fixture
 }

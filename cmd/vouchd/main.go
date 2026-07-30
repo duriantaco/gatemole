@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,11 +19,28 @@ func main() {
 }
 
 func run() int {
+	config, exitCode := parseDaemonConfig(os.Args[1:], os.Stderr)
+	if exitCode != 0 {
+		return exitCode
+	}
+	config.Stdout = os.Stdout
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := daemon.Run(ctx, config); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func parseDaemonConfig(args []string, stderr io.Writer) (daemon.Config, int) {
 	flags := flag.NewFlagSet("vouchd", flag.ContinueOnError)
+	flags.SetOutput(stderr)
 	databasePath := flags.String("db", ".vouch/kernel.db", "SQLite kernel database path")
 	socketPath := flags.String("socket", ".vouch/vouchd.sock", "Unix socket path")
 	repositoryRoot := flags.String("repo", ".", "repository root for mediated workspaces")
-	transactionRoot := flags.String("transaction-root", filepath.Join(os.TempDir(), "vouch-transactions"), "isolated transaction worktree root")
+	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
 	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")
 	allowedImages := flags.String("allowed-images", "", "comma-separated digest-pinned OCI images allowed in production")
 	approvalTrust := flags.String("approval-trust", "", "JSON file containing trusted approval public keys")
@@ -44,19 +62,40 @@ func run() int {
 		false,
 		"development only: allow clients to supervise unenforced host processes",
 	)
-	if err := flags.Parse(os.Args[1:]); err != nil {
-		return 2
+	if err := flags.Parse(args); err != nil {
+		return daemon.Config{}, 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(os.Stderr, "vouchd: unexpected argument %q\n", flags.Arg(0))
-		return 2
+		fmt.Fprintf(stderr, "vouchd: unexpected argument %q\n", flags.Arg(0))
+		return daemon.Config{}, 2
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := daemon.Run(ctx, daemon.Config{
+
+	repository, err := canonicalRepositoryRoot(*repositoryRoot)
+	if err != nil {
+		fmt.Fprintf(stderr, "vouchd: resolve repository root: %v\n", err)
+		return daemon.Config{}, 1
+	}
+	*databasePath = repositoryPath(repository, *databasePath)
+	*socketPath = repositoryPath(repository, *socketPath)
+	*approvalTrust = repositoryPath(repository, *approvalTrust)
+	*identityTrust = repositoryPath(repository, *identityTrust)
+	*verifierProfiles = repositoryPath(repository, *verifierProfiles)
+	*modelBrokerPolicy = repositoryPath(repository, *modelBrokerPolicy)
+	*runtimeEngine = repositoryExecutable(repository, *runtimeEngine)
+	if flagWasSet(flags, "transaction-root") {
+		*transactionRoot = repositoryPath(repository, *transactionRoot)
+	} else {
+		*transactionRoot, err = daemon.DefaultTransactionRoot(repository)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return daemon.Config{}, 1
+		}
+	}
+
+	return daemon.Config{
 		DatabasePath:             *databasePath,
 		SocketPath:               *socketPath,
-		RepositoryRoot:           *repositoryRoot,
+		RepositoryRoot:           repository,
 		TransactionRoot:          *transactionRoot,
 		RuntimeProfile:           *runtimeProfile,
 		AllowedImages:            commaValues(*allowedImages),
@@ -71,12 +110,48 @@ func run() int {
 		IdentityTrustFile:        *identityTrust,
 		VerifierProfilesFile:     *verifierProfiles,
 		AllowUnsafeHostExecution: *allowUnsafeHostExecution,
-		Stdout:                   os.Stdout,
-	}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+	}, 0
+}
+
+func canonicalRepositoryRoot(root string) (string, error) {
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
 	}
-	return 0
+	canonical, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(canonical), nil
+}
+
+func repositoryPath(repository, path string) string {
+	if path == "" {
+		return ""
+	}
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(filepath.Join(repository, path))
+}
+
+func repositoryExecutable(repository, executable string) string {
+	if executable == "" ||
+		filepath.IsAbs(executable) ||
+		!strings.ContainsRune(executable, filepath.Separator) {
+		return executable
+	}
+	return repositoryPath(repository, executable)
+}
+
+func flagWasSet(flags *flag.FlagSet, name string) bool {
+	wasSet := false
+	flags.Visit(func(current *flag.Flag) {
+		if current.Name == name {
+			wasSet = true
+		}
+	})
+	return wasSet
 }
 
 func commaValues(value string) []string {

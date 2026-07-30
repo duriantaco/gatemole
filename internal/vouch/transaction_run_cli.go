@@ -21,6 +21,8 @@ import (
 	"github.com/duriantaco/vouch/internal/kernel/admission"
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
+	"github.com/duriantaco/vouch/internal/kernel/runtimepreflight"
 	"github.com/duriantaco/vouch/internal/kernel/sandbox"
 	transactionreducer "github.com/duriantaco/vouch/internal/kernel/transaction"
 )
@@ -60,14 +62,28 @@ func transactionRun(
 }
 
 func runtimeRunCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		runtimeRunUsage(stderr)
+		return 2
+	}
+	transactionFactory, err := runtimeBoundTransactionClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
+		return 1
+	}
+	kernelFactory, err := runtimeBoundKernelClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
+		return 1
+	}
 	return runtimeRunCommandWithFactories(
 		repo,
 		args,
 		jsonOut,
 		stdout,
 		stderr,
-		func(socket string) transactionClient { return kernelclient.New(socket) },
-		func(socket string) kernelRunClient { return kernelclient.New(socket) },
+		transactionFactory,
+		kernelFactory,
 	)
 }
 
@@ -132,6 +148,11 @@ func transactionRunNamed(
 	agent := flags.String("agent", "", "named agent profile from the strict repo profile document")
 	agentProfiles := flags.String("agent-profiles", "", "agent profile document (default .vouch/agent-profiles.json)")
 	unsafeHost := flags.Bool("unsafe-host", false, "acknowledge that host execution is not a security boundary")
+	requiredEnforcementProfile := flags.String(
+		"require-enforcement-profile",
+		"",
+		"require daemon enforcement profile: development or production",
+	)
 	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID supervising the transaction")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "supervisor principal kind")
@@ -145,6 +166,24 @@ func transactionRunNamed(
 	}
 	if *runtimeClass != "oci" && *runtimeClass != "host" {
 		fmt.Fprintf(stderr, "%s --runtime must be oci or host\n", commandName)
+		return 2
+	}
+	if *requiredEnforcementProfile != "" &&
+		!model.IsEnforcementProfile(*requiredEnforcementProfile) {
+		fmt.Fprintf(
+			stderr,
+			"%s --require-enforcement-profile must be development or production\n",
+			commandName,
+		)
+		return 2
+	}
+	if *runtimeClass == "host" &&
+		*requiredEnforcementProfile == "production" {
+		fmt.Fprintf(
+			stderr,
+			"%s host execution cannot require the production enforcement profile\n",
+			commandName,
+		)
 		return 2
 	}
 	if *modelProvider != "" && !model.IsIdentifier(*modelProvider) {
@@ -209,6 +248,19 @@ func transactionRunNamed(
 			return 1
 		}
 	}
+	runtimeIdentity, err := runtimeidentity.Load(
+		context.Background(),
+		repo,
+	)
+	if err != nil {
+		fmt.Fprintf(
+			stderr,
+			"%s: load Runtime identity; run `vouch runtime init` first: %v\n",
+			commandName,
+			err,
+		)
+		return 1
+	}
 	intentBytes, err := transactionRunIntent(repo, *intent, *intentFile)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -252,13 +304,19 @@ func transactionRunNamed(
 			Operations: []string{"model.invoke"},
 		})
 	}
+	expectedEnforcementProfile := *requiredEnforcementProfile
+	if expectedEnforcementProfile == "" {
+		expectedEnforcementProfile = "development"
+	}
 	admissionRequest := admission.Request{
-		Version:        admission.RequestVersion,
-		IdempotencyKey: *id,
-		TransactionID:  *id,
-		RunID:          *runID,
-		Intent:         string(intentBytes),
-		AgentProfile:   profileBinding,
+		Version:                    admission.RequestVersion,
+		ExpectedRuntimeID:          runtimeIdentity.RuntimeID,
+		ExpectedEnforcementProfile: expectedEnforcementProfile,
+		IdempotencyKey:             *id,
+		TransactionID:              *id,
+		RunID:                      *runID,
+		Intent:                     string(intentBytes),
+		AgentProfile:               profileBinding,
 		Sponsor: model.Principal{
 			ID:   *sponsorID,
 			Kind: model.PrincipalKind(*sponsorKind),
@@ -273,6 +331,32 @@ func transactionRunNamed(
 		},
 	}
 	client := newClient(*socket)
+	if kernelClient, ok := client.(*kernelclient.Client); ok {
+		client = kernelClient.WithExpectedRuntimeID(
+			runtimeIdentity.RuntimeID,
+		)
+	}
+	if *runtimeClass == "oci" {
+		preflight, err := client.PreflightRuntime(
+			context.Background(),
+			*namespace,
+			runtimepreflight.Request{
+				Version:                    runtimepreflight.RequestVersion,
+				ExpectedRuntimeID:          runtimeIdentity.RuntimeID,
+				RequiredEnforcementProfile: *requiredEnforcementProfile,
+				Agent: &runtimepreflight.AgentSelection{
+					Profile:  profileBinding,
+					OCIImage: *image,
+				},
+			},
+		)
+		if err != nil {
+			fmt.Fprintf(stderr, "%s: Runtime preflight failed: %v\n", commandName, err)
+			return 1
+		}
+		admissionRequest.ExpectedEnforcementProfile =
+			preflight.EnforcementProfile
+	}
 	admitted, err := client.AdmitTask(
 		context.Background(),
 		*namespace,
@@ -442,11 +526,12 @@ func digestCommand(command []string) (string, error) {
 }
 
 func runtimeRunUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] run [options] -- [AGENT_ARG...]")
+	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] run [--namespace NS] [--require-enforcement-profile development|production] [options] -- [AGENT_ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --agent NAME [--agent-profiles FILE] [-- AGENT_ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --image IMAGE -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --runtime host --unsafe-host -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "production callers should pass --require-enforcement-profile production")
 	fmt.Fprintln(out, "advanced lifecycle: vouch tx <command>")
 	fmt.Fprintln(out, "low-level run records: vouch kernel run <command>")
 }

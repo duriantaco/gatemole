@@ -17,6 +17,7 @@ import (
 	kernelclient "github.com/duriantaco/vouch/internal/kernel/client"
 	"github.com/duriantaco/vouch/internal/kernel/model"
 	"github.com/duriantaco/vouch/internal/kernel/reducer"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 )
 
 type kernelRunClient interface {
@@ -32,9 +33,18 @@ type kernelRunClient interface {
 type kernelClientFactory func(string) kernelRunClient
 
 func kernelCommand(repo string, args []string, jsonOut bool, stdout io.Writer, stderr io.Writer) int {
-	return kernelCommandWithFactory(repo, args, jsonOut, stdout, stderr, func(socket string) kernelRunClient {
-		return kernelclient.New(socket)
-	})
+	if len(args) == 0 {
+		kernelUsage(stderr)
+		return 2
+	}
+	factory, err := runtimeBoundKernelClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "kernel: %v\n", err)
+		return 1
+	}
+	return kernelCommandWithFactory(
+		repo, args, jsonOut, stdout, stderr, factory,
+	)
 }
 
 func kernelCommandWithFactory(
@@ -60,9 +70,34 @@ func kernelCommandWithFactory(
 }
 
 func runCommand(repo string, args []string, jsonOut bool, stdout io.Writer, stderr io.Writer) int {
-	return runCommandWithFactory(repo, args, jsonOut, stdout, stderr, func(socket string) kernelRunClient {
-		return kernelclient.New(socket)
-	})
+	if len(args) == 0 {
+		runUsage(stderr)
+		return 2
+	}
+	factory, err := runtimeBoundKernelClientFactory(repo)
+	if err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
+		return 1
+	}
+	return runCommandWithFactory(
+		repo, args, jsonOut, stdout, stderr, factory,
+	)
+}
+
+func runtimeBoundKernelClientFactory(
+	repo string,
+) (kernelClientFactory, error) {
+	identity, err := runtimeidentity.Load(context.Background(), repo)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"load Runtime identity; run `vouch runtime init` first: %w",
+			err,
+		)
+	}
+	return func(socket string) kernelRunClient {
+		return kernelclient.New(socket).
+			WithExpectedRuntimeID(identity.RuntimeID)
+	}, nil
 }
 
 func runCommandWithFactory(
@@ -423,17 +458,20 @@ func renderRunProjection(
 
 func runUsage(out io.Writer) {
 	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] kernel run <command>")
-	fmt.Fprintln(out, "  run create --file FILE [--socket FILE] [--actor ID] [--actor-kind KIND]")
 	fmt.Fprintln(out, "  run get --namespace NS --id ID [--socket FILE]")
 	fmt.Fprintln(out, "  run list --namespace NS [--socket FILE]")
 	fmt.Fprintln(out, "  run events --namespace NS --id ID [--after N] [--socket FILE]")
 	fmt.Fprintln(out, "  run transition --namespace NS --id ID --to STATE [--reason TEXT] [--socket FILE]")
 	fmt.Fprintln(out, "  run pause|resume|cancel --namespace NS --id ID [--reason TEXT] [--socket FILE]")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "embedded/unbound compatibility only; configured vouchd rejects raw authority creation:")
+	fmt.Fprintln(out, "  run create --file FILE [--socket FILE] [--actor ID] [--actor-kind KIND]")
 	fmt.Fprintln(out, "  run grant --namespace NS --id ID --contract FILE [--socket FILE]")
 }
 
 func kernelUsage(out io.Writer) {
 	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] kernel run <command>")
-	fmt.Fprintln(out, "  kernel run manages the low-level AgentRun lifecycle")
+	fmt.Fprintln(out, "  kernel run manages low-level AgentRun inspection and lifecycle transitions")
+	fmt.Fprintln(out, "  raw run creation and grants are embedded/unbound compatibility operations")
 	fmt.Fprintln(out, "  use 'vouch kernel run' for command details")
 }

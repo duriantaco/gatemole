@@ -6,6 +6,7 @@ import (
 
 	"github.com/duriantaco/vouch/internal/kernel/admission"
 	"github.com/duriantaco/vouch/internal/kernel/model"
+	"github.com/duriantaco/vouch/internal/kernel/runtimeidentity"
 )
 
 func (s *Server) admitTask(w http.ResponseWriter, r *http.Request) {
@@ -15,6 +16,40 @@ func (s *Server) admitTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	namespace := r.PathValue("namespace")
+	switch request.Version {
+	case admission.LegacyRequestVersion:
+		if runtimeidentity.IsRuntimeID(s.runtimeID) {
+			s.replayLegacyTaskAdmission(w, r, namespace, request)
+			return
+		}
+	case admission.RequestVersion:
+		// Runtime-bound admission continues below.
+	default:
+		writeError(w, schemaError(
+			"invalid task admission request",
+			errors.New("unsupported task admission version"),
+		))
+		return
+	}
+	if err := s.requireExpectedRuntimeID(
+		request.ExpectedRuntimeID,
+		"admit_task",
+		request.TransactionID,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
+	if request.Version == admission.RequestVersion &&
+		request.ExpectedEnforcementProfile !=
+			s.runtimeEnforcementProfile() {
+		writeError(w, &model.KernelError{
+			Code:      model.ErrorCapabilityDenied,
+			Operation: "admit_task",
+			Resource:  request.TransactionID,
+			Message:   "request enforcement profile does not match this daemon",
+		})
+		return
+	}
 	requestDigest, err := admission.ComputeRequestDigest(namespace, request)
 	if err != nil {
 		writeError(w, err)
@@ -79,6 +114,57 @@ func (s *Server) admitTask(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, result)
+}
+
+func (s *Server) replayLegacyTaskAdmission(
+	w http.ResponseWriter,
+	r *http.Request,
+	namespace string,
+	request admission.Request,
+) {
+	if err := s.requireExpectedRuntimeID(
+		r.Header.Get(runtimeidentity.HTTPHeader),
+		"admit_task",
+		request.IdempotencyKey,
+	); err != nil {
+		writeError(w, err)
+		return
+	}
+	if request.ExpectedRuntimeID != "" ||
+		request.ExpectedEnforcementProfile != "" {
+		writeError(w, schemaError(
+			"invalid legacy task admission request",
+			errors.New("v0 admission cannot carry Runtime metadata"),
+		))
+		return
+	}
+	requestDigest, err := admission.ComputeRequestDigest(namespace, request)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	existing, storedDigest, err := s.store.GetTaskAdmission(
+		r.Context(),
+		namespace,
+		request.IdempotencyKey,
+	)
+	switch {
+	case isNotFound(err):
+		writeError(w, &model.KernelError{
+			Code:      model.ErrorCheckpointIncompatible,
+			Operation: "admit_task",
+			Resource:  request.IdempotencyKey,
+			Message:   "configured Runtime may replay but cannot create legacy v0 admission",
+		})
+	case err != nil:
+		writeError(w, err)
+	case existing.Version != admission.LegacyResultVersion:
+		writeError(w, idempotencyConflict(request.IdempotencyKey))
+	case storedDigest != requestDigest:
+		writeError(w, idempotencyConflict(request.IdempotencyKey))
+	default:
+		writeJSON(w, http.StatusOK, existing)
+	}
 }
 
 func isNotFound(err error) bool {
