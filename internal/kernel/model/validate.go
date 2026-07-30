@@ -14,6 +14,7 @@ import (
 var (
 	identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$`)
 	digestPattern     = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+	runtimeIDPattern  = regexp.MustCompile(`^runtime:[a-f0-9]{64}$`)
 )
 
 func IsSHA256Digest(value string) bool {
@@ -22,6 +23,14 @@ func IsSHA256Digest(value string) bool {
 
 func IsIdentifier(value string) bool {
 	return identifierPattern.MatchString(value)
+}
+
+func IsRuntimeID(value string) bool {
+	return runtimeIDPattern.MatchString(value)
+}
+
+func IsEnforcementProfile(value string) bool {
+	return value == "development" || value == "production"
 }
 
 func (image AgentImage) Validate() error {
