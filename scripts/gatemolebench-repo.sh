@@ -3,11 +3,11 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: scripts/vouchbench-repo.sh --repo DIR [--out DIR] [--test-command CMD] [--junit PATH] [--keep]
+usage: scripts/gatemolebench-repo.sh --repo DIR [--out DIR] [--test-command CMD] [--junit PATH] [--keep]
 
-Runs a non-destructive Vouch evaluation against an external repository.
+Runs a non-destructive Gatemole evaluation against an external repository.
 
-The source repo is copied into a temporary snapshot first. Vouch writes only to
+The source repo is copied into a temporary snapshot first. Gatemole writes only to
 that snapshot, never to the source repo.
 
 Options:
@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
       if [[ $# -lt 2 ]]; then
-        echo "vouchbench-repo: --repo requires a directory" >&2
+        echo "gatemolebench-repo: --repo requires a directory" >&2
         exit 2
       fi
       SOURCE_REPO="$2"
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --out)
       if [[ $# -lt 2 ]]; then
-        echo "vouchbench-repo: --out requires a directory" >&2
+        echo "gatemolebench-repo: --out requires a directory" >&2
         exit 2
       fi
       OUT_DIR="$2"
@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-command)
       if [[ $# -lt 2 ]]; then
-        echo "vouchbench-repo: --test-command requires a command string" >&2
+        echo "gatemolebench-repo: --test-command requires a command string" >&2
         exit 2
       fi
       TEST_COMMAND="$2"
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --junit)
       if [[ $# -lt 2 ]]; then
-        echo "vouchbench-repo: --junit requires a path" >&2
+        echo "gatemolebench-repo: --junit requires a path" >&2
         exit 2
       fi
       JUNIT_PATH="$2"
@@ -69,7 +69,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "vouchbench-repo: unknown argument $1" >&2
+      echo "gatemolebench-repo: unknown argument $1" >&2
       usage >&2
       exit 2
       ;;
@@ -77,19 +77,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SOURCE_REPO" ]]; then
-  echo "vouchbench-repo: --repo is required" >&2
+  echo "gatemolebench-repo: --repo is required" >&2
   usage >&2
   exit 2
 fi
 if [[ ! -d "$SOURCE_REPO" ]]; then
-  echo "vouchbench-repo: repo does not exist: $SOURCE_REPO" >&2
+  echo "gatemolebench-repo: repo does not exist: $SOURCE_REPO" >&2
   exit 2
 fi
 
 mkdir -p "$OUT_DIR"
-RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchbench-repo.XXXXXX")"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gatemolebench-repo.XXXXXX")"
 SNAPSHOT="$RUN_DIR/repo"
-VOUCH="$RUN_DIR/vouch"
+GATEMOLE="$RUN_DIR/gatemole"
 STEPS_DIR="$RUN_DIR/steps"
 mkdir -p "$STEPS_DIR"
 
@@ -217,8 +217,8 @@ PY
 }
 
 render_results() {
-  local json_out="$OUT_DIR/vouchbench-repo.latest.json"
-  local md_out="$OUT_DIR/vouchbench-repo.latest.md"
+  local json_out="$OUT_DIR/gatemolebench-repo.latest.json"
+  local md_out="$OUT_DIR/gatemolebench-repo.latest.md"
   python3 - "$RUN_DIR" "$json_out" "$md_out" "$SOURCE_REPO" "$TEST_COMMAND" "$JUNIT_PATH" <<'PY'
 from __future__ import annotations
 
@@ -252,7 +252,7 @@ def parse_json_stdout(step: dict | None):
         return None
 
 step_order = [
-    "build_vouch",
+    "build_gatemole",
     "init",
     "bootstrap_dry_run",
     "bootstrap",
@@ -292,7 +292,7 @@ elif junit_path and steps_by_name.get("gate", {}).get("exit_code") is None:
     status = "gate_not_run"
 
 result = {
-    "version": "vouchbench.repo_eval.v0",
+    "version": "gatemolebench.repo_eval.v0",
     "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
     "status": status,
     "summary": summary,
@@ -311,7 +311,7 @@ with json_out.open("w", encoding="utf-8") as f:
     f.write("\n")
 
 lines = [
-    "# VouchBench External Repo Evaluation",
+    "# GatemoleBench External Repo Evaluation",
     "",
     f"Source repo: `{source_repo}`",
     f"Status: `{status}`",
@@ -343,7 +343,7 @@ lines.extend([
     "## Notes",
     "",
     "- This is a non-destructive snapshot evaluation, not a committed benchmark fixture.",
-    "- A clean result here means Vouch can bootstrap/compile/gate the snapshot under the provided inputs.",
+    "- A clean result here means Gatemole can bootstrap/compile/gate the snapshot under the provided inputs.",
     "- It does not validate product correctness, and it does not replace the deterministic fixture acceptance suite.",
 ])
 md_out.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -354,14 +354,14 @@ PY
 echo "snapshotting external repo..."
 copy_snapshot
 
-echo "building local vouch binary..."
-run_step build_vouch bash -lc "cd '$ROOT' && GOCACHE='${GOCACHE:-$RUN_DIR/gocache}' go build -o '$VOUCH' ./cmd/vouch"
+echo "building local gatemole binary..."
+run_step build_gatemole bash -lc "cd '$ROOT' && GOCACHE='${GOCACHE:-$RUN_DIR/gocache}' go build -o '$GATEMOLE' ./cmd/gatemole"
 
-echo "running vouch init/bootstrap/compile on snapshot..."
-run_step init "$VOUCH" --repo "$SNAPSHOT" --json init
-run_step bootstrap_dry_run "$VOUCH" --repo "$SNAPSHOT" --json bootstrap --dry-run
-run_step bootstrap "$VOUCH" --repo "$SNAPSHOT" --json bootstrap
-run_step compile "$VOUCH" --repo "$SNAPSHOT" --json compile
+echo "running gatemole init/bootstrap/compile on snapshot..."
+run_step init "$GATEMOLE" --repo "$SNAPSHOT" --json init
+run_step bootstrap_dry_run "$GATEMOLE" --repo "$SNAPSHOT" --json bootstrap --dry-run
+run_step bootstrap "$GATEMOLE" --repo "$SNAPSHOT" --json bootstrap
+run_step compile "$GATEMOLE" --repo "$SNAPSHOT" --json compile
 
 if [[ -n "$TEST_COMMAND" ]]; then
   echo "running external repo test command in snapshot..."
@@ -370,11 +370,11 @@ fi
 
 if [[ -n "$JUNIT_PATH" ]]; then
   echo "importing JUnit evidence and running manifestless gate..."
-  run_step evidence_import "$VOUCH" --repo "$SNAPSHOT" --json evidence import junit "$JUNIT_PATH"
-  run_step gate "$VOUCH" --repo "$SNAPSHOT" gate --json
+  run_step evidence_import "$GATEMOLE" --repo "$SNAPSHOT" --json evidence import junit "$JUNIT_PATH"
+  run_step gate "$GATEMOLE" --repo "$SNAPSHOT" gate --json
 fi
 
 render_results
 echo "wrote:"
-echo "  $OUT_DIR/vouchbench-repo.latest.json"
-echo "  $OUT_DIR/vouchbench-repo.latest.md"
+echo "  $OUT_DIR/gatemolebench-repo.latest.json"
+echo "  $OUT_DIR/gatemolebench-repo.latest.md"

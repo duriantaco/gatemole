@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: scripts/vouchci-plan.sh --paths FILE
+usage: scripts/gatemoleci-plan.sh --paths FILE
 
 Classifies changed repository paths for the focused pull-request validation
 workflow. The output is suitable for appending to GITHUB_OUTPUT.
@@ -17,12 +17,12 @@ fi
 
 paths_file="$2"
 if [[ ! -f "$paths_file" ]]; then
-  echo "vouchci-plan: path list does not exist: $paths_file" >&2
+  echo "gatemoleci-plan: path list does not exist: $paths_file" >&2
   exit 2
 fi
 
 docs=false
-vouchbench=false
+gatemolebench=false
 kernelbench=false
 transactionbench=false
 runtimebench=false
@@ -36,7 +36,7 @@ select_runtime_acceptance() {
 }
 
 select_everything() {
-  vouchbench=true
+  gatemolebench=true
   select_runtime_acceptance
   production=true
 }
@@ -59,35 +59,35 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       docs=true
       select_everything
       ;;
-    demo_repo/*|benchmarks/results/vouchbench.*)
-      vouchbench=true
+    demo_repo/*|benchmarks/results/gatemolebench.*)
+      gatemolebench=true
       ;;
-    scripts/vouchbench.sh|scripts/vouchbench-repo.sh)
-      vouchbench=true
+    scripts/gatemolebench.sh|scripts/gatemolebench-repo.sh)
+      gatemolebench=true
       ;;
-    internal/vouch/artifacts.go|\
-    internal/vouch/bootstrap_cli_test.go|\
-    internal/vouch/compile.go|\
-    internal/vouch/compile_cli_test.go|\
-    internal/vouch/compiler.go|\
-    internal/vouch/contracts_cli.go|\
-    internal/vouch/contracts_cli_test.go|\
-    internal/vouch/diagnostics.go|\
-    internal/vouch/evidence*.go|\
-    internal/vouch/github_summary_test.go|\
-    internal/vouch/intent.go|\
-    internal/vouch/ir.go|\
-    internal/vouch/junit_map*.go|\
-    internal/vouch/load.go|\
-    internal/vouch/onboarding*.go|\
-    internal/vouch/plan.go|\
-    internal/vouch/policy.go|\
-    internal/vouch/render.go|\
-    internal/vouch/sarif.go|\
-    internal/vouch/try*.go|\
-    internal/vouch/types.go|\
-    internal/vouch/validate.go)
-      vouchbench=true
+    internal/gatemole/artifacts.go|\
+    internal/gatemole/bootstrap_cli_test.go|\
+    internal/gatemole/compile.go|\
+    internal/gatemole/compile_cli_test.go|\
+    internal/gatemole/compiler.go|\
+    internal/gatemole/contracts_cli.go|\
+    internal/gatemole/contracts_cli_test.go|\
+    internal/gatemole/diagnostics.go|\
+    internal/gatemole/evidence*.go|\
+    internal/gatemole/github_summary_test.go|\
+    internal/gatemole/intent.go|\
+    internal/gatemole/ir.go|\
+    internal/gatemole/junit_map*.go|\
+    internal/gatemole/load.go|\
+    internal/gatemole/onboarding*.go|\
+    internal/gatemole/plan.go|\
+    internal/gatemole/policy.go|\
+    internal/gatemole/render.go|\
+    internal/gatemole/sarif.go|\
+    internal/gatemole/try*.go|\
+    internal/gatemole/types.go|\
+    internal/gatemole/validate.go)
+      gatemolebench=true
       ;;
     internal/kernel/broker/*|\
     internal/kernel/capability/*|\
@@ -119,25 +119,25 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       runtimebench=true
       production=true
       ;;
-    internal/vouch/action_cli.go|internal/vouch/kernel_cli*.go)
+    internal/gatemole/action_cli.go|internal/gatemole/kernel_cli*.go)
       kernelbench=true
       production=true
       ;;
-    internal/vouch/transaction_cli.go)
+    internal/gatemole/transaction_cli.go)
       transactionbench=true
       production=true
       ;;
-    internal/vouch/approval_cli*.go|\
-    internal/vouch/daemon_cli.go|\
-    internal/vouch/identity_cli*.go|\
-    internal/vouch/transaction_profile_cli*.go|\
-    internal/vouch/transaction_run_cli*.go|\
-    internal/vouch/transaction_verify_cli*.go)
+    internal/gatemole/approval_cli*.go|\
+    internal/gatemole/daemon_cli.go|\
+    internal/gatemole/identity_cli*.go|\
+    internal/gatemole/transaction_profile_cli*.go|\
+    internal/gatemole/transaction_run_cli*.go|\
+    internal/gatemole/transaction_verify_cli*.go)
       runtimebench=true
       production=true
       ;;
-    internal/vouch/cli.go)
-      vouchbench=true
+    internal/gatemole/cli.go)
+      gatemolebench=true
       runtimebench=true
       production=true
       ;;
@@ -145,22 +145,22 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       runtimebench=true
       production=true
       ;;
-    cmd/vouch/*)
+    cmd/gatemole/*)
       select_everything
       ;;
-    scripts/vouchkernelbench.sh)
+    scripts/gatemolekernelbench.sh)
       kernelbench=true
       production=true
       ;;
-    scripts/vouchtransactionbench.sh)
+    scripts/gatemoletransactionbench.sh)
       transactionbench=true
       production=true
       ;;
-    scripts/vouchruntimebench.sh)
+    scripts/gatemoleruntimebench.sh)
       runtimebench=true
       production=true
       ;;
-    build/*|scripts/vouchproductionbench.sh|scripts/vouchproductionfixture.sh)
+    build/*|scripts/gatemoleproductionbench.sh|scripts/gatemoleproductionfixture.sh)
       production=true
       ;;
     .gitignore|.editorconfig|CODEOWNERS|.github/CODEOWNERS)
@@ -176,12 +176,12 @@ while IFS= read -r path || [[ -n "$path" ]]; do
 done < "$paths_file"
 
 if [[ "$changed_count" -eq 0 ]]; then
-  echo "vouchci-plan: no changed paths were supplied" >&2
+  echo "gatemoleci-plan: no changed paths were supplied" >&2
   exit 1
 fi
 
 printf 'docs=%s\n' "$docs"
-printf 'vouchbench=%s\n' "$vouchbench"
+printf 'gatemolebench=%s\n' "$gatemolebench"
 printf 'kernelbench=%s\n' "$kernelbench"
 printf 'transactionbench=%s\n' "$transactionbench"
 printf 'runtimebench=%s\n' "$runtimebench"

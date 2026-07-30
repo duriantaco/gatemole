@@ -100,8 +100,8 @@ func runtimeRunCommandWithFactories(
 		return 2
 	}
 	if isLegacyRunSubcommand(args[0]) {
-		// Keep the original vouch run lifecycle callable for existing scripts
-		// while making it explicit under `vouch kernel run` for new users.
+		// Keep the original gatemole run lifecycle callable for existing scripts
+		// while making it explicit under `gatemole kernel run` for new users.
 		return runCommandWithFactory(
 			repo, args, jsonOut, stdout, stderr, newKernelClient,
 		)
@@ -255,7 +255,7 @@ func transactionRunNamed(
 	if err != nil {
 		fmt.Fprintf(
 			stderr,
-			"%s: load Runtime identity; run `vouch runtime init` first: %v\n",
+			"%s: load Runtime identity; run `gatemole runtime init` first: %v\n",
 			commandName,
 			err,
 		)
@@ -384,7 +384,7 @@ func transactionRunNamed(
 		return 1
 	}
 	if !jsonOut {
-		fmt.Fprintf(stderr, "Vouch transaction: %s\nWorkspace: %s\n", *id, worktree.Workspace.Path)
+		fmt.Fprintf(stderr, "Gatemole transaction: %s\nWorkspace: %s\n", *id, worktree.Workspace.Path)
 	}
 	var execution model.AgentExecution
 	if *runtimeClass == "oci" {
@@ -526,14 +526,14 @@ func digestCommand(command []string) (string, error) {
 }
 
 func runtimeRunUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] run [--namespace NS] [--require-enforcement-profile development|production] [options] -- [AGENT_ARG...]")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] run [--namespace NS] [--require-enforcement-profile development|production] [options] -- [AGENT_ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --agent NAME [--agent-profiles FILE] [-- AGENT_ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --image IMAGE -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --runtime host --unsafe-host -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "production callers should pass --require-enforcement-profile production")
-	fmt.Fprintln(out, "advanced lifecycle: vouch tx <command>")
-	fmt.Fprintln(out, "low-level run records: vouch kernel run <command>")
+	fmt.Fprintln(out, "advanced lifecycle: gatemole tx <command>")
+	fmt.Fprintln(out, "low-level run records: gatemole kernel run <command>")
 }
 
 func buildSupervisedInvocation(

@@ -1195,7 +1195,7 @@ func createRepository(t *testing.T) string {
 	runGit(t, repository, "add", "--", "internal/auth/middleware.go", "delete.txt")
 	tree := runGit(t, repository, "write-tree")
 	commit := runGitWithInput(t, repository, []byte("base\n"),
-		"-c", "user.name=Vouch Test", "-c", "user.email=gatemole-test@example.invalid",
+		"-c", "user.name=Gatemole Test", "-c", "user.email=gatemole-test@example.invalid",
 		"commit-tree", tree, "-F", "-")
 	runGit(t, repository, "update-ref", "refs/heads/main", commit)
 	return repository

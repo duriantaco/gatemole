@@ -20,12 +20,12 @@ func TestTryUsesSnapshotByDefault(t *testing.T) {
 
 	out := stdout.String()
 	for _, want := range []string{
-		"Vouch Try",
+		"Gatemole Try",
 		"Mode: temp snapshot",
 		"contracts drafted: 1",
 		"obligations compiled: 5",
 		"HIGH auth.password_reset",
-		"write drafts with: vouch try --repo",
+		"write drafts with: gatemole try --repo",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected try output to contain %q, got:\n%s", want, out)
@@ -39,7 +39,7 @@ func TestTryUsesSnapshotByDefault(t *testing.T) {
 	}
 }
 
-func TestTryWriteModeWritesVouchFiles(t *testing.T) {
+func TestTryWriteModeWritesGatemoleFiles(t *testing.T) {
 	repo := bootstrapFixture(t)
 	var stdout, stderr bytes.Buffer
 

@@ -76,7 +76,7 @@ func TestDaemonTransactionRootUsesSecureDefaultAndRepositoryRelativeCustomPath(
 	}
 	if filepath.Dir(root) != filepath.Join(
 		canonicalRuntimeDirectory,
-		"vouch",
+		"gatemole",
 		"transactions",
 	) {
 		t.Fatalf("default transaction root is not per-user scoped: %q", root)

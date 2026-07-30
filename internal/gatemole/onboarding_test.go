@@ -88,7 +88,7 @@ func TestContractCreateAndManifestCreateMapChangedFilesToOwnedSpec(t *testing.T)
 		Summary:          "change app service",
 		Agent:            "codex",
 		RunID:            "run-1",
-		RunnerIdentity:   "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main",
+		RunnerIdentity:   "https://github.com/example/repo/.github/workflows/gatemole.yml@refs/heads/main",
 		RunnerOIDCIssuer: "https://token.actions.githubusercontent.com",
 		ChangedFiles:     []string{"src/app/service.py", "tests/test_app.py"},
 		Out:              ".gatemole/manifests/agent-1.json",
@@ -167,11 +167,11 @@ func TestManifestCreateUsesConfiguredBaseRef(t *testing.T) {
 	runGit(t, repo, "init")
 	runGit(t, repo, "checkout", "-b", "trunk")
 	runGit(t, repo, "add", ".")
-	runGit(t, repo, "-c", "user.email=vouch@example.invalid", "-c", "user.name=Vouch Test", "commit", "-m", "initial")
+	runGit(t, repo, "-c", "user.email=gatemole@example.invalid", "-c", "user.name=Gatemole Test", "commit", "-m", "initial")
 	runGit(t, repo, "checkout", "-b", "feature")
 	writeText(t, filepath.Join(repo, "src", "app", "service.py"), "def service():\n    return 'new'\n")
 	runGit(t, repo, "add", "src/app/service.py")
-	runGit(t, repo, "-c", "user.email=vouch@example.invalid", "-c", "user.name=Vouch Test", "commit", "-m", "change service")
+	runGit(t, repo, "-c", "user.email=gatemole@example.invalid", "-c", "user.name=Gatemole Test", "commit", "-m", "change service")
 	t.Setenv("GATEMOLE_BASE_REF", "trunk")
 
 	manifest, err := CreateManifest(repo, ManifestCreateOptions{

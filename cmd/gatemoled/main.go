@@ -48,7 +48,7 @@ func parseDaemonConfig(args []string, stderr io.Writer) (daemon.Config, int) {
 	runtimeEngine := flags.String("runtime-engine", "docker", "daemon-owned OCI engine executable")
 	verifierUID := flags.Int("verifier-uid", os.Getuid(), "non-root UID for daemon-run agent, verifier, and broker workloads")
 	verifierGID := flags.Int("verifier-gid", os.Getgid(), "non-root GID for daemon-run agent, verifier, and broker workloads")
-	modelBrokerImage := flags.String("model-broker-image", "", "digest-pinned Vouch model broker OCI image")
+	modelBrokerImage := flags.String("model-broker-image", "", "digest-pinned Gatemole model broker OCI image")
 	modelBrokerPolicy := flags.String("model-broker-policy", "", "model broker policy JSON")
 	modelTokenEnv := flags.String("model-provider-token-env", "OPENAI_API_KEY", "daemon environment containing the provider bearer credential")
 	identityTrust := flags.String("identity-trust", "", "OIDC issuer/JWKS trust document")

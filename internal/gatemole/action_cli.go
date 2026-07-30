@@ -196,7 +196,7 @@ func randomKernelID(prefix string) string {
 }
 
 func actionUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] action <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] action <command>")
 	fmt.Fprintln(out, "  action fs-write --namespace NS --run ID --path WORKSPACE/PATH --input FILE [--capability ID]")
 	fmt.Fprintln(out, "  action fs-read --namespace NS --run ID --path WORKSPACE/PATH [--capability ID]")
 }

@@ -79,7 +79,7 @@ func TestFilesystemPermanentlyDeniesControlStateNamespaces(t *testing.T) {
 		"workspace/.gatemole/kernel.db",
 		"workspace/.GATEMOLE./gatemoled.sock",
 		"workspace/.vouch/kernel.db",
-		"workspace/.VOUCH./gatemoled.sock",
+		"workspace/.VOUCH./vouchd.sock",
 	} {
 		request := actionRequest(
 			t,

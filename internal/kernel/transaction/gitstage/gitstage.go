@@ -1036,7 +1036,7 @@ func (manager *Manager) PrepareCommit(
 	}
 	treeRevision := snapshot.TreeRevision
 	message := fmt.Sprintf(
-		"Vouch transaction %s\n\nIntent-Digest: %s\nEffect-Set-Digest: %s\nStaged-State-Digest: %s\nPolicy-Digest: %s\nCommit-Plan-Digest: %s\n",
+		"Gatemole transaction %s\n\nIntent-Digest: %s\nEffect-Set-Digest: %s\nStaged-State-Digest: %s\nPolicy-Digest: %s\nCommit-Plan-Digest: %s\n",
 		plan.TransactionID,
 		plan.IntentDigest,
 		plan.EffectSetDigest,
@@ -1049,10 +1049,10 @@ func (manager *Manager) PrepareCommit(
 		workspace.Path,
 		message,
 		[]string{
-			"GIT_AUTHOR_NAME=Vouch Transaction OS",
-			"GIT_AUTHOR_EMAIL=vouch@localhost",
-			"GIT_COMMITTER_NAME=Vouch Transaction OS",
-			"GIT_COMMITTER_EMAIL=vouch@localhost",
+			"GIT_AUTHOR_NAME=Gatemole Transaction OS",
+			"GIT_AUTHOR_EMAIL=gatemole@localhost",
+			"GIT_COMMITTER_NAME=Gatemole Transaction OS",
+			"GIT_COMMITTER_EMAIL=gatemole@localhost",
 			"GIT_AUTHOR_DATE=" + plan.CreatedAt.UTC().Format(time.RFC3339),
 			"GIT_COMMITTER_DATE=" + plan.CreatedAt.UTC().Format(time.RFC3339),
 		},

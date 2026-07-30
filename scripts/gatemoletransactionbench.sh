@@ -7,7 +7,7 @@ REPO_DIR="$BENCH_DIR/repository"
 STAGE_DIR="$BENCH_DIR/stages"
 DB_PATH="$BENCH_DIR/kernel.db"
 SOCKET_PATH="$BENCH_DIR/gatemoled.sock"
-GATEMOLE_BIN="$BENCH_DIR/vouch"
+GATEMOLE_BIN="$BENCH_DIR/gatemole"
 DAEMON_LOG="$BENCH_DIR/gatemoled.log"
 DAEMON_PID=""
 PASSED=0
@@ -71,11 +71,11 @@ printf 'package auth\n\nfunc Allowed() bool { return false }\n' >"$REPO_DIR/inte
 printf 'package auth\n\nfunc TestAllowed() {}\n' >"$REPO_DIR/internal/auth/middleware_test.go"
 git -C "$REPO_DIR" add -- internal/auth/middleware.go internal/auth/middleware_test.go
 BASE_TREE="$(git -C "$REPO_DIR" write-tree)"
-BASE_COMMIT="$(printf 'base\n' | git -C "$REPO_DIR" -c user.name='Vouch Bench' -c user.email='gatemole-bench@example.invalid' commit-tree "$BASE_TREE" -F -)"
+BASE_COMMIT="$(printf 'base\n' | git -C "$REPO_DIR" -c user.name='Gatemole Bench' -c user.email='gatemole-bench@example.invalid' commit-tree "$BASE_TREE" -F -)"
 git -C "$REPO_DIR" update-ref refs/heads/main "$BASE_COMMIT"
 
 cd "$ROOT_DIR"
-go build -o "$GATEMOLE_BIN" ./cmd/vouch
+go build -o "$GATEMOLE_BIN" ./cmd/gatemole
 "$GATEMOLE_BIN" --repo "$REPO_DIR" runtime init >/dev/null
 start_daemon
 
@@ -150,4 +150,4 @@ pass "daemon restart recovered a byte-equivalent transaction projection"
 
 [[ "$(sed -n '3p' "$REPO_DIR/internal/auth/middleware.go")" == 'func Allowed() bool { return false }' ]] || fail "source repository changed during benchmark"
 [[ "$PASSED" == "$TOTAL" ]] || fail "benchmark completed with $PASSED/$TOTAL checks"
-echo "VouchTransactionBench: $PASSED/$TOTAL passed"
+echo "GatemoleTransactionBench: $PASSED/$TOTAL passed"

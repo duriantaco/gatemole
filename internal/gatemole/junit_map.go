@@ -267,7 +267,7 @@ func writeMappedJUnit(path string, cases []junitTestCase) error {
 	encoder := xml.NewEncoder(&data)
 	encoder.Indent("", "  ")
 	suite := mappedJUnitSuite{
-		Name:     "vouch",
+		Name:     "gatemole",
 		Tests:    len(cases),
 		Failures: 0,
 		Errors:   0,

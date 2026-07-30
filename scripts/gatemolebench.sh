@@ -3,9 +3,9 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: scripts/vouchbench.sh [--out DIR] [--keep]
+usage: scripts/gatemolebench.sh [--out DIR] [--keep]
 
-Runs the local Vouch benchmark harness against reproducible fixtures.
+Runs the local Gatemole benchmark harness against reproducible fixtures.
 
 Options:
   --out DIR   Write result JSON and Markdown to DIR.
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --out)
       if [[ $# -lt 2 ]]; then
-        echo "vouchbench: --out requires a directory" >&2
+        echo "gatemolebench: --out requires a directory" >&2
         exit 2
       fi
       OUT_DIR="$2"
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "vouchbench: unknown argument $1" >&2
+      echo "gatemolebench: unknown argument $1" >&2
       usage >&2
       exit 2
       ;;
@@ -46,8 +46,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$OUT_DIR"
-RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchbench.XXXXXX")"
-VOUCH="$RUN_DIR/vouch"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gatemolebench.XXXXXX")"
+GATEMOLE="$RUN_DIR/gatemole"
 
 cleanup() {
   if [[ "$KEEP" == "1" ]]; then
@@ -94,7 +94,7 @@ from xml.sax.saxutils import escape
 path, raw = sys.argv[1:]
 obligations = json.loads(raw)
 with open(path, "w", encoding="utf-8") as f:
-    f.write(f'<testsuite name="vouchbench" tests="{len(obligations)}" failures="0" errors="0" skipped="0">')
+    f.write(f'<testsuite name="gatemolebench" tests="{len(obligations)}" failures="0" errors="0" skipped="0">')
     for obligation in obligations:
         value = escape(obligation, {'"': '&quot;'})
         f.write(f'<testcase classname="{value}" name="{value}"></testcase>')
@@ -161,9 +161,9 @@ run_gate() {
   start_ns="$(now_ns)"
   set +e
   if [[ -n "$manifest" ]]; then
-    "$VOUCH" --repo "$repo" --manifest "$manifest" gate --json > "$dir/gate.json" 2> "$dir/gate.stderr"
+    "$GATEMOLE" --repo "$repo" --manifest "$manifest" gate --json > "$dir/gate.json" 2> "$dir/gate.stderr"
   else
-    "$VOUCH" --repo "$repo" gate --json > "$dir/gate.json" 2> "$dir/gate.stderr"
+    "$GATEMOLE" --repo "$repo" gate --json > "$dir/gate.json" 2> "$dir/gate.stderr"
   fi
   code=$?
   set -e
@@ -179,7 +179,7 @@ attach_artifact() {
   local path="$5"
   local stdout_path="$6"
 
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest "$manifest" \
     --id "$id" \
     --kind "$kind" \
@@ -375,7 +375,7 @@ with (scenario_dir / "row.json").open("w", encoding="utf-8") as f:
     f.write("\n")
 
 if not passed:
-    print(f"vouchbench: scenario {meta['id']} failed assertions:", file=sys.stderr)
+    print(f"gatemolebench: scenario {meta['id']} failed assertions:", file=sys.stderr)
     for item in assertions:
         if item["passed"]:
             continue
@@ -564,8 +564,8 @@ create_platform_repo() {
 /internal/payments/ @payments
 /internal/api/ @platform'
 
-  "$VOUCH" --repo "$repo" init > "$dir/init.stdout"
-  "$VOUCH" --repo "$repo" contract create \
+  "$GATEMOLE" --repo "$repo" init > "$dir/init.stdout"
+  "$GATEMOLE" --repo "$repo" contract create \
     --name auth.session \
     --owner security \
     --risk high \
@@ -580,7 +580,7 @@ create_platform_repo() {
     --metric "auth.session.logout" \
     --rollback-strategy "feature_flag" \
     --rollback-flag "session_refresh_v2" > "$dir/contract-auth.stdout"
-  "$VOUCH" --repo "$repo" contract create \
+  "$GATEMOLE" --repo "$repo" contract create \
     --name payments.checkout \
     --owner payments \
     --risk high \
@@ -595,7 +595,7 @@ create_platform_repo() {
     --metric "payments.checkout.failed" \
     --rollback-strategy "disable_feature_flag" \
     --rollback-flag "checkout_v3" > "$dir/contract-payments.stdout"
-  "$VOUCH" --repo "$repo" contract create \
+  "$GATEMOLE" --repo "$repo" contract create \
     --name api.users \
     --owner platform \
     --risk medium \
@@ -607,7 +607,7 @@ create_platform_repo() {
     --required-test "user search pagination" \
     --metric "api.users.requests" \
     --rollback-strategy "revert_change" > "$dir/contract-api.stdout"
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   printf '%s\n' "$repo"
 }
 
@@ -654,7 +654,7 @@ add_auth_tests_only() {
       \"id\": \"tests_only\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees a passing JUnit artifact and no release-obligation coverage model.\"
     },
     \"expected\": {
@@ -677,8 +677,8 @@ add_auth_tests_only() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  "$VOUCH" --repo "$repo" evidence import junit artifacts/junit-pass.xml > "$dir/import.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" evidence import junit artifacts/junit-pass.xml > "$dir/import.stdout"
   run_gate "$dir" "$repo" ""
   assert_scenario "$dir"
 }
@@ -698,7 +698,7 @@ add_auth_partial_release_evidence() {
       \"id\": \"tests_plus_partial_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees passing tests and partial artifacts, but does not require every compiled release obligation to be covered.\"
     },
     \"expected\": {
@@ -720,7 +720,7 @@ add_auth_partial_release_evidence() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   run_gate "$dir" "$repo" ".gatemole/manifests/blocked.json"
   assert_scenario "$dir"
 }
@@ -740,7 +740,7 @@ add_auth_manifest_traceability_block() {
       \"id\": \"tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees the full passing artifact set but does not check changed-file ownership against contract scope.\"
     },
     \"expected\": {
@@ -758,7 +758,7 @@ add_auth_manifest_traceability_block() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   run_gate "$dir" "$repo" ".gatemole/manifests/traceability-blocked.json"
   assert_scenario "$dir"
 }
@@ -778,7 +778,7 @@ add_auth_nonzero_test_artifact() {
       \"id\": \"tests_failed\",
       \"tests_passed\": false,
       \"caught_by_tests\": true,
-      \"would_continue_without_vouch\": false,
+      \"would_continue_without_gatemole\": false,
       \"description\": \"The test runner already failed, so this is a negative-control scenario rather than a Gatemole-only catch.\"
     },
     \"expected\": {
@@ -800,7 +800,7 @@ add_auth_nonzero_test_artifact() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   set_test_artifact_exit_code "$repo" ".gatemole/manifests/nonzero-test-artifact.json"
   run_gate "$dir" "$repo" ".gatemole/manifests/nonzero-test-artifact.json"
   assert_scenario "$dir"
@@ -821,7 +821,7 @@ add_auth_full_release_evidence() {
       \"id\": \"tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees complete passing artifacts but does not express the canary release route.\"
     },
     \"expected\": {
@@ -838,7 +838,7 @@ add_auth_full_release_evidence() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   run_gate "$dir" "$repo" ".gatemole/manifests/pass.json"
   assert_scenario "$dir"
 }
@@ -858,7 +858,7 @@ add_auth_full_release_without_canary() {
       \"id\": \"tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees passing tests and complete artifacts, but does not encode high-risk rollout policy.\"
     },
     \"expected\": {
@@ -875,7 +875,7 @@ add_auth_full_release_without_canary() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
   disable_canary_manifest "$repo" ".gatemole/manifests/no-canary.json"
   run_gate "$dir" "$repo" ".gatemole/manifests/no-canary.json"
   assert_scenario "$dir"
@@ -896,7 +896,7 @@ add_platform_multi_component_partial_evidence() {
       \"id\": \"multi_component_tests_plus_partial_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees passing tests across auth, payments, and API, but does not require complete evidence per compiled obligation and component.\"
     },
     \"expected\": {
@@ -924,7 +924,7 @@ add_platform_multi_component_partial_evidence() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" manifest create \
+  "$GATEMOLE" --repo "$repo" manifest create \
     --task-id platform-204 \
     --summary "agent updates session refresh, checkout, and users API" \
     --agent codex \
@@ -961,7 +961,7 @@ add_platform_multi_component_full_canary() {
       \"id\": \"multi_component_tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees all component tests and artifacts passing but does not encode the high-risk canary release posture.\"
     },
     \"expected\": {
@@ -978,7 +978,7 @@ add_platform_multi_component_full_canary() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" manifest create \
+  "$GATEMOLE" --repo "$repo" manifest create \
     --task-id platform-205 \
     --summary "agent updates session refresh, checkout, and users API with complete release evidence" \
     --agent codex \
@@ -1010,12 +1010,12 @@ add_platform_medium_api_auto_merge() {
   write_meta_json "$dir" "{
     \"id\": \"$scenario\",
     \"title\": \"Medium-risk API-only change in a multi-component repo\",
-    \"claim\": \"The benchmark should prove Vouch can isolate a medium-risk component inside a larger repo and auto-merge it when evidence is complete.\",
+    \"claim\": \"The benchmark should prove Gatemole can isolate a medium-risk component inside a larger repo and auto-merge it when evidence is complete.\",
     \"baseline\": {
       \"id\": \"api_tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees passing API tests but does not prove the gate scoped obligations to only the touched medium-risk contract.\"
     },
     \"expected\": {
@@ -1032,7 +1032,7 @@ add_platform_medium_api_auto_merge() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" manifest create \
+  "$GATEMOLE" --repo "$repo" manifest create \
     --task-id platform-206 \
     --summary "agent updates users API only" \
     --agent codex \
@@ -1067,7 +1067,7 @@ add_docs_low_risk_full_evidence() {
       \"id\": \"tests_plus_complete_artifacts\",
       \"tests_passed\": true,
       \"caught_by_tests\": false,
-      \"would_continue_without_vouch\": true,
+      \"would_continue_without_gatemole\": true,
       \"description\": \"The baseline sees passing documentation checks and all declared docs obligations are covered.\"
     },
     \"expected\": {
@@ -1084,8 +1084,8 @@ add_docs_low_risk_full_evidence() {
     }
   }"
 
-  "$VOUCH" --repo "$repo" init > "$dir/init.stdout"
-  "$VOUCH" --repo "$repo" contract create \
+  "$GATEMOLE" --repo "$repo" init > "$dir/init.stdout"
+  "$GATEMOLE" --repo "$repo" contract create \
     --name docs.readme \
     --owner docs \
     --risk low \
@@ -1095,8 +1095,8 @@ add_docs_low_risk_full_evidence() {
     --required-test "documentation smoke check" \
     --metric "gatemole.gate.decision" \
     --rollback-strategy "revert_change" > "$dir/contract.stdout"
-  "$VOUCH" --repo "$repo" compile > "$dir/compile.stdout"
-  "$VOUCH" --repo "$repo" manifest create \
+  "$GATEMOLE" --repo "$repo" compile > "$dir/compile.stdout"
+  "$GATEMOLE" --repo "$repo" manifest create \
     --task-id docs-safe \
     --summary "docs update" \
     --agent codex \
@@ -1112,21 +1112,21 @@ add_docs_low_risk_full_evidence() {
   write_text_file "$repo/.gatemole/test-map.json" '{"version":"gatemole.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
   write_text_file "$repo/.gatemole/artifacts/tests.xml" '<testsuite name="docs" tests="1" failures="0" errors="0" skipped="0"><testcase classname="tests.docs.test_readme" name="test_documentation_smoke_check" file="tests/docs/test_readme.py"></testcase></testsuite>'
 
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest .gatemole/manifests/docs.json \
     --id behavior \
     --kind behavior_trace \
     --path .gatemole/artifacts/behavior.json \
     --exit-code 0 \
     --out .gatemole/manifests/docs.json > "$dir/attach-behavior.stdout"
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest .gatemole/manifests/docs.json \
     --id security \
     --kind security_check \
     --path .gatemole/artifacts/security.json \
     --exit-code 0 \
     --out .gatemole/manifests/docs.json > "$dir/attach-security.stdout"
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest .gatemole/manifests/docs.json \
     --id tests \
     --kind test_coverage \
@@ -1134,14 +1134,14 @@ add_docs_low_risk_full_evidence() {
     --test-map .gatemole/test-map.json \
     --exit-code 0 \
     --out .gatemole/manifests/docs.json > "$dir/attach-tests.stdout"
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest .gatemole/manifests/docs.json \
     --id runtime \
     --kind runtime_metric \
     --path .gatemole/artifacts/runtime.json \
     --exit-code 0 \
     --out .gatemole/manifests/docs.json > "$dir/attach-runtime.stdout"
-  "$VOUCH" --repo "$repo" manifest attach-artifact \
+  "$GATEMOLE" --repo "$repo" manifest attach-artifact \
     --manifest .gatemole/manifests/docs.json \
     --id rollback \
     --kind rollback_plan \
@@ -1154,8 +1154,8 @@ add_docs_low_risk_full_evidence() {
 }
 
 render_results() {
-  local json_out="$OUT_DIR/vouchbench.latest.json"
-  local md_out="$OUT_DIR/vouchbench.latest.md"
+  local json_out="$OUT_DIR/gatemolebench.latest.json"
+  local md_out="$OUT_DIR/gatemolebench.latest.md"
 
   python3 - "$json_out" "$md_out" "${SCENARIOS[@]}" <<'PY'
 from __future__ import annotations
@@ -1331,7 +1331,7 @@ acceptance = {
     "criteria": criteria,
 }
 result = {
-    "version": "vouchbench.v1",
+    "version": "gatemolebench.v1",
     "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
     "acceptance": acceptance,
     "summary": summary,
@@ -1344,7 +1344,7 @@ with json_out.open("w", encoding="utf-8") as f:
 
 status = "pass" if acceptance["passed"] else "fail"
 lines = [
-    "# VouchBench Latest",
+    "# GatemoleBench Latest",
     "",
     f"Generated: `{result['generated_at']}`",
     "",
@@ -1370,7 +1370,7 @@ lines.extend([
     f"- Tests-passed scenarios: {summary['tests_passed_scenarios']}/{summary['scenario_count']}",
     f"- Tests-failed negative controls: {summary['tests_failed_scenarios']}/{summary['scenario_count']}",
     f"- Tests-passed scenarios expected to block: {summary['tests_passed_expected_block_scenarios']}",
-    f"- Tests-passed scenarios Vouch blocked: {summary['tests_passed_scenarios_gatemole_blocked']}/{summary['tests_passed_expected_block_scenarios']}",
+    f"- Tests-passed scenarios Gatemole blocked: {summary['tests_passed_scenarios_gatemole_blocked']}/{summary['tests_passed_expected_block_scenarios']}",
     f"- Non-blocking policy routes matched: {summary['nonblocking_policy_routes_met']}/{summary['nonblocking_policy_routes']}",
     f"- Full-coverage block scenarios: {summary['full_coverage_block_scenarios']}",
     f"- Medium/high scale scenarios: {summary['medium_high_scale_scenarios']} with max {summary['max_obligations_in_scenario']} obligations",
@@ -1380,7 +1380,7 @@ lines.extend([
     "",
     "## Scenarios",
     "",
-    "| Scenario | Baseline | Tests | Expected | Vouch | Exit | Coverage | Assertions |",
+    "| Scenario | Baseline | Tests | Expected | Gatemole | Exit | Coverage | Assertions |",
     "| --- | --- | --- | --- | --- | ---: | --- | --- |",
 ])
 for row in rows:
@@ -1406,7 +1406,7 @@ md_out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(md_out.read_text(encoding="utf-8"))
 
 if not acceptance["passed"]:
-    print("vouchbench: acceptance failed", file=sys.stderr)
+    print("gatemolebench: acceptance failed", file=sys.stderr)
     for item in criteria:
         if not item["passed"]:
             print(f"- {item['id']}: expected {item['expected']!r}, got {item['actual']!r}", file=sys.stderr)
@@ -1414,8 +1414,8 @@ if not acceptance["passed"]:
 PY
 }
 
-echo "building local vouch binary..."
-(cd "$ROOT" && GOCACHE="${GOCACHE:-$RUN_DIR/gocache}" go build -o "$VOUCH" ./cmd/vouch)
+echo "building local gatemole binary..."
+(cd "$ROOT" && GOCACHE="${GOCACHE:-$RUN_DIR/gocache}" go build -o "$GATEMOLE" ./cmd/gatemole)
 
 echo "running benchmark scenarios..."
 add_auth_tests_only
@@ -1431,5 +1431,5 @@ add_docs_low_risk_full_evidence
 
 render_results
 echo "wrote:"
-echo "  $OUT_DIR/vouchbench.latest.json"
-echo "  $OUT_DIR/vouchbench.latest.md"
+echo "  $OUT_DIR/gatemolebench.latest.json"
+echo "  $OUT_DIR/gatemolebench.latest.md"

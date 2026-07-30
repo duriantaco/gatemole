@@ -54,7 +54,7 @@ func contractsCommand(
 }
 
 func contractsUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] contracts <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] contracts <command>")
 	fmt.Fprintln(out, "  contracts try|init|bootstrap|compile|verify|gate|evidence")
 	fmt.Fprintln(out, "  contracts intent|ir|plan|artifacts|spec|contract|manifest|junit|policy")
 }

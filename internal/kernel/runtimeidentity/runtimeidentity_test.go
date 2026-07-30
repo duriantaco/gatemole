@@ -354,7 +354,7 @@ func TestLoadRejectsUnsafeFileAndDirectoryShapes(t *testing.T) {
 			t.Fatalf("directory identity was accepted: %v", err)
 		}
 	})
-	t.Run("symlink vouch directory", func(t *testing.T) {
+	t.Run("symlink gatemole directory", func(t *testing.T) {
 		parent := t.TempDir()
 		source := newGitRepository(t, filepath.Join(parent, "source"))
 		if _, _, err := CreateOrLoad(context.Background(), source); err != nil {
@@ -378,7 +378,7 @@ func TestLoadRejectsUnsafeFileAndDirectoryShapes(t *testing.T) {
 			t.Fatalf("Load accepted a symlink .gatemole directory: %v", err)
 		}
 	})
-	t.Run("writable vouch directory", func(t *testing.T) {
+	t.Run("writable gatemole directory", func(t *testing.T) {
 		repository, _ := createdIdentityPath(t)
 		if err := os.Chmod(filepath.Join(repository, ".gatemole"), 0o770); err != nil {
 			t.Fatal(err)

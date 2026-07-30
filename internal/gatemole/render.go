@@ -193,7 +193,7 @@ func gateNextSteps(evidence Evidence) []string {
 		steps = append(steps, "Attach "+kind+" evidence")
 	}
 	if len(steps) > 0 {
-		steps = append(steps, "Re-run vouch gate")
+		steps = append(steps, "Re-run gatemole gate")
 	}
 	return steps
 }
@@ -256,7 +256,7 @@ func hasMissingNonTestEvidence(evidence Evidence) bool {
 func RenderGitHubSummary(evidence Evidence) string {
 	covered, total := obligationCoverageCounts(evidence)
 	var b strings.Builder
-	b.WriteString("# Vouch Gate\n\n")
+	b.WriteString("# Gatemole Gate\n\n")
 	b.WriteString("| Field | Value |\n")
 	b.WriteString("| --- | --- |\n")
 	fmt.Fprintf(&b, "| Decision | `%s` |\n", markdownCell(evidence.Decision))
@@ -346,7 +346,7 @@ func RenderGateResultJSON(evidence Evidence) (string, error) {
 
 func RenderEvidence(evidence Evidence) string {
 	var b strings.Builder
-	fmt.Fprintln(&b, "# Vouch Evidence Report")
+	fmt.Fprintln(&b, "# Gatemole Evidence Report")
 	fmt.Fprintln(&b)
 	fmt.Fprintf(&b, "Repo: %s\n", evidence.Repo)
 	fmt.Fprintf(&b, "Manifest: %s\n", evidence.ManifestPath)

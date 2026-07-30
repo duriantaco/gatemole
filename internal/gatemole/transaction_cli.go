@@ -96,7 +96,7 @@ func runtimeBoundTransactionClientFactory(
 	identity, err := runtimeidentity.Load(context.Background(), repo)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"load Runtime identity; run `vouch runtime init` first: %w",
+			"load Runtime identity; run `gatemole runtime init` first: %w",
 			err,
 		)
 	}
@@ -135,8 +135,8 @@ func transactionAliasCommandWithFactory(
 }
 
 // normalizeTopLevelTransactionArgs makes the product-facing commands concise:
-// `vouch status TX_ID` targets the local namespace by default. The advanced
-// `vouch tx` surface retains its explicit --namespace/--id contract.
+// `gatemole status TX_ID` targets the local namespace by default. The advanced
+// `gatemole tx` surface retains its explicit --namespace/--id contract.
 func normalizeTopLevelTransactionArgs(args []string) ([]string, error) {
 	normalized := append([]string(nil), args...)
 	if len(normalized) > 0 && !strings.HasPrefix(normalized[0], "-") {
@@ -248,7 +248,7 @@ func transactionCreate(repo string, args []string, jsonOut bool, stdout, stderr 
 	if err != nil {
 		fmt.Fprintf(
 			stderr,
-			"tx create: load Runtime identity; run `vouch runtime init` first: %v\n",
+			"tx create: load Runtime identity; run `gatemole runtime init` first: %v\n",
 			err,
 		)
 		return 1
@@ -688,7 +688,7 @@ func renderTransactionProjection(
 }
 
 func transactionUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] tx <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] tx <command>")
 	fmt.Fprintln(out, "  tx run [--id ID] [--namespace NS] [--require-enforcement-profile development|production] (--intent TEXT | --intent-file FILE) [--agent NAME | --image IMAGE] [--run RUN] -- [COMMAND_OR_AGENT_ARG...]")
 	fmt.Fprintln(out, "  tx create --id ID --namespace NS (--intent TEXT | --intent-file FILE) [--run RUN] (development-only manual Runtime-bound v1 admission)")
 	fmt.Fprintln(out, "  tx start --namespace NS --id ID")

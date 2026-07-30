@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf '%s\n' 'usage: scripts/vouchkernelbench.sh [--out DIR] [--keep]'
+  printf '%s\n' 'usage: scripts/gatemolekernelbench.sh [--out DIR] [--keep]'
 }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,7 +12,7 @@ KEEP=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --out)
-      [[ $# -ge 2 ]] || { echo 'vouchkernelbench: --out requires a directory' >&2; exit 2; }
+      [[ $# -ge 2 ]] || { echo 'gatemolekernelbench: --out requires a directory' >&2; exit 2; }
       OUT_DIR="$2"
       shift 2
       ;;
@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "vouchkernelbench: unknown argument $1" >&2
+      echo "gatemolekernelbench: unknown argument $1" >&2
       usage >&2
       exit 2
       ;;
@@ -33,10 +33,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$OUT_DIR"
-RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchkernelbench.XXXXXX")"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gm-kernel.XXXXXX")"
 REPO="$RUN_DIR/repo"
-VOUCH="$RUN_DIR/vouch"
-VOUCHD="$RUN_DIR/gatemoled"
+GATEMOLE="$RUN_DIR/gatemole"
+GATEMOLED="$RUN_DIR/gatemoled"
 SOCKET="$REPO/.gatemole/gatemoled.sock"
 DATABASE="$REPO/.gatemole/kernel.db"
 DAEMON_PID=""
@@ -60,7 +60,7 @@ cleanup() {
 trap cleanup EXIT
 
 start_daemon() {
-  "$VOUCHD" --repo "$REPO" --db "$DATABASE" --socket "$SOCKET" \
+  "$GATEMOLED" --repo "$REPO" --db "$DATABASE" --socket "$SOCKET" \
     --transaction-root "$RUN_DIR/transactions" \
     --allow-unsafe-host-execution \
     >> "$RUN_DIR/gatemoled.stdout" 2>> "$RUN_DIR/gatemoled.stderr" &
@@ -70,12 +70,12 @@ start_daemon() {
       return 0
     fi
     if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
-      echo 'vouchkernelbench: daemon exited during startup' >&2
+      echo 'gatemolekernelbench: daemon exited during startup' >&2
       return 1
     fi
     sleep 0.05
   done
-  echo 'vouchkernelbench: daemon socket did not become ready' >&2
+  echo 'gatemolekernelbench: daemon socket did not become ready' >&2
   return 1
 }
 
@@ -83,32 +83,32 @@ mkdir -p "$REPO/workspace"
 printf '%s\n' 'governed kernel output' > "$REPO/input.txt"
 git -C "$REPO" init --initial-branch=main >/dev/null
 git -C "$REPO" add -- input.txt
-git -C "$REPO" -c user.name='Vouch Kernel Bench' \
+git -C "$REPO" -c user.name='Gatemole Kernel Bench' \
   -c user.email='gatemole-kernel-bench@example.invalid' \
   commit -m fixture >/dev/null
 
 (
   cd "$ROOT"
-  go build -o "$VOUCH" ./cmd/vouch
-  go build -o "$VOUCHD" ./cmd/gatemoled
+  go build -o "$GATEMOLE" ./cmd/gatemole
+  go build -o "$GATEMOLED" ./cmd/gatemoled
 )
 
-"$VOUCH" --repo "$REPO" runtime init >/dev/null
+"$GATEMOLE" --repo "$REPO" runtime init >/dev/null
 start_daemon
-"$VOUCH" --repo "$REPO" --json tx create \
+"$GATEMOLE" --repo "$REPO" --json tx create \
   --id tx:kernelbench-001 \
   --namespace kernelbench \
   --intent 'Write only inside the benchmark workspace.' \
   --run run:kernelbench-001 > "$RUN_DIR/admitted.json"
-"$VOUCH" --repo "$REPO" --json run transition --namespace kernelbench --id run:kernelbench-001 --to running > "$RUN_DIR/running.json"
-"$VOUCH" --repo "$REPO" --json action fs-write \
+"$GATEMOLE" --repo "$REPO" --json kernel run transition --namespace kernelbench --id run:kernelbench-001 --to running > "$RUN_DIR/running.json"
+"$GATEMOLE" --repo "$REPO" --json action fs-write \
   --namespace kernelbench --run run:kernelbench-001 \
   --path workspace/allowed.txt --input "$REPO/input.txt" \
   --action-id action:kernelbench-allowed --idempotency-key idem:kernelbench-allowed \
   > "$RUN_DIR/allowed.json"
 
 set +e
-"$VOUCH" --repo "$REPO" --json action fs-write \
+"$GATEMOLE" --repo "$REPO" --json action fs-write \
   --namespace kernelbench --run run:kernelbench-001 \
   --path workspace/../escaped.txt --input "$REPO/input.txt" \
   --action-id action:kernelbench-escape --idempotency-key idem:kernelbench-escape \
@@ -116,12 +116,12 @@ set +e
 DENIED_CODE=$?
 set -e
 
-"$VOUCH" --repo "$REPO" --json run get --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/before-run.json"
-"$VOUCH" --repo "$REPO" --json run events --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/before-events.json"
+"$GATEMOLE" --repo "$REPO" --json kernel run get --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/before-run.json"
+"$GATEMOLE" --repo "$REPO" --json kernel run events --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/before-events.json"
 stop_daemon
 start_daemon
-"$VOUCH" --repo "$REPO" --json run get --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/after-run.json"
-"$VOUCH" --repo "$REPO" --json run events --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/after-events.json"
+"$GATEMOLE" --repo "$REPO" --json kernel run get --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/after-run.json"
+"$GATEMOLE" --repo "$REPO" --json kernel run events --namespace kernelbench --id run:kernelbench-001 > "$RUN_DIR/after-events.json"
 
 python3 - "$RUN_DIR" "$REPO" "$OUT_DIR" "$DENIED_CODE" <<'PY'
 import json
@@ -154,7 +154,7 @@ assertions = {
     'history_survives_restart': before_events == after_events,
 }
 result = {
-    'name': 'VouchKernelBench',
+    'name': 'GatemoleKernelBench',
     'passed': all(assertions.values()),
     'assertions_passed': sum(assertions.values()),
     'assertions_total': len(assertions),
@@ -164,18 +164,18 @@ result = {
     'event_types': event_types,
 }
 out_dir.mkdir(parents=True, exist_ok=True)
-with (out_dir / 'vouchkernelbench.latest.json').open('w', encoding='utf-8') as handle:
+with (out_dir / 'gatemolekernelbench.latest.json').open('w', encoding='utf-8') as handle:
     json.dump(result, handle, indent=2, sort_keys=True)
     handle.write('\n')
 markdown = [
-    '# VouchKernelBench', '',
+    '# GatemoleKernelBench', '',
     f"Result: {'PASS' if result['passed'] else 'FAIL'}",
     f"Assertions: {result['assertions_passed']}/{result['assertions_total']}", '',
 ]
 for name, passed in assertions.items():
     markdown.append(f"- {'PASS' if passed else 'FAIL'} `{name}`")
-(out_dir / 'vouchkernelbench.latest.md').write_text('\n'.join(markdown) + '\n', encoding='utf-8')
-print(f"VouchKernelBench: {result['assertions_passed']}/{result['assertions_total']} assertions passed")
+(out_dir / 'gatemolekernelbench.latest.md').write_text('\n'.join(markdown) + '\n', encoding='utf-8')
+print(f"GatemoleKernelBench: {result['assertions_passed']}/{result['assertions_total']} assertions passed")
 if not result['passed']:
     raise SystemExit(1)
 PY

@@ -27,7 +27,7 @@ func TestGateGitHubSummaryWritesStepSummary(t *testing.T) {
 	}
 	summary := string(data)
 	for _, want := range []string{
-		"# Vouch Gate",
+		"# Gatemole Gate",
 		"| Decision | `auto_merge` |",
 		"| Obligations | `5/5 covered` |",
 		"### `ui.copy`",

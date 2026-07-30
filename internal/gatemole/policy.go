@@ -99,7 +99,7 @@ func LoadReleasePolicy(repo string, policyPath string) (ReleasePolicy, string, e
 	policy, err := LoadJSON[ReleasePolicy](resolved)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) && policyPath == "" {
-			return ReleasePolicy{}, "", fmt.Errorf("release policy not found at %s; run vouch init or pass --policy", resolved)
+			return ReleasePolicy{}, "", fmt.Errorf("release policy not found at %s; run gatemole init or pass --policy", resolved)
 		}
 		return ReleasePolicy{}, "", err
 	}

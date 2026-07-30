@@ -34,7 +34,7 @@
     "commands": [
       "npm test",
       "npm run test:e2e",
-      "vouch verify"
+      "gatemole verify"
     ],
     "tests_added": [
       "tests/auth/password-reset.spec.ts"
@@ -56,7 +56,7 @@
         "id": "behavior-trace",
         "kind": "behavior_trace",
         "producer": "agent",
-        "command": "vouch verify",
+        "command": "gatemole verify",
         "path": "artifacts/behavior-trace.json",
         "exit_code": 0,
         "obligations": [

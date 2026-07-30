@@ -113,7 +113,7 @@ func TestEvidenceImportJUnitRejectsBeforeCompile(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected import to fail before compile: code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "run vouch compile first") {
+	if !strings.Contains(stderr.String(), "run gatemole compile first") {
 		t.Fatalf("expected compile-first error, got stderr:\n%s", stderr.String())
 	}
 }

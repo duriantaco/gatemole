@@ -299,7 +299,7 @@ func (verifier *Verifier) Verify(token string, now time.Time) (Identity, error) 
 	}
 	for _, role := range roles {
 		if role != "viewer" && role != "operator" && role != "approver" && role != "admin" {
-			return Identity{}, errors.New("OIDC token contains an invalid Vouch role")
+			return Identity{}, errors.New("OIDC token contains an invalid Gatemole role")
 		}
 	}
 	payloadDigest := sha256.Sum256(payloadData)

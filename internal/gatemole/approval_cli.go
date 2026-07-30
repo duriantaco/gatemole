@@ -22,7 +22,7 @@ import (
 
 func approvalCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "keygen" {
-		fmt.Fprintln(stderr, "usage: vouch approval keygen --key-id ID --principal ID --class CLASS --private-key FILE --trust-file FILE")
+		fmt.Fprintln(stderr, "usage: gatemole approval keygen --key-id ID --principal ID --class CLASS --private-key FILE --trust-file FILE")
 		return 2
 	}
 	return approvalKeygen(repo, args[1:], jsonOut, stdout, stderr)

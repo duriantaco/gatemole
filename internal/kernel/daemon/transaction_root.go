@@ -70,7 +70,7 @@ func DefaultTransactionRoot(repository string) (string, error) {
 	sum := sha256.Sum256([]byte(canonicalRepository))
 	return filepath.Join(
 		base,
-		"vouch",
+		"gatemole",
 		"transactions",
 		hex.EncodeToString(sum[:12]),
 	), nil

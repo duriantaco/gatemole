@@ -14,7 +14,7 @@ import (
 	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
 
-const pinnedImage = "registry.example.invalid/vouch/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const pinnedImage = "registry.example.invalid/gatemole/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func TestOCIInvocationEnforcesIsolationAndLimits(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "workspace")

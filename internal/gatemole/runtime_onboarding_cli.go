@@ -28,7 +28,7 @@ const (
 	runtimeIgnoreFile    = ".gatemole/.gitignore"
 )
 
-var runtimeStateIgnore = []byte(`# Local Vouch Runtime state. Keep agent-profiles.json under version control.
+var runtimeStateIgnore = []byte(`# Local Gatemole Runtime state. Keep agent-profiles.json under version control.
 kernel.db
 kernel.db-journal
 kernel.db-shm
@@ -103,7 +103,7 @@ func runtimeCommand(
 }
 
 func runtimeUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] runtime <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] runtime <command>")
 	fmt.Fprintln(out, "  runtime init [--agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]]")
 	fmt.Fprintln(out, "  runtime doctor [--agent NAME] [--namespace NAME] [--require-enforcement-profile PROFILE] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
 	fmt.Fprintln(out, "  omit all runtime init profile inputs to initialize only the repository-local Runtime identity")
@@ -118,7 +118,7 @@ func runtimeInitCommand(
 ) int {
 	flags := flag.NewFlagSet("runtime init", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	agent := flags.String("agent", "", "stable name used by vouch run --agent")
+	agent := flags.String("agent", "", "stable name used by gatemole run --agent")
 	image := flags.String("image", "", "complete digest-pinned OCI image reference")
 	sourceDigest := flags.String(
 		"source-digest", "",
@@ -235,11 +235,11 @@ func runtimeInitCommand(
 		return renderCommandJSON(result, stdout, stderr)
 	}
 	if result.RuntimeIdentityCreated || result.ProfileCreated {
-		fmt.Fprintf(stdout, "Initialized Vouch Runtime in %s\n", result.Repository)
+		fmt.Fprintf(stdout, "Initialized Gatemole Runtime in %s\n", result.Repository)
 	} else if result.Agent == "" {
-		fmt.Fprintf(stdout, "Vouch Runtime already initialized in %s.\n", result.Repository)
+		fmt.Fprintf(stdout, "Gatemole Runtime already initialized in %s.\n", result.Repository)
 	} else {
-		fmt.Fprintf(stdout, "Vouch Runtime already initialized in %s; profile left unchanged.\n", result.Repository)
+		fmt.Fprintf(stdout, "Gatemole Runtime already initialized in %s; profile left unchanged.\n", result.Repository)
 	}
 	fmt.Fprintf(
 		stdout,
@@ -257,7 +257,7 @@ func runtimeInitCommand(
 	} else {
 		fmt.Fprintf(stdout, "Runtime state ignore is complete: %s\n", result.IgnorePath)
 	}
-	fmt.Fprintf(stdout, "Next: vouch --repo %s doctor\n", result.Repository)
+	fmt.Fprintf(stdout, "Next: gatemole --repo %s doctor\n", result.Repository)
 	return 0
 }
 
@@ -496,9 +496,9 @@ func appendRuntimeIgnoreEntries(
 	}
 	if !bytes.Contains(
 		existing,
-		[]byte("# Local Vouch Runtime state."),
+		[]byte("# Local Gatemole Runtime state."),
 	) {
-		addition.WriteString("# Local Vouch Runtime state.\n")
+		addition.WriteString("# Local Gatemole Runtime state.\n")
 	}
 	for _, entry := range missing {
 		addition.WriteString(entry)
@@ -623,7 +623,7 @@ func runtimeDoctorCommandWithProbes(
 			return code
 		}
 	} else {
-		fmt.Fprintln(stdout, "Vouch Runtime doctor")
+		fmt.Fprintln(stdout, "Gatemole Runtime doctor")
 		for _, check := range result.Checks {
 			fmt.Fprintf(
 				stdout, "[%s] %s: %s\n",
@@ -731,7 +731,7 @@ func runRuntimeDoctor(
 				"runtime_identity",
 				"fail",
 				"load local Runtime identity: "+identityErr.Error()+
-					"; run `vouch runtime init`",
+					"; run `gatemole runtime init`",
 			)
 		} else {
 			add(
@@ -770,7 +770,7 @@ func runRuntimeDoctor(
 	case os.IsNotExist(profileRootCause(profileErr)):
 		add(
 			"agent_profiles", "warn",
-			"not configured; create it with `vouch runtime init`",
+			"not configured; create it with `gatemole runtime init`",
 		)
 	default:
 		add("agent_profiles", "fail", profileErr.Error())
@@ -793,7 +793,7 @@ func runRuntimeDoctor(
 	case os.IsNotExist(socketErr):
 		socketStatus = "warn"
 		socketMessage =
-			"not running; start it with `vouch daemon` when you are ready to execute"
+			"not running; start it with `gatemole daemon` when you are ready to execute"
 	case socketErr != nil:
 		socketStatus = "fail"
 		socketMessage = "inspect daemon socket: " + socketErr.Error()
@@ -885,7 +885,7 @@ func runRuntimeDoctor(
 				add(
 					"agent_images", "fail",
 					fmt.Sprintf(
-						"selected agent %q image is not present locally: %s; Vouch executes with pull=never",
+						"selected agent %q image is not present locally: %s; Gatemole executes with pull=never",
 						selectedAgent, selectedImage,
 					),
 				)

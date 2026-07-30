@@ -1,4 +1,4 @@
-// Package runtimeidentity owns the local identity of one Vouch Runtime
+// Package runtimeidentity owns the local identity of one Gatemole Runtime
 // installation. The identity document contains no repository path or derived
 // path digest and therefore remains stable when its Git worktree is moved.
 package runtimeidentity

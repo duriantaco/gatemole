@@ -1865,7 +1865,7 @@ func TestRequireSignedRequiresArtifactBackedEvidence(t *testing.T) {
 
 func TestRequireSignedAcceptsCosignVerifiedArtifacts(t *testing.T) {
 	installFakeCosign(t, 0)
-	signerIdentity := "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main"
+	signerIdentity := "https://github.com/example/repo/.github/workflows/gatemole.yml@refs/heads/main"
 	signerOIDCIssuer := "https://token.actions.githubusercontent.com"
 	spec := Spec{
 		Version:    SpecSchemaVersion,
@@ -2040,7 +2040,7 @@ func TestRequireSignedRejectsAllowedIdentityWithWrongIssuer(t *testing.T) {
 	installFakeCosign(t, 0)
 	repo, manifestPath, _ := writeFullyCoveredUIScenario(t, nil)
 	attachSignedBundles(t, repo, manifestPath, nil)
-	writeAllowedSigners(t, repo, "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main", "https://issuer.example.invalid")
+	writeAllowedSigners(t, repo, "https://github.com/example/repo/.github/workflows/gatemole.yml@refs/heads/main", "https://issuer.example.invalid")
 	evidence, err := CollectEvidenceWithOptions(repo, manifestPath, CollectEvidenceOptions{RequireSigned: true})
 	if err != nil {
 		t.Fatal(err)
@@ -2063,7 +2063,7 @@ func TestRequireSignedAcceptsMultiEntryAllowlist(t *testing.T) {
 			OIDCIssuer: "https://token.actions.githubusercontent.com",
 		},
 		{
-			Identity:   "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main",
+			Identity:   "https://github.com/example/repo/.github/workflows/gatemole.yml@refs/heads/main",
 			OIDCIssuer: "https://token.actions.githubusercontent.com",
 		},
 	})
@@ -2283,7 +2283,7 @@ func writeFullyCoveredUIScenario(t *testing.T, extra func(map[ObligationKind]str
 
 func attachSignedBundles(t *testing.T, repo string, manifestPath string, mutate func(EvidenceArtifact, *EvidenceBundle)) {
 	t.Helper()
-	signerIdentity := "https://github.com/example/repo/.github/workflows/vouch.yml@refs/heads/main"
+	signerIdentity := "https://github.com/example/repo/.github/workflows/gatemole.yml@refs/heads/main"
 	signerOIDCIssuer := "https://token.actions.githubusercontent.com"
 	writeAllowedSigners(t, repo, signerIdentity, signerOIDCIssuer)
 	manifest := mustLoadManifest(t, manifestPath)

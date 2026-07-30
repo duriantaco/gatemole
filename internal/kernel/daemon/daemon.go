@@ -212,7 +212,7 @@ func Run(ctx context.Context, config Config) error {
 	runtimeIdentity, err := runtimeidentity.Load(ctx, repositoryRoot)
 	if err != nil {
 		return fmt.Errorf(
-			"gatemoled: load Runtime identity; run `vouch runtime init` first: %w",
+			"gatemoled: load Runtime identity; run `gatemole runtime init` first: %w",
 			err,
 		)
 	}

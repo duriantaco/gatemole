@@ -106,7 +106,7 @@ func CollectEvidenceFromEvidenceManifest(repo string, manifestPath string, opts 
 	}
 	specIDs := sortedStringKeys(specs)
 	if len(specIDs) == 0 {
-		return Evidence{}, errors.New("no compiled specs found; run vouch compile first")
+		return Evidence{}, errors.New("no compiled specs found; run gatemole compile first")
 	}
 	risk := maxSpecRisk(specs, specIDs)
 	if risk == "" {
@@ -119,9 +119,9 @@ func CollectEvidenceFromEvidenceManifest(repo string, manifestPath string, opts 
 			Risk:         risk,
 			SpecsTouched: specIDs,
 		},
-		Agent: Agent{Name: "vouch"},
+		Agent: Agent{Name: "gatemole"},
 		Verification: Verification{
-			Commands: []string{"vouch evidence import junit " + evidenceManifest.ArtifactPath},
+			Commands: []string{"gatemole evidence import junit " + evidenceManifest.ArtifactPath},
 		},
 		Runtime: ManifestRuntime{
 			Metrics: runtimeMetricsForSpecs(specs, specIDs),
@@ -177,7 +177,7 @@ func loadCompiledRequiredTests(repo string) ([]Obligation, error) {
 	bundle, err := LoadJSON[ObligationIRBundle](path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("compiled obligation IR not found at %s; run vouch compile first", path)
+			return nil, fmt.Errorf("compiled obligation IR not found at %s; run gatemole compile first", path)
 		}
 		return nil, err
 	}

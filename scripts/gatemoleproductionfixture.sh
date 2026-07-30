@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf '%s\n' 'usage: scripts/vouchproductionfixture.sh [--tag IMAGE_TAG]'
+  printf '%s\n' 'usage: scripts/gatemoleproductionfixture.sh [--tag IMAGE_TAG]'
 }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,7 +11,7 @@ IMAGE_TAG="gatemole-production-fixture:local"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)
-      [[ $# -ge 2 ]] || { echo 'vouchproductionfixture: --tag requires a value' >&2; exit 2; }
+      [[ $# -ge 2 ]] || { echo 'gatemoleproductionfixture: --tag requires a value' >&2; exit 2; }
       IMAGE_TAG="$2"
       shift 2
       ;;
@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "vouchproductionfixture: unknown argument $1" >&2
+      echo "gatemoleproductionfixture: unknown argument $1" >&2
       usage >&2
       exit 2
       ;;
@@ -181,7 +181,7 @@ EOF
 
 docker_arch="$(docker version --format '{{.Server.Arch}}')"
 if [[ -z "$docker_arch" ]]; then
-  echo 'vouchproductionfixture: Docker server architecture is unavailable' >&2
+  echo 'gatemoleproductionfixture: Docker server architecture is unavailable' >&2
   exit 1
 fi
 

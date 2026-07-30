@@ -252,9 +252,9 @@ func initCommand(repo string, args []string, jsonOut bool, stdout io.Writer, std
 		return renderCommandJSON(result, stdout, stderr)
 	}
 	if result.Created {
-		fmt.Fprintf(stdout, "Initialized Vouch in %s\n", result.Repo)
+		fmt.Fprintf(stdout, "Initialized Gatemole in %s\n", result.Repo)
 	} else {
-		fmt.Fprintf(stdout, "Vouch already initialized in %s\n", result.Repo)
+		fmt.Fprintf(stdout, "Gatemole already initialized in %s\n", result.Repo)
 	}
 	fmt.Fprintf(stdout, "Profiles: %s\n", strings.Join(result.Profiles, ", "))
 	fmt.Fprintf(stdout, "Config: %s\n", result.ConfigPath)
@@ -416,7 +416,7 @@ func manifestAttachArtifact(repo string, args []string, jsonOut bool, stdout io.
 	producer := flags.String("producer", "", "artifact producer")
 	command := flags.String("command", "", "command that produced artifact")
 	sha256 := flags.String("sha256", "", "expected sha256")
-	evidenceBundle := flags.String("evidence-bundle", "", "Vouch evidence bundle path")
+	evidenceBundle := flags.String("evidence-bundle", "", "Gatemole evidence bundle path")
 	signatureBundle := flags.String("signature-bundle", "", "cosign signature bundle path")
 	signerIdentity := flags.String("signer-identity", "", "expected cosign signer identity")
 	signerOIDCIssuer := flags.String("signer-oidc-issuer", "", "expected cosign signer OIDC issuer")
@@ -876,7 +876,7 @@ func collectAndRender(repo string, manifestPath string, jsonOut bool, stdout io.
 }
 
 func usage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--manifest FILE] [--json] <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--manifest FILE] [--json] <command>")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "commands:")
 	fmt.Fprintln(out, "  daemon [--db FILE] [--socket FILE] [--transaction-root DIR] [--runtime-profile development|production]")
@@ -893,7 +893,7 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "  contracts <command> (optional release-contract verification module)")
 	fmt.Fprintln(out, "  approval keygen --key-id ID --principal ID --class CLASS --private-key FILE --trust-file FILE")
 	fmt.Fprintln(out, "  identity keygen|issue (local OIDC bootstrap and acceptance testing)")
-	fmt.Fprintln(out, "  action fs-write|fs-read (use 'vouch action' for details)")
+	fmt.Fprintln(out, "  action fs-write|fs-read (use 'gatemole action' for details)")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "Legacy top-level Contracts commands remain accepted for compatibility.")
 }

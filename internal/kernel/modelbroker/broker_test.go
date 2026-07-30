@@ -32,7 +32,7 @@ func TestBrokerEnforcesPolicyReplacesCredentialAndRecordsDigests(t *testing.T) {
 			t.Errorf("upstream credential=%q", got)
 		}
 		if !strings.HasPrefix(r.Header.Get("X-Client-Request-Id"), "model-call:") {
-			t.Errorf("missing Vouch request ID: %q", r.Header.Get("X-Client-Request-Id"))
+			t.Errorf("missing Gatemole request ID: %q", r.Header.Get("X-Client-Request-Id"))
 		}
 		data, err := io.ReadAll(r.Body)
 		if err != nil {

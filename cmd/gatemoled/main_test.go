@@ -76,7 +76,7 @@ func TestDaemonConfigDefaultsStayWithRepositoryOutsideWorkingDirectory(t *testin
 		t,
 		"transaction root parent",
 		filepath.Dir(configA.TransactionRoot),
-		filepath.Join(canonicalRuntimeDirectory, "vouch", "transactions"),
+		filepath.Join(canonicalRuntimeDirectory, "gatemole", "transactions"),
 	)
 }
 

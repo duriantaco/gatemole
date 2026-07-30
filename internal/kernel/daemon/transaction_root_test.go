@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrepareTransactionRootCreatesPrivateRealDirectory(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "vouch", "transactions", "repo")
+	root := filepath.Join(t.TempDir(), "gatemole", "transactions", "repo")
 	prepared, err := prepareTransactionRoot(root)
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestDefaultTransactionRootUsesSecurePerUserRepositoryScope(
 	}
 	wantParent := filepath.Join(
 		canonicalRuntimeDirectory,
-		"vouch",
+		"gatemole",
 		"transactions",
 	)
 	if filepath.Dir(rootA) != wantParent {

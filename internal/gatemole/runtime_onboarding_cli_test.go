@@ -132,7 +132,7 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 	if err := os.WriteFile(
 		mergeIgnore,
 		[]byte(
-			"# Local Vouch Runtime state. Keep agent-profiles.json under version control.\n"+
+			"# Local Gatemole Runtime state. Keep agent-profiles.json under version control.\n"+
 				"custom-entry\n",
 		),
 		0o600,
@@ -154,7 +154,7 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 	}
 	if bytes.Count(
 		merged,
-		[]byte("# Local Vouch Runtime state."),
+		[]byte("# Local Gatemole Runtime state."),
 	) != 1 {
 		t.Fatalf("Runtime ignore marker was duplicated: %s", merged)
 	}
@@ -848,7 +848,7 @@ func runtimeGitRepoForTest(t *testing.T) string {
 	}
 	command = exec.Command(
 		"git", "-C", repo,
-		"-c", "user.name=Vouch Test",
+		"-c", "user.name=Gatemole Test",
 		"-c", "user.email=gatemole-test@example.invalid",
 		"commit", "--allow-empty", "--quiet", "-m", "initial",
 	)

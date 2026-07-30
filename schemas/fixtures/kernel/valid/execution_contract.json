@@ -10,7 +10,7 @@
   "goal": "Modify the fixture only inside its workspace and produce release evidence.",
   "non_goals": [
     "Do not write outside the fixture workspace.",
-    "Do not release without satisfying the existing Vouch gate."
+    "Do not release without satisfying the existing Gatemole gate."
   ],
   "risk": "high",
   "resources": [

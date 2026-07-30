@@ -15,7 +15,7 @@ case "$production_image" in
   *@sha256:????????????????????????????????????????????????????????????????) ;;
   *)
     echo "GATEMOLE_PRODUCTION_IMAGE is required and must be a local sha256 image ID or digest-pinned reference" >&2
-    echo 'build one with: scripts/vouchproductionfixture.sh --tag gatemole-production-fixture:acceptance' >&2
+    echo 'build one with: scripts/gatemoleproductionfixture.sh --tag gatemole-production-fixture:acceptance' >&2
     exit 2
     ;;
 esac
@@ -66,12 +66,12 @@ printf 'package auth\n\nfunc TestAllowed() {}\n' > "$repo/internal/auth/middlewa
 printf 'verifier-poison\n' > "$repo/.gitignore"
 git -C "$repo" init --initial-branch=main >/dev/null
 git -C "$repo" add -- .gitignore internal/auth/middleware.go internal/auth/middleware_test.go
-git -C "$repo" -c user.name='Vouch Production Bench' -c user.email='vouch@example.invalid' commit -m fixture >/dev/null
+git -C "$repo" -c user.name='Gatemole Production Bench' -c user.email='gatemole@example.invalid' commit -m fixture >/dev/null
 git -C "$repo" branch release/production-bench HEAD
 
-GOCACHE="$bench_root/go-build" go build -o "$bin_dir/vouch" ./cmd/vouch
+GOCACHE="$bench_root/go-build" go build -o "$bin_dir/gatemole" ./cmd/gatemole
 GOCACHE="$bench_root/go-build" go build -o "$bin_dir/gatemoled" ./cmd/gatemoled
-"$bin_dir/vouch" --repo "$repo" runtime init >/dev/null
+"$bin_dir/gatemole" --repo "$repo" runtime init >/dev/null
 runtime_id=$(jq -r '.runtime_id' "$repo/.gatemole/runtime.json")
 broker_arch=$(docker version --format '{{.Server.Arch}}')
 CGO_ENABLED=0 GOOS=linux GOARCH="$broker_arch" \
@@ -126,7 +126,7 @@ jq -n \
   }' >"$bench_root/verifier-profiles.json"
 chmod 600 "$bench_root/verifier-profiles.json"
 
-"$bin_dir/vouch" --repo "$repo" approval keygen \
+"$bin_dir/gatemole" --repo "$repo" approval keygen \
   --key-id key:production-bench \
   --principal human:production-reviewer \
   --issuer "$identity_issuer" \
@@ -134,14 +134,14 @@ chmod 600 "$bench_root/verifier-profiles.json"
   --private-key "$bench_root/approval.key" \
   --trust-file "$bench_root/approval-trust.json" >/dev/null
 
-"$bin_dir/vouch" --repo "$repo" identity keygen \
+"$bin_dir/gatemole" --repo "$repo" identity keygen \
   --key-id key:production-identity \
   --issuer "$identity_issuer" \
   --audience "$identity_audience" \
   --private-key "$bench_root/identity.key" \
   --trust-file "$bench_root/identity-trust.json" >/dev/null
 
-operator_token=$("$bin_dir/vouch" --repo "$repo" identity issue \
+operator_token=$("$bin_dir/gatemole" --repo "$repo" identity issue \
   --key "$bench_root/identity.key" \
   --key-id key:production-identity \
   --issuer "$identity_issuer" \
@@ -152,7 +152,7 @@ operator_token=$("$bin_dir/vouch" --repo "$repo" identity issue \
   --roles viewer,operator \
   --ttl 30m)
 
-reviewer_token=$("$bin_dir/vouch" --repo "$repo" identity issue \
+reviewer_token=$("$bin_dir/gatemole" --repo "$repo" identity issue \
   --key "$bench_root/identity.key" \
   --key-id key:production-identity \
   --issuer "$identity_issuer" \
@@ -216,7 +216,7 @@ test "$legacy_status" = 403
 test "$(jq -r '.code' "$bench_root/legacy-host-api.json")" = KERNEL_CAPABILITY_DENIED
 test "$(jq -r '.operation' "$bench_root/legacy-host-api.json")" = legacy_host_runtime
 
-GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx run \
+GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx run \
   --socket "$socket" \
   --id tx:production-bench \
   --namespace production-bench \
@@ -279,7 +279,7 @@ esac
 test -f "$workspace/verifier-poison"
 git -C "$workspace" check-ignore --quiet -- verifier-poison
 
-if GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx verify \
+if GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx verify \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
@@ -291,7 +291,7 @@ if GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --j
 fi
 grep -q 'KERNEL_CAPABILITY_DENIED' "$bench_root/substituted-verifier.stderr"
 
-GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx verify \
+GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx verify \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
@@ -303,7 +303,7 @@ test -f "$workspace/verifier-poison"
 
 main_before_symref=$(git -C "$repo" rev-parse refs/heads/main)
 git -C "$repo" symbolic-ref refs/heads/release/symref-escape refs/heads/main
-if GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx prepare \
+if GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx prepare \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
@@ -317,13 +317,13 @@ grep -q 'invalid Git release target' "$bench_root/symref-prepare.stderr"
 test "$(git -C "$repo" rev-parse refs/heads/main)" = "$main_before_symref"
 git -C "$repo" symbolic-ref --delete refs/heads/release/symref-escape
 
-GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx prepare \
+GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx prepare \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
   --git-ref refs/heads/release/production-bench >"$bench_root/prepare.json"
 
-GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/vouch" --repo "$repo" --json tx approve \
+GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/gatemole" --repo "$repo" --json tx approve \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
@@ -333,7 +333,7 @@ GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/vouch" --repo "$repo" --json
   --issuer "$identity_issuer" \
   --class security-reviewer >"$bench_root/approve.json"
 
-if GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/vouch" --repo "$repo" --json tx release \
+if GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/gatemole" --repo "$repo" --json tx release \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench \
@@ -345,12 +345,12 @@ if GATEMOLE_IDENTITY_TOKEN="$reviewer_token" "$bin_dir/vouch" --repo "$repo" --j
 fi
 grep -q 'KERNEL_APPROVAL_INVALID' "$bench_root/self-release.stderr"
 
-GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx release \
+GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx release \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench >"$bench_root/release.json"
 
-GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/vouch" --repo "$repo" --json tx events \
+GATEMOLE_IDENTITY_TOKEN="$operator_token" "$bin_dir/gatemole" --repo "$repo" --json tx events \
   --socket "$socket" \
   --namespace production-bench \
   --id tx:production-bench >"$bench_root/events.json"

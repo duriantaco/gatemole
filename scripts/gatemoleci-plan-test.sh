@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLANNER="$ROOT/scripts/vouchci-plan.sh"
-TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchci-plan-test.XXXXXX")"
+PLANNER="$ROOT/scripts/gatemoleci-plan.sh"
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gatemoleci-plan-test.XXXXXX")"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
 run_plan() {
@@ -17,7 +17,7 @@ assert_output() {
   local output="$1"
   local expected="$2"
   if ! grep -qx "$expected" <<< "$output"; then
-    echo "vouchci-plan-test: expected '$expected' in:" >&2
+    echo "gatemoleci-plan-test: expected '$expected' in:" >&2
     echo "$output" >&2
     exit 1
   fi
@@ -25,17 +25,17 @@ assert_output() {
 
 touch "$TEST_DIR/empty.paths"
 if "$PLANNER" --paths "$TEST_DIR/empty.paths" >/dev/null 2>&1; then
-  echo "vouchci-plan-test: an empty change set must fail closed" >&2
+  echo "gatemoleci-plan-test: an empty change set must fail closed" >&2
   exit 1
 fi
 
 docs_plan="$(run_plan docs docs/PRODUCTION.md README.md)"
 assert_output "$docs_plan" "docs=true"
-assert_output "$docs_plan" "vouchbench=false"
+assert_output "$docs_plan" "gatemolebench=false"
 assert_output "$docs_plan" "production=false"
 
-contracts_plan="$(run_plan contracts internal/vouch/compiler.go demo_repo/README.md)"
-assert_output "$contracts_plan" "vouchbench=true"
+contracts_plan="$(run_plan contracts internal/gatemole/compiler.go demo_repo/README.md)"
+assert_output "$contracts_plan" "gatemolebench=true"
 assert_output "$contracts_plan" "kernelbench=false"
 assert_output "$contracts_plan" "production=false"
 
@@ -57,19 +57,19 @@ assert_output "$transaction_plan" "runtimebench=false"
 
 schema_plan="$(run_plan schema schemas/gatemole.agent_task.v0.schema.json)"
 assert_output "$schema_plan" "docs=true"
-assert_output "$schema_plan" "vouchbench=true"
+assert_output "$schema_plan" "gatemolebench=true"
 assert_output "$schema_plan" "production=true"
 
 critical_paths=(
   internal/kernel/sandbox/oci.go
   internal/kernel/identity/oidc.go
-  internal/vouch/approval_cli.go
-  internal/vouch/transaction_cli.go
+  internal/gatemole/approval_cli.go
+  internal/gatemole/transaction_cli.go
   build/production-fixture.Dockerfile
   connectors/github/driver.go
   .gatemole/agent-profiles.json
   .gitattributes
-  scripts/vouchci-plan.sh
+  scripts/gatemoleci-plan.sh
   .github/workflows/pr.yml
   go.mod
 )
@@ -81,7 +81,7 @@ for critical_path in "${critical_paths[@]}"; do
 done
 
 unknown_plan="$(run_plan unknown connectors/github/driver.go)"
-assert_output "$unknown_plan" "vouchbench=true"
+assert_output "$unknown_plan" "gatemolebench=true"
 assert_output "$unknown_plan" "kernelbench=true"
 
-echo "vouchci-plan-test: all routing cases passed"
+echo "gatemoleci-plan-test: all routing cases passed"

@@ -90,7 +90,7 @@ func runtimeBoundKernelClientFactory(
 	identity, err := runtimeidentity.Load(context.Background(), repo)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"load Runtime identity; run `vouch runtime init` first: %w",
+			"load Runtime identity; run `gatemole runtime init` first: %w",
 			err,
 		)
 	}
@@ -457,7 +457,7 @@ func renderRunProjection(
 }
 
 func runUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] kernel run <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] kernel run <command>")
 	fmt.Fprintln(out, "  run get --namespace NS --id ID [--socket FILE]")
 	fmt.Fprintln(out, "  run list --namespace NS [--socket FILE]")
 	fmt.Fprintln(out, "  run events --namespace NS --id ID [--after N] [--socket FILE]")
@@ -470,8 +470,8 @@ func runUsage(out io.Writer) {
 }
 
 func kernelUsage(out io.Writer) {
-	fmt.Fprintln(out, "usage: vouch [--repo DIR] [--json] kernel run <command>")
+	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--json] kernel run <command>")
 	fmt.Fprintln(out, "  kernel run manages low-level AgentRun inspection and lifecycle transitions")
 	fmt.Fprintln(out, "  raw run creation and grants are embedded/unbound compatibility operations")
-	fmt.Fprintln(out, "  use 'vouch kernel run' for command details")
+	fmt.Fprintln(out, "  use 'gatemole kernel run' for command details")
 }

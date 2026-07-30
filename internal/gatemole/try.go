@@ -73,7 +73,7 @@ func tryCommand(repo string, args []string, jsonOut bool, stdout io.Writer, stde
 	opts := tryOptions{}
 	flags.StringVar(&opts.JUnit, "junit", "", "JUnit XML path to import after compile")
 	flags.StringVar(&opts.TestCommand, "test-command", "", "test command to run before importing JUnit")
-	flags.BoolVar(&opts.Write, "write", false, "write generated Vouch files into the source repo")
+	flags.BoolVar(&opts.Write, "write", false, "write generated Gatemole files into the source repo")
 	flags.BoolVar(&opts.Keep, "keep", false, "keep the temporary snapshot after the run")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -485,12 +485,12 @@ func tryNextSteps(result TryResult, opts tryOptions) []string {
 		steps = append(steps, "review "+result.TopDrafts[0].Edit)
 	}
 	if !opts.Write {
-		steps = append(steps, "write drafts with: vouch try --repo "+shellQuotePath(result.Repo)+" --write")
+		steps = append(steps, "write drafts with: gatemole try --repo "+shellQuotePath(result.Repo)+" --write")
 	}
 	if opts.JUnit == "" {
-		steps = append(steps, "link tests with: vouch try --repo "+shellQuotePath(result.Repo)+" --test-command \"pytest --junitxml .gatemole/artifacts/pytest.xml\" --junit .gatemole/artifacts/pytest.xml")
+		steps = append(steps, "link tests with: gatemole try --repo "+shellQuotePath(result.Repo)+" --test-command \"pytest --junitxml .gatemole/artifacts/pytest.xml\" --junit .gatemole/artifacts/pytest.xml")
 	} else if result.GateDecision == "block" {
-		steps = append(steps, "add or attach missing security/runtime/rollback evidence, then rerun vouch gate")
+		steps = append(steps, "add or attach missing security/runtime/rollback evidence, then rerun gatemole gate")
 	}
 	return steps
 }
@@ -504,7 +504,7 @@ func shellQuotePath(path string) string {
 
 func RenderTryResult(result TryResult) string {
 	var b strings.Builder
-	b.WriteString("Vouch Try\n\n")
+	b.WriteString("Gatemole Try\n\n")
 	fmt.Fprintf(&b, "Repo: %s\n", result.Repo)
 	if result.Mode == "write" {
 		b.WriteString("Mode: write to source repo\n")

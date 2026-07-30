@@ -20,7 +20,7 @@ import (
 
 func identityCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: vouch identity keygen|issue")
+		fmt.Fprintln(stderr, "usage: gatemole identity keygen|issue")
 		return 2
 	}
 	switch args[0] {
@@ -39,7 +39,7 @@ func identityKeygen(repo string, args []string, jsonOut bool, stdout, stderr io.
 	flags.SetOutput(stderr)
 	keyID := flags.String("key-id", "", "stable OIDC signing key identifier")
 	issuer := flags.String("issuer", "", "HTTPS issuer URL")
-	audience := flags.String("audience", "", "Vouch access-token audience")
+	audience := flags.String("audience", "", "Gatemole access-token audience")
 	privateKeyPath := flags.String("private-key", "", "new private key output path")
 	trustFilePath := flags.String("trust-file", "", "new daemon OIDC trust document")
 	if err := flags.Parse(args); err != nil {
@@ -134,10 +134,10 @@ func identityIssue(repo string, args []string, jsonOut bool, stdout, stderr io.W
 	issuer := flags.String("issuer", "", "HTTPS token issuer")
 	audience := flags.String("audience", "", "token audience")
 	subject := flags.String("subject", "", "OIDC subject; defaults to the principal ID")
-	principalID := flags.String("principal", "", "Vouch principal ID")
+	principalID := flags.String("principal", "", "Gatemole principal ID")
 	kind := flags.String("kind", "", "human, service, or operator")
 	namespaceValues := flags.String("namespaces", "", "comma-separated authorized namespaces")
-	roleValues := flags.String("roles", "", "comma-separated Vouch roles")
+	roleValues := flags.String("roles", "", "comma-separated Gatemole roles")
 	ttl := flags.Duration("ttl", 15*time.Minute, "token lifetime, between 1 minute and 1 hour")
 	if err := flags.Parse(args); err != nil {
 		return 2

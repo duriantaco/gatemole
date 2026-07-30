@@ -430,7 +430,7 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	newClient := func(string) transactionClient {
 		return runtimeBoundHandlerClientForTest(t, repo, handler)
 	}
-	intent := "Change authentication through the mounted Vouch task"
+	intent := "Change authentication through the mounted Gatemole task"
 	image := "registry.example.invalid/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	script := "test -r \"$GATEMOLE_TASK_PATH\" && " +
 		"test -n \"$GATEMOLE_TASK_DIGEST\" && " +
@@ -859,8 +859,8 @@ func transactionRunRepository(t *testing.T) string {
 	runGitForTransactionTest(t, repo, "add", "--", "internal/auth/middleware.go", "internal/auth/middleware_test.go")
 	runGitForTransactionTest(
 		t, repo,
-		"-c", "user.name=Vouch Test",
-		"-c", "user.email=vouch@example.invalid",
+		"-c", "user.name=Gatemole Test",
+		"-c", "user.email=gatemole@example.invalid",
 		"commit", "-m", "fixture",
 	)
 	if err := os.Mkdir(filepath.Join(repo, ".gatemole"), 0o700); err != nil {
