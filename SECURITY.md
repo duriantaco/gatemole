@@ -1,23 +1,23 @@
 # Security Policy
 
-Vouch is security-sensitive infrastructure. Reports that could let an agent
+Gatemole is security-sensitive infrastructure. Reports that could let an agent
 escape its transaction boundary, forge authority, bypass verification, or leak
 credentials are especially important.
 
 ## Supported versions
 
-Vouch does not yet publish versioned stable releases. Security fixes are
+Gatemole does not yet publish versioned stable releases. Security fixes are
 applied to the latest code on `main`; older commits and development branches
 should be treated as unsupported.
 
 The only supported production deployment profile is the mandatory-gate-tested,
-single-node, single-tenant Vouch Runtime that publishes to allowed local Git
-refs. Vouch Contracts is an optional verification module. The future Vouch
+single-node, single-tenant Gatemole Runtime that publishes to allowed local Git
+refs. Gatemole Contracts is an optional verification module. The future Gatemole
 Control Plane, enterprise connector drivers, multi-tenancy and HA are not
 implemented production claims. There is no production push, merge or deployment
 connector driver.
 Mandatory gates include reachable Go vulnerability scanning and
-VouchRuntimeBench in addition to test, vet, race, compiler/kernel/transaction
+GatemoleRuntimeBench in addition to test, vet, race, compiler/kernel/transaction
 benchmarks, and production OCI acceptance.
 
 ## Reporting a vulnerability
@@ -25,7 +25,7 @@ benchmarks, and production OCI acceptance.
 Do not open a public issue for a suspected vulnerability.
 
 Report it privately through
-[GitHub Security Advisories](https://github.com/duriantaco/vouch/security/advisories/new).
+[GitHub Security Advisories](https://github.com/duriantaco/gatemole/security/advisories/new).
 Include:
 
 - The affected commit, command, resource, or deployment profile.
@@ -68,9 +68,9 @@ High-priority reports include:
   or mediated filesystem access to `.git`, `.gatemole`, or the permanently
   reserved legacy `.vouch` control-state namespace.
 
-Vouch's documented deployment limits remain relevant when assessing a report.
-For example, direct host access granted outside Vouch is not considered a
-sandbox escape by Vouch itself, but a way to obtain that access through the
+Gatemole's documented deployment limits remain relevant when assessing a report.
+For example, direct host access granted outside Gatemole is not considered a
+sandbox escape by Gatemole itself, but a way to obtain that access through the
 documented production boundary is.
 
 ## Production trust boundary

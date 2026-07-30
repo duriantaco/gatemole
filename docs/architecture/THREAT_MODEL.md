@@ -1,4 +1,4 @@
-# Vouch Agent Kernel Threat Model
+# Gatemole Agent Kernel Threat Model
 
 ## Scope
 
@@ -6,7 +6,7 @@ This threat model covers the agent-kernel architecture described in
 `ADR-001-agent-kernel-boundary.md`. It focuses on kernel authority,
 resource mediation, durable execution, evidence, and audit.
 
-The model does not claim that Vouch can make an arbitrary model correct. It
+The model does not claim that Gatemole can make an arbitrary model correct. It
 defines how the system limits, attributes, pauses, and recovers actions even
 when reasoning is wrong or hostile.
 
@@ -151,7 +151,7 @@ Controls:
 - Event sequence numbers and previous-event digests detect deletion or
   reordering.
 - Artifacts, checkpoints, policies, contracts, and images are content-addressed.
-- Existing Vouch artifact-path, hash, signer, and provenance validation remains
+- Existing Gatemole artifact-path, hash, signer, and provenance validation remains
   in the release path.
 
 ### Crash ambiguity and duplicated effects

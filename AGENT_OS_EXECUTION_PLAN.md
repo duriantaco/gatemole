@@ -1,23 +1,23 @@
-# Vouch Agent Kernel Execution Plan (Superseded Product Direction)
+# Gatemole Agent Kernel Execution Plan (Superseded Product Direction)
 
 > This document records the kernel foundation implemented on 2026-07-23. Its
 > original identity-and-control-plane product framing is superseded by
 > [`AGENT_TRANSACTION_EXECUTION_PLAN.md`](./AGENT_TRANSACTION_EXECUTION_PLAN.md).
 > The canonical hierarchy is now defined by [`README.md`](./README.md) and
-> [`ROADMAP.md`](./ROADMAP.md): Vouch Agent OS is the complete architecture,
-> Vouch Runtime is the customer-side enforcement product, `gatemoled` is its
-> kernel, and Vouch Control Plane manages Runtime fleets. The run lifecycle,
+> [`ROADMAP.md`](./ROADMAP.md): Gatemole Agent OS is the complete architecture,
+> Gatemole Runtime is the customer-side enforcement product, `gatemoled` is its
+> kernel, and Gatemole Control Plane manages Runtime fleets. The run lifecycle,
 > durable event store, capability broker, and connector-driver
 > boundary remain required substrate for the transaction product.
 
 ## Purpose
 
-Evolve Vouch from a release-contract compiler and evidence gate into the
-trusted `gatemoled` authority kernel inside Vouch Runtime.
+Evolve Gatemole from a release-contract compiler and evidence gate into the
+trusted `gatemoled` authority kernel inside Gatemole Runtime.
 
 The intended system is not another reasoning framework. Existing agents and
 frameworks should continue to own prompting, planning, model calls, and their
-internal loops. Vouch should own the authority boundary around those agents:
+internal loops. Gatemole should own the authority boundary around those agents:
 
 ```text
 human intent
@@ -29,7 +29,7 @@ human intent
   -> pause | constrain | escalate | terminate | release
 ```
 
-The existing Vouch compiler, obligation IR, evidence linker, release policy,
+The existing Gatemole compiler, obligation IR, evidence linker, release policy,
 artifact verification, and gate remain the foundation. Release becomes the
 final checkpoint in a longer governed execution lifecycle.
 
@@ -56,7 +56,7 @@ guarantees:
 
 1. Every agent run has a stable identity, owner, parent lineage, lifecycle,
    budget, contract, and isolated state.
-2. Privileged actions are mediated through Vouch and cannot silently bypass its
+2. Privileged actions are mediated through Gatemole and cannot silently bypass its
    capability and policy checks.
 3. Runs can pause, survive process or host failure, and resume without blindly
    duplicating side effects.
@@ -64,14 +64,14 @@ guarantees:
 5. Policy is enforced before and during actions, not only at release time.
 6. Every material action and decision is attributable and replayable from an
    append-only event history.
-7. More than one agent runtime can use the same Vouch contracts and kernel APIs.
+7. More than one agent runtime can use the same Gatemole contracts and kernel APIs.
 8. Concurrent agents are governed by quotas, priorities, deadlines, and cost
    budgets.
 9. Agents, memory, credentials, and workspaces are isolated by default.
 10. An operator can inspect, approve, pause, resume, cancel, and recover runs.
 
-Under the current hierarchy, these guarantees produce a credible Vouch Runtime
-kernel. The complete Vouch Agent OS additionally requires the Vouch Control
+Under the current hierarchy, these guarantees produce a credible Gatemole Runtime
+kernel. The complete Gatemole Agent OS additionally requires the Gatemole Control
 Plane to manage a Runtime fleet.
 
 ## North-Star Demonstration
@@ -80,12 +80,12 @@ The first complete demonstration should govern one real coding-agent run:
 
 ```text
 1. A human creates a run from a reviewed execution contract.
-2. Vouch admits the run and launches an agent through an agent adapter.
-3. The agent requests a permitted workspace write; Vouch authorizes and logs it.
-4. The agent requests an out-of-scope write; Vouch denies it before execution.
+2. Gatemole admits the run and launches an agent through an agent adapter.
+3. The agent requests a permitted workspace write; Gatemole authorizes and logs it.
+4. The agent requests an out-of-scope write; Gatemole denies it before execution.
 5. The agent requests a protected action such as push or deployment.
-6. Vouch checkpoints and pauses the run for human approval.
-7. The Vouch daemon is restarted while the run is paused.
+6. Gatemole checkpoints and pauses the run for human approval.
+7. The Gatemole daemon is restarted while the run is paused.
 8. The operator approves the action and the run resumes from its checkpoint.
 9. Tests and scanners emit evidence against compiled obligations.
 10. The existing release gate returns block, escalation, canary, or release.
@@ -101,7 +101,7 @@ infrastructure.
 ```text
                     Humans / CI / Applications
                                |
-                         Vouch Control API
+                         Gatemole Control API
                                |
           +--------------------+--------------------+
           |                 gatemoled kernel             |
@@ -265,9 +265,9 @@ requested
   -> authorized -> executing -> committed | failed | unknown
 ```
 
-## What Vouch Owns and What It Integrates
+## What Gatemole Owns and What It Integrates
 
-### Vouch should own
+### Gatemole should own
 
 - Execution-contract language and compiler.
 - Run/process and lifecycle semantics.
@@ -278,7 +278,7 @@ requested
 - Agent-adapter and connector-driver interfaces.
 - Audit history and operator-facing explanation.
 
-### Vouch should integrate
+### Gatemole should integrate
 
 - Model APIs and agent reasoning frameworks.
 - Linux/container/microVM sandboxes.
@@ -336,12 +336,12 @@ Deliverables:
 Suggested CLI:
 
 ```text
-vouch daemon
-vouch image register FILE
-vouch run create --image IMAGE --contract CONTRACT
-vouch run get RUN_ID
-vouch run events RUN_ID
-vouch run pause|resume|cancel RUN_ID
+gatemole daemon
+gatemole image register FILE
+gatemole run create --image IMAGE --contract CONTRACT
+gatemole run get RUN_ID
+gatemole run events RUN_ID
+gatemole run pause|resume|cancel RUN_ID
 ```
 
 Exit criteria:
@@ -366,7 +366,7 @@ Deliverables:
 - Action receipts with arguments/results stored as hashed artifacts.
 - Approval-required decisions and revocation.
 
-Do not begin with arbitrary MCP passthrough. First prove that Vouch can safely
+Do not begin with arbitrary MCP passthrough. First prove that Gatemole can safely
 mediate two local drivers with strict typed schemas.
 
 Exit criteria:
@@ -425,7 +425,7 @@ Exit criteria:
 
 ### Milestone 5: Continuous contracts, evidence, and release
 
-Goal: extend Vouch's strongest existing feature across the entire run.
+Goal: extend Gatemole's strongest existing feature across the entire run.
 
 Deliverables:
 
@@ -444,7 +444,7 @@ Exit criteria:
   obligations.
 - Replaying the same history with the same policy produces the same decisions.
 - A policy update can be simulated against completed runs without mutating them.
-- Existing VouchBench release scenarios continue to pass.
+- Existing GatemoleBench release scenarios continue to pass.
 
 ### Milestone 6: Scheduling, budgets, and concurrency
 
@@ -484,7 +484,7 @@ Exit criteria:
 - No static downstream credential is exposed to the agent.
 - MCP and A2A calls are authorized at individual operation boundaries.
 - Remote actions retain human, parent-agent, and child-agent attribution.
-- Cross-protocol traces correlate to the same Vouch run and event sequence.
+- Cross-protocol traces correlate to the same Gatemole run and event sequence.
 
 ### Milestone 8: Distributed production Runtime
 
@@ -518,15 +518,15 @@ Implement this before broad integrations:
    `Checkpoint`, and `PolicyDecision`.
 2. Add a pure lifecycle reducer with table-driven transition tests.
 3. Add SQLite-backed append-only event storage and materialized run state.
-4. Add `vouch daemon`, `vouch run create`, `vouch run get`, and
-   `vouch run events`.
+4. Add `gatemole daemon`, `gatemole run create`, `gatemole run get`, and
+   `gatemole run events`.
 5. Add one filesystem driver supporting scoped read and write actions.
 6. Compile owned-path rules into filesystem capabilities.
 7. Log request, decision, execution, and result events with an event hash chain.
 8. Demonstrate an allowed workspace write and denied path escape.
 9. Restart the daemon and prove the state and history recover exactly.
-10. Add the scenario to a new `VouchKernelBench` acceptance harness while
-    keeping VouchBench unchanged.
+10. Add the scenario to a new `GatemoleKernelBench` acceptance harness while
+    keeping GatemoleBench unchanged.
 
 This slice proves the process, persistence, capability, action-broker, and audit
 model without prematurely adding a scheduler, remote agent protocol, or cloud
@@ -540,9 +540,9 @@ extract packages when boundaries are proven.
 Proposed initial layout:
 
 ```text
-cmd/vouch/                 existing CLI plus run commands
+cmd/gatemole/                 existing CLI plus run commands
 cmd/gatemoled/                local daemon entrypoint
-internal/vouch/            existing compiler, evidence, and release runtime
+internal/gatemole/            existing compiler, evidence, and release runtime
 internal/kernel/model/     public kernel resource types and validation
 internal/kernel/reducer/   lifecycle and action state reducers
 internal/kernel/store/     event/run store interfaces and SQLite adapter
@@ -565,7 +565,7 @@ store, policy, broker, runtime
 daemon and CLI
 ```
 
-The kernel may call the existing Vouch compiler and evidence APIs through narrow
+The kernel may call the existing Gatemole compiler and evidence APIs through narrow
 interfaces. The compiler should not depend on daemon, storage, or adapter code.
 
 ## Verification Strategy
@@ -610,8 +610,8 @@ reconciliation.
 
 Keep two separate claims:
 
-- `VouchBench`: release contracts, evidence, traceability, and policy routing.
-- `VouchKernelBench`: run durability, action mediation, delegation, budgets,
+- `GatemoleBench`: release contracts, evidence, traceability, and policy routing.
+- `GatemoleKernelBench`: run durability, action mediation, delegation, budgets,
   approvals, and recovery.
 
 Do not claim agent-task quality from either harness. They validate kernel
@@ -663,8 +663,8 @@ At the end of each milestone, answer:
 7. Did the existing compiler/evidence/release behavior remain compatible?
 
 If a milestone adds orchestration features without strengthening an authority,
-durability, isolation or audit boundary, it is not moving Vouch Runtime toward
-the complete Vouch Agent OS architecture.
+durability, isolation or audit boundary, it is not moving Gatemole Runtime toward
+the complete Gatemole Agent OS architecture.
 
 ## Immediate Next Actions
 

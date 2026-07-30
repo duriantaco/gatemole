@@ -42,7 +42,7 @@ Rules:
 
 ## Runtime identity and preflight
 
-`vouch runtime init` creates an ignored `.gatemole/runtime.json` containing one
+`gatemole runtime init` creates an ignored `.gatemole/runtime.json` containing one
 random, opaque Runtime ID. The file identifies this local repository Runtime;
 it is not a user identity, signing key or fleet enrollment credential.
 

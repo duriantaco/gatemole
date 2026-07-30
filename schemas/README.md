@@ -1,6 +1,6 @@
-# Vouch Public Schemas
+# Gatemole Public Schemas
 
-This directory contains the machine-readable contracts for public Vouch
+This directory contains the machine-readable contracts for public Gatemole
 artifacts. Agent-kernel schemas use JSON Schema draft 2020-12 and reject unknown
 fields unless a field is explicitly documented as driver-defined data.
 

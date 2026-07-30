@@ -1,6 +1,6 @@
 # Runtime examples
 
-Vouch's implemented production boundary today is a Git repository on one
+Gatemole's implemented production boundary today is a Git repository on one
 trusted node. These examples therefore use software-delivery work rather than
 pretending that the current repository can already control SAP, Salesforce or
 bank transfers.
@@ -14,11 +14,11 @@ before release. It requires Git, Go, Docker, `jq`, and `curl`:
 go test ./...
 
 AGENT_IMAGE="$(
-  scripts/vouchproductionfixture.sh \
+  scripts/gatemoleproductionfixture.sh \
     --tag gatemole-production-fixture:example
 )"
 GATEMOLE_PRODUCTION_IMAGE="$AGENT_IMAGE" \
-  scripts/vouchproductionbench.sh
+  scripts/gatemoleproductionbench.sh
 ```
 
 It creates a temporary authentication repository, production OIDC identities,
@@ -42,7 +42,7 @@ that direct agent Internet egress is blocked.
 ## 2. Runnable deterministic fixture: authentication hotfix
 
 This example creates a small payments-service repository and a digest-pinned
-agent image. The agent changes authentication code and its test inside a Vouch
+agent image. The agent changes authentication code and its test inside a Gatemole
 transaction. The source checkout remains unchanged.
 
 Run the example as a non-root user with Git, Go, Docker, and `jq` installed.
@@ -148,12 +148,12 @@ deployments normally use a registry reference of the form
 ### Start the Runtime and run the task
 
 ```sh
-go install ./cmd/vouch ./cmd/gatemoled
+go install ./cmd/gatemole ./cmd/gatemoled
 
 # This fixture uses an ad-hoc local image ID below, so initialize only the
 # repository-local Runtime identity. Named production profiles are registered
-# with the full `vouch runtime init --agent ...` form shown in the README.
-vouch --repo "$REPO" runtime init
+# with the full `gatemole runtime init --agent ...` form shown in the README.
+gatemole --repo "$REPO" runtime init
 
 RUNTIME="$EXAMPLE_ROOT/runtime"
 SOCKET="$RUNTIME/gatemoled.sock"
@@ -171,7 +171,7 @@ while [ ! -S "$SOCKET" ]; do
   sleep 0.1
 done
 
-vouch --repo "$REPO" --json run \
+gatemole --repo "$REPO" --json run \
   --socket "$SOCKET" \
   --namespace payments \
   --id tx:pay-1842 \
@@ -207,16 +207,16 @@ The response contains the detached workspace, daemon-authored execution
 receipt, normalized effects, and sequence decision. Inspect the durable state:
 
 ```sh
-vouch --repo "$REPO" status tx:pay-1842 \
+gatemole --repo "$REPO" status tx:pay-1842 \
   --socket "$SOCKET" \
   --namespace payments
 
-vouch --repo "$REPO" tx effects \
+gatemole --repo "$REPO" tx effects \
   --socket "$SOCKET" \
   --namespace payments \
   --id tx:pay-1842
 
-vouch --repo "$REPO" tx events \
+gatemole --repo "$REPO" tx events \
   --socket "$SOCKET" \
   --namespace payments \
   --id tx:pay-1842
@@ -265,7 +265,7 @@ git -C /srv/repos/payments-api \
 The developer starts exactly one admitted task:
 
 ```sh
-vouch --repo /srv/repos/payments-api run \
+gatemole --repo /srv/repos/payments-api run \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
@@ -286,7 +286,7 @@ After the agent exits, the team independently verifies the frozen tree:
 ```sh
 VERIFIER_IMAGE="$(cat /etc/gatemole/images/go-verifier.ref)"
 
-vouch --repo /srv/repos/payments-api tx verify \
+gatemole --repo /srv/repos/payments-api tx verify \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
@@ -294,7 +294,7 @@ vouch --repo /srv/repos/payments-api tx verify \
   --image "$VERIFIER_IMAGE" \
   -- /usr/local/bin/run-auth-tests
 
-vouch --repo /srv/repos/payments-api tx prepare \
+gatemole --repo /srv/repos/payments-api tx prepare \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
@@ -307,7 +307,7 @@ profile. A security reviewer then signs the exact frozen approval package:
 ```sh
 export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_REVIEWER_TOKEN"
 
-vouch --repo /srv/repos/payments-api tx approve \
+gatemole --repo /srv/repos/payments-api tx approve \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
@@ -324,7 +324,7 @@ identity performs release:
 ```sh
 export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_RELEASER_TOKEN"
 
-vouch --repo /srv/repos/payments-api tx release \
+gatemole --repo /srv/repos/payments-api tx release \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
@@ -333,7 +333,7 @@ vouch --repo /srv/repos/payments-api tx release \
 ```
 
 Release updates only the pre-existing allowed local Git ref with
-compare-and-swap. Vouch does not push or merge a remote pull request in the
+compare-and-swap. Gatemole does not push or merge a remote pull request in the
 current profile. The trust setup is described in the
 [production operations guide](PRODUCTION.md).
 
@@ -343,7 +343,7 @@ A schema team can run a deterministic migration generator without any model
 authority:
 
 ```sh
-vouch --repo /srv/repos/orders-api run \
+gatemole --repo /srv/repos/orders-api run \
   --socket /run/gatemole/gatemoled.sock \
   --namespace database \
   --id tx:orders-297 \
@@ -361,7 +361,7 @@ the exact generated Git effects.
 
 The accounts-payable scenario—create vendor, change bank details, approve an
 invoice and transfer money—is the intended multi-system Agent OS direction,
-not an implemented connector in this repository. Today Vouch cannot honestly
+not an implemented connector in this repository. Today Gatemole cannot honestly
 claim to execute or roll back SAP, Salesforce, cloud or bank operations.
 
 That future flow requires typed connector drivers, scoped downstream

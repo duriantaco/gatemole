@@ -55,12 +55,12 @@ used to imply that native ERP controls do not exist.
 Threat:
 
 An agent writes directly to a real repository, database, cloud API, or network
-endpoint while Vouch records only the staged copy.
+endpoint while Gatemole records only the staged copy.
 
 Controls:
 
 - Remove ambient production credentials from the agent sandbox.
-- Give Vouch Runtime connector drivers access only to transaction-scoped
+- Give Gatemole Runtime connector drivers access only to transaction-scoped
   worktrees, clones, namespaces and credentials.
 - Restrict egress to broker endpoints and explicit read-only sources.
 - Compare staged resources and broker receipts to expected effect inventory.

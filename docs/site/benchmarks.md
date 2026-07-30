@@ -1,14 +1,14 @@
 # Benchmarks
 
-VouchBench is the repo-local acceptance harness for the current
+GatemoleBench is the repo-local acceptance harness for the current
 compiler/evidence/policy behavior.
 
 ```sh
-scripts/vouchbench.sh
+scripts/gatemolebench.sh
 ```
 
 Full benchmark documentation lives in
-[`docs/BENCHMARKS.md`](https://github.com/duriantaco/vouch/blob/main/docs/BENCHMARKS.md).
+[`docs/BENCHMARKS.md`](https://github.com/duriantaco/gatemole/blob/main/docs/BENCHMARKS.md).
 
 ## Current Acceptance Floor
 
@@ -22,10 +22,10 @@ Full benchmark documentation lives in
 
 ## Valid Claim
 
-Vouch links compiled obligations to evidence deterministically for the fixture
+Gatemole links compiled obligations to evidence deterministically for the fixture
 corpus and routes the resulting policy decisions as expected.
 
 ## Invalid Claim
 
-VouchBench does not prove arbitrary code correctness, automatic product
+GatemoleBench does not prove arbitrary code correctness, automatic product
 understanding, incident reduction, or product-market fit.

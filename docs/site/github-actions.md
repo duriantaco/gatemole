@@ -2,13 +2,13 @@
 
 This repo uses GitHub Actions for two things:
 
-1. publishing the Vouch docs site to GitHub Pages
-2. running the current Vouch gate in pull request workflows
+1. publishing the Gatemole docs site to GitHub Pages
+2. running the current Gatemole gate in pull request workflows
 
 Published docs URL:
 
 ```text
-https://duriantaco.github.io/vouch/
+https://duriantaco.github.io/gatemole/
 ```
 
 GitHub Pages is configured with `build_type: workflow`, so content is published
@@ -32,8 +32,9 @@ Source files:
 
 ```text
 mkdocs.yml
+docs/requirements.txt
 docs/site/
-docs/site/assets/vouch.png
+docs/site/assets/gatemole.png
 ```
 
 The workflow builds the MkDocs site into `_site/`, uploads that artifact, and
@@ -45,14 +46,14 @@ Official references:
 - [actions/upload-pages-artifact](https://github.com/actions/upload-pages-artifact)
 - [actions/deploy-pages](https://github.com/actions/deploy-pages)
 
-## Vouch PR Workflow
+## Gatemole PR Workflow
 
-The current Vouch PR workflow should start in shadow mode. It creates a PR
+The current Gatemole PR workflow should start in shadow mode. It creates a PR
 manifest from the diff, attaches evidence artifacts, appends a job summary, and
 uploads the manifest/build/evidence bundle without blocking the PR.
 
 ```yaml
-name: Vouch
+name: Gatemole
 
 on:
   pull_request:
@@ -66,7 +67,7 @@ env:
   GATEMOLE_JUNIT: .gatemole/artifacts/pytest.xml
 
 jobs:
-  vouch:
+  gatemole:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -78,20 +79,20 @@ jobs:
         with:
           go-version: "1.26"
 
-      - name: Install Vouch
-        run: go install github.com/duriantaco/vouch/cmd/vouch@latest
+      - name: Install Gatemole
+        run: go install github.com/duriantaco/gatemole/cmd/gatemole@latest
 
-      - name: Compile Vouch contracts
-        run: vouch contracts compile
+      - name: Compile Gatemole contracts
+        run: gatemole contracts compile
 
       - name: Create PR manifest
         env:
           GATEMOLE_TASK_ID: pr-${{ github.event.pull_request.number }}
           GATEMOLE_TASK_SUMMARY: ${{ github.event.pull_request.title }}
           GATEMOLE_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
-          GATEMOLE_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
+          GATEMOLE_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/gatemole.yml@${{ github.ref }}
         run: |
-          vouch contracts manifest create \
+          gatemole contracts manifest create \
             --task-id "$GATEMOLE_TASK_ID" \
             --summary "$GATEMOLE_TASK_SUMMARY" \
             --agent github-actions \
@@ -115,7 +116,7 @@ jobs:
       - name: Attach JUnit evidence
         if: steps.tests.outputs.exit_code == '0'
         run: |
-          vouch contracts manifest attach-artifact \
+          gatemole contracts manifest attach-artifact \
             --manifest "$GATEMOLE_MANIFEST" \
             --id pytest \
             --kind test_coverage \
@@ -126,9 +127,9 @@ jobs:
             --out "$GATEMOLE_MANIFEST"
 
       - name: Gate PR
-        run: vouch --manifest "$GATEMOLE_MANIFEST" gate --github-summary --out "$GATEMOLE_GATE_RESULT"
+        run: gatemole --manifest "$GATEMOLE_MANIFEST" contracts gate --github-summary --out "$GATEMOLE_GATE_RESULT"
 
-      - name: Upload Vouch artifacts
+      - name: Upload Gatemole artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -153,15 +154,15 @@ Upload these paths for every shadow run:
 ## Code References
 
 - CLI command and `--github-summary` flag:
-  [`internal/vouch/cli.go`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/cli.go)
+  [`internal/gatemole/cli.go`](https://github.com/duriantaco/gatemole/blob/main/internal/gatemole/cli.go)
 - `$GITHUB_STEP_SUMMARY` handling:
-  [`appendGitHubSummary`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/cli.go)
+  [`appendGitHubSummary`](https://github.com/duriantaco/gatemole/blob/main/internal/gatemole/cli.go)
 - Markdown summary rendering:
-  [`RenderGitHubSummary`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/render.go)
+  [`RenderGitHubSummary`](https://github.com/duriantaco/gatemole/blob/main/internal/gatemole/render.go)
 - Gate result JSON:
-  [`GateResultFromEvidence`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/render.go)
+  [`GateResultFromEvidence`](https://github.com/duriantaco/gatemole/blob/main/internal/gatemole/render.go)
 - Default release policy:
-  [`DefaultReleasePolicy`](https://github.com/duriantaco/vouch/blob/main/internal/vouch/policy.go)
+  [`DefaultReleasePolicy`](https://github.com/duriantaco/gatemole/blob/main/internal/gatemole/policy.go)
 
 ## Enforced Mode
 

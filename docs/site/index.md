@@ -1,6 +1,6 @@
-# Vouch
+# Gatemole
 
-Vouch is an enforcement kernel and transaction Runtime for autonomous software
+Gatemole is an enforcement kernel and transaction Runtime for autonomous software
 agents. Its customer-side Runtime controls the boundary between an agent's
 proposal and an exact effect:
 
@@ -14,28 +14,28 @@ intent
   -> commit | block | revise | recover
 ```
 
-Vouch does not decide how an agent reasons or writes code. The trusted local
+Gatemole does not decide how an agent reasons or writes code. The trusted local
 kernel, `gatemoled`, orchestrates sandboxed execution and owns authoritative
 transaction state, verification, policy decisions and commit coordination.
 
 ## Product hierarchy
 
-- **Vouch Developer Runtime** is the local product experience: run an existing
+- **Gatemole Developer Runtime** is the local product experience: run an existing
   coding agent in an isolated Git transaction, inspect its effects and control
   release. A low-level, manually operated local-Git integration exists today;
   the self-serve developer preview is still a milestone.
-- **Vouch Agent OS** is the planned enterprise product experience and complete
+- **Gatemole Agent OS** is the planned enterprise product experience and complete
   target architecture: the Control Plane, Runtime fleet, transaction protocol
   and connector model. It is an umbrella, not another process.
-- **Vouch Control Plane** is the planned commercial management layer for
+- **Gatemole Control Plane** is the planned commercial management layer for
   Runtime fleets, organization policy, approvals, audit and incident response.
-- **Vouch Runtime** is the deployable customer-side enforcement boundary. A
+- **Gatemole Runtime** is the deployable customer-side enforcement boundary. A
   narrow single-node local-Git profile is implemented today.
 - **`gatemoled`** is the trusted transaction kernel inside each Runtime.
-- **Vouch Contracts** is an optional verification module that compiles release
+- **Gatemole Contracts** is an optional verification module that compiles release
   intent into obligations and maps evidence to them.
 
-The Developer Runtime and enterprise **Vouch Agent OS** experience use the same
+The Developer Runtime and enterprise **Gatemole Agent OS** experience use the same
 `gatemoled` kernel; they are not separate engines.
 
 ## Try the Developer Runtime
@@ -44,23 +44,23 @@ The current development workflow requires Git, an OCI engine and a
 digest-pinned agent image that is already loaded locally:
 
 ```sh
-go install ./cmd/vouch
+go install ./cmd/gatemole
 
-vouch --repo /path/to/service runtime init \
+gatemole --repo /path/to/service runtime init \
   --agent coding-agent \
   --image registry.example/coding-agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
   -- /usr/local/bin/agent
 
-vouch --repo /path/to/service daemon
+gatemole --repo /path/to/service daemon
 ```
 
 In another terminal:
 
 ```sh
-vouch --repo /path/to/service doctor --agent coding-agent
+gatemole --repo /path/to/service doctor --agent coding-agent
 
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --intent "Fix authentication without changing public behavior" \
   --agent coding-agent
 ```
@@ -70,7 +70,7 @@ its Git effects and performs sequence validation. Production verification,
 approval and local-ref release require the hardened runtime configuration.
 Runtime initialization creates a strict repository-owned agent profile and an
 ignored local identity at `.gatemole/runtime.json`. Commit the agent profile and
-`.gatemole/.gitignore`, not the Runtime identity. For OCI execution, `vouch run`
+`.gatemole/.gitignore`, not the Runtime identity. For OCI execution, `gatemole run`
 preflights the exact Runtime ID, daemon enforcement profile and selected image
 before creating authority or a worktree. Admission then durably binds the
 Runtime ID and actual profile with the transaction. Doctor reports warnings for
@@ -89,7 +89,7 @@ and exit. It should never receive the daemon socket or production credentials.
 Without explicit model authority the container has no network:
 
 ```sh
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --intent "Apply the deterministic migration" \
   --agent migration-agent
 ```
@@ -98,7 +98,7 @@ When the daemon has a pinned provider broker, one task can request it
 explicitly:
 
 ```sh
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --intent "Fix the failing authentication test" \
   --agent coding-agent \
   --model-provider openai
@@ -115,12 +115,12 @@ development daemon then fails preflight before task authority is created.
 For a runnable deterministic payments-service fixture, including building the
 agent image, starting `gatemoled`, inspecting effects and understanding why an
 authentication change requires approval, read the
-[Runtime examples guide](https://github.com/duriantaco/vouch/blob/main/docs/EXAMPLES.md).
+[Runtime examples guide](https://github.com/duriantaco/gatemole/blob/main/docs/EXAMPLES.md).
 
 Read the
-[transaction guide](https://github.com/duriantaco/vouch/blob/main/docs/TRANSACTIONS.md)
+[transaction guide](https://github.com/duriantaco/gatemole/blob/main/docs/TRANSACTIONS.md)
 and
-[production operations guide](https://github.com/duriantaco/vouch/blob/main/docs/PRODUCTION.md)
+[production operations guide](https://github.com/duriantaco/gatemole/blob/main/docs/PRODUCTION.md)
 before treating the runtime as an enforcement boundary.
 
 ## Current supported profile
@@ -150,19 +150,19 @@ account's effective UID. OIDC tokens preserve logical operator, reviewer and
 releaser identities, but the current approval CLI does not provide a separate
 offline sign-and-submit path.
 
-## Vouch Contracts
+## Gatemole Contracts
 
-Vouch Contracts is useful when a repository needs human-owned semantic release
+Gatemole Contracts is useful when a repository needs human-owned semantic release
 obligations in addition to runtime isolation:
 
 ```sh
-vouch --repo /path/to/service contracts try --write
-vouch --repo /path/to/service contracts compile
-vouch --repo /path/to/service contracts gate
+gatemole --repo /path/to/service contracts try --write
+gatemole --repo /path/to/service contracts compile
+gatemole --repo /path/to/service contracts gate
 ```
 
 Contracts and evidence enrich runtime verification and approval. They are not a
 generic AI code reviewer and do not prove arbitrary code correct.
 
 Use the **Contracts** navigation only when working with that optional module.
-Vouch Runtime is the current product; `gatemoled` is its trusted kernel.
+Gatemole Runtime is the current product; `gatemoled` is its trusted kernel.

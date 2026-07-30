@@ -1,4 +1,4 @@
-# Vouch Runtime Kernel North-Star Demonstration
+# Gatemole Runtime Kernel North-Star Demonstration
 
 ## Status
 
@@ -18,19 +18,19 @@ test.
 
 ## Target claim
 
-Vouch Runtime will durably govern one untrusted coding agent through a complete
+Gatemole Runtime will durably govern one untrusted coding agent through a complete
 action, approval, restart, evidence and release path.
 
 The demonstration validates kernel authority and transaction behavior. It does
-not validate the future organization-wide Vouch Control Plane, claim that the
-agent's implementation is correct or claim that Vouch can infer arbitrary
+not validate the future organization-wide Gatemole Control Plane, claim that the
+agent's implementation is correct or claim that Gatemole can infer arbitrary
 intent.
 
 ## Fixture
 
 The fixture contains:
 
-- A small Git repository with a reviewed Vouch release intent.
+- A small Git repository with a reviewed Gatemole release intent.
 - An `AgentImage` using the reference subprocess adapter.
 - An `ExecutionContract` granting read/write access only inside the fixture
   workspace.
@@ -56,7 +56,7 @@ The fixture contains:
 14. Approve as an authenticated fixture operator.
 15. Assert the exact action resumes; a mutated request cannot reuse approval.
 16. Execute fixture tests and attach their evidence.
-17. Run the existing Vouch release gate.
+17. Run the existing Gatemole release gate.
 18. Assert the expected release decision and obligation coverage.
 19. Export the run history and verify event order, digests, identities, policy
     rules, action receipts, checkpoint, evidence links, and final decision.
@@ -77,7 +77,7 @@ The fixture contains:
 
 ## Acceptance output
 
-`VouchKernelBench` will emit a versioned JSON result and Markdown summary with:
+`GatemoleKernelBench` will emit a versioned JSON result and Markdown summary with:
 
 - Scenario and assertion counts.
 - Run lifecycle states observed.

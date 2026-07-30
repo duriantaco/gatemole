@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="../assets/vouch.png" alt="Vouch logo" width="180">
+  <img src="../assets/gatemole.png" alt="Gatemole logo" width="180">
 </p>
 
 # GitHub Actions
 
 This repo uses GitHub Actions for two things:
 
-1. publishing the Vouch docs site to GitHub Pages
-2. running the current Vouch gate in pull request workflows
+1. publishing the Gatemole docs site to GitHub Pages
+2. running the current Gatemole gate in pull request workflows
 
 Published docs URL:
 
-https://duriantaco.github.io/vouch/
+https://duriantaco.github.io/gatemole/
 
 Pages is configured with `build_type: workflow`, so content is published by
 `.github/workflows/pages.yml` after changes land on `main`.
@@ -36,7 +36,7 @@ Source files:
 mkdocs.yml
 docs/requirements.txt
 docs/site/
-docs/site/assets/vouch.png
+docs/site/assets/gatemole.png
 ```
 
 The workflow builds the MkDocs site into `_site/`, uploads that artifact, and
@@ -48,20 +48,20 @@ Official references:
 - https://github.com/actions/upload-pages-artifact
 - https://github.com/actions/deploy-pages
 
-## Vouch PR Workflow
+## Gatemole PR Workflow
 
 The relevant code paths are:
 
 - CLI command and `--github-summary` flag:
-  [`internal/vouch/cli.go`](../internal/vouch/cli.go)
+  [`internal/gatemole/cli.go`](../internal/gatemole/cli.go)
 - `$GITHUB_STEP_SUMMARY` handling:
-  [`appendGitHubSummary`](../internal/vouch/cli.go)
+  [`appendGitHubSummary`](../internal/gatemole/cli.go)
 - Markdown summary rendering:
-  [`RenderGitHubSummary`](../internal/vouch/render.go)
+  [`RenderGitHubSummary`](../internal/gatemole/render.go)
 - Final gate result shape:
-  [`GateResultFromEvidence`](../internal/vouch/render.go)
+  [`GateResultFromEvidence`](../internal/gatemole/render.go)
 - Default release policy:
-  [`DefaultReleasePolicy`](../internal/vouch/policy.go)
+  [`DefaultReleasePolicy`](../internal/gatemole/policy.go)
 
 ### Shadow Mode
 
@@ -71,7 +71,7 @@ manifest/build/evidence bundle for audit. The job is advisory because
 `continue-on-error: true` is set at the job level.
 
 ```yaml
-name: Vouch
+name: Gatemole
 
 on:
   pull_request:
@@ -85,7 +85,7 @@ env:
   GATEMOLE_JUNIT: .gatemole/artifacts/pytest.xml
 
 jobs:
-  vouch:
+  gatemole:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -97,20 +97,20 @@ jobs:
         with:
           go-version: "1.26"
 
-      - name: Install Vouch
-        run: go install github.com/duriantaco/vouch/cmd/vouch@latest
+      - name: Install Gatemole
+        run: go install github.com/duriantaco/gatemole/cmd/gatemole@latest
 
-      - name: Compile Vouch contracts
-        run: vouch contracts compile
+      - name: Compile Gatemole contracts
+        run: gatemole contracts compile
 
       - name: Create PR manifest
         env:
           GATEMOLE_TASK_ID: pr-${{ github.event.pull_request.number }}
           GATEMOLE_TASK_SUMMARY: ${{ github.event.pull_request.title }}
           GATEMOLE_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
-          GATEMOLE_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
+          GATEMOLE_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/gatemole.yml@${{ github.ref }}
         run: |
-          vouch contracts manifest create \
+          gatemole contracts manifest create \
             --task-id "$GATEMOLE_TASK_ID" \
             --summary "$GATEMOLE_TASK_SUMMARY" \
             --agent github-actions \
@@ -134,7 +134,7 @@ jobs:
       - name: Attach JUnit evidence
         if: steps.tests.outputs.exit_code == '0'
         run: |
-          vouch contracts manifest attach-artifact \
+          gatemole contracts manifest attach-artifact \
             --manifest "$GATEMOLE_MANIFEST" \
             --id pytest \
             --kind test_coverage \
@@ -145,9 +145,9 @@ jobs:
             --out "$GATEMOLE_MANIFEST"
 
       - name: Gate PR
-        run: vouch --manifest "$GATEMOLE_MANIFEST" gate --github-summary --out "$GATEMOLE_GATE_RESULT"
+        run: gatemole --manifest "$GATEMOLE_MANIFEST" contracts gate --github-summary --out "$GATEMOLE_GATE_RESULT"
 
-      - name: Upload Vouch artifacts
+      - name: Upload Gatemole artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -159,7 +159,7 @@ jobs:
           if-no-files-found: ignore
 ```
 
-Use shadow mode until reviewers agree that Vouch is catching real
+Use shadow mode until reviewers agree that Gatemole is catching real
 release-readiness gaps and the false-block rate is acceptable. Keep normal CI
 test jobs in place during this phase; this job is measuring the release
 contract workflow.
@@ -170,11 +170,11 @@ After a shadow-mode pilot, remove job-level `continue-on-error: true`:
 
 ```yaml
 jobs:
-  vouch:
+  gatemole:
     runs-on: ubuntu-latest
 ```
 
-`vouch contracts gate` exits non-zero only when the release decision is `block`.
+`gatemole contracts gate` exits non-zero only when the release decision is `block`.
 `human_escalation`, `canary`, and `auto_merge` are non-blocking process exits.
 If the test evidence step records a non-zero exit, the workflow does not attach
 the JUnit artifact, so the gate reports missing required-test evidence instead
@@ -194,11 +194,11 @@ The report includes:
 - component-level covered and missing obligations
 - verifier findings and required fixes
 
-The renderer is [`RenderGitHubSummary`](../internal/vouch/render.go).
+The renderer is [`RenderGitHubSummary`](../internal/gatemole/render.go).
 
 ### Artifact Convention
 
-Upload the whole Vouch bundle for each shadow run:
+Upload the whole Gatemole bundle for each shadow run:
 
 - `.gatemole/manifests/`: PR manifest and attached artifact references.
 - `.gatemole/build/`: compiler outputs and `gate-result.json`.
@@ -217,24 +217,24 @@ Do not silently generate new contracts in an enforced workflow. Commit reviewed
 For pilots, it is acceptable to run:
 
 ```sh
-vouch contracts bootstrap --review
+gatemole contracts bootstrap --review
 ```
 
 Use generated contracts as scaffolding only. A human should edit owners, paths,
 risk, behavior, security, runtime signals, and rollback expectations before
-Vouch becomes an enforced gate.
+Gatemole becomes an enforced gate.
 
 ### Signed Evidence
 
 For stricter runs, use:
 
 ```sh
-vouch contracts gate --require-signed --github-summary
+gatemole contracts gate --require-signed --github-summary
 ```
 
 The signed-evidence checks are wired through `CollectEvidenceWithOptions` and
-artifact linking in [`internal/vouch/evidence.go`](../internal/vouch/evidence.go).
+artifact linking in [`internal/gatemole/evidence.go`](../internal/gatemole/evidence.go).
 Allowed signers are loaded from `.gatemole/config.json`.
 
-Use this only after your runners are producing Vouch evidence bundles and cosign
+Use this only after your runners are producing Gatemole evidence bundles and cosign
 signature bundles.

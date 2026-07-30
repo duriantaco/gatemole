@@ -1,6 +1,6 @@
 # Agent Transactions
 
-Vouch Runtime provides the executable transaction path. Its development
+Gatemole Runtime provides the executable transaction path. Its development
 profile supports local exploration; its supported enforcement profile is
 deliberately limited to a single-node, single-tenant local-Git runtime.
 
@@ -29,10 +29,10 @@ lifecycle. Admission creates the associated `AgentRun`, and launch revalidates
 its live authority and atomically pins both ledger heads. The OCI workload
 currently advances and settles only the transaction ledger; the run lifecycle
 and durable budget usage are not yet advanced with it. A metadata cancellation
-before launch can prevent launch, but Vouch does not yet provide a supervisor
+before launch can prevent launch, but Gatemole does not yet provide a supervisor
 that interrupts an already-running production workload.
 
-Vouch can create and publish the prepared commit to an allowed local Git ref.
+Gatemole can create and publish the prepared commit to an allowed local Git ref.
 It does not push to a remote, merge a pull request, deploy software, or execute
 a production-database effect. Those connectors remain outside the implemented
 profile.
@@ -43,7 +43,7 @@ Create a strict profile for a digest-pinned image that is already loaded in the
 local OCI engine:
 
 ```sh
-vouch --repo /path/to/service runtime init \
+gatemole --repo /path/to/service runtime init \
   --agent coding-agent \
   --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
@@ -51,7 +51,7 @@ vouch --repo /path/to/service runtime init \
 ```
 
 Initialization writes the shareable agent profile and creates
-`.gatemole/runtime.json`, a random identity for this local Runtime instance. Vouch
+`.gatemole/runtime.json`, a random identity for this local Runtime instance. Gatemole
 adds ignore rules for the identity, SQLite/WAL state, locks and socket. Commit
 `.gatemole/agent-profiles.json` and `.gatemole/.gitignore`; do not commit
 `.gatemole/runtime.json`.
@@ -60,7 +60,7 @@ Start the local daemon. The convenience command keeps its transaction root
 outside the repository:
 
 ```sh
-vouch --repo /path/to/service daemon
+gatemole --repo /path/to/service daemon
 ```
 
 Its default is a canonical repository-scoped directory beneath a validated
@@ -72,40 +72,40 @@ In another terminal, diagnose the selected profile and run a task through the
 primary Runtime surface:
 
 ```sh
-vouch --repo /path/to/service doctor --agent coding-agent
+gatemole --repo /path/to/service doctor --agent coding-agent
 
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --namespace payments \
   --intent "Upgrade the service without changing authentication behavior" \
   --agent coding-agent
 ```
 
-For OCI execution, `vouch run` first asks `gatemoled` to match the exact local
+For OCI execution, `gatemole run` first asks `gatemoled` to match the exact local
 Runtime ID, report its enforcement profile, check ledger health and inspect the
 selected pull-never image. A failed preflight creates neither admission
-authority nor a worktree. After a successful preflight, `vouch run` creates and
+authority nor a worktree. After a successful preflight, `gatemole run` creates and
 starts the transaction, creates its isolated worktree, runs the agent, freezes
 the exact Git effects, and performs sequence validation. It prints the
 generated transaction ID. Inspect it with:
 
 ```sh
-vouch --repo /path/to/service status <transaction-id> \
+gatemole --repo /path/to/service status <transaction-id> \
   --namespace payments
 
-vouch --repo /path/to/service tx effects \
+gatemole --repo /path/to/service tx effects \
   --namespace payments --id <transaction-id>
 
-vouch --repo /path/to/service tx events \
+gatemole --repo /path/to/service tx events \
   --namespace payments --id <transaction-id>
 ```
 
-`vouch runtime init` writes `.gatemole/agent-profiles.json` using the
+`gatemole runtime init` writes `.gatemole/agent-profiles.json` using the
 [public profile schema](../schemas/gatemole.agent_profiles.v0.schema.json). The
 [checked-in fixture](../schemas/fixtures/runtime/valid/agent_profiles.json)
 shows the complete shareable document shape. `.gatemole/runtime.json` is separate
 local control state, not part of that schema.
 
-Every primary `vouch run` persists a strict `gatemole.agent_task.v0` resource. It
+Every primary `gatemole run` persists a strict `gatemole.agent_task.v0` resource. It
 binds the transaction, namespace, participating run, exact intent, selected
 profile, pinned image and final command. Daemon-owned OCI agents receive the
 same envelope in a read-only mount:
@@ -142,7 +142,7 @@ wiring; it is not an authentication secret.
 
 ## Agent integration contract
 
-An existing coding agent does not need to adopt a Vouch SDK. Its OCI entrypoint
+An existing coding agent does not need to adopt a Gatemole SDK. Its OCI entrypoint
 receives:
 
 ```text
@@ -157,7 +157,7 @@ GATEMOLE_RUNTIME_ROLE         agent
 
 The process edits `/workspace` and exits. It must not receive the source
 repository, the `gatemoled` socket, Git hosting credentials or downstream
-production credentials. Vouch re-inspects the worktree, freezes the exact
+production credentials. Gatemole re-inspects the worktree, freezes the exact
 effects and records the daemon-authored process receipt.
 
 Example entrypoint:
@@ -177,7 +177,7 @@ Without `--model-provider`, the agent starts with `network=none`; model broker
 variables are absent:
 
 ```sh
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --namespace payments \
   --intent "Apply the checked-in deterministic migration" \
   --agent migration-agent
@@ -189,7 +189,7 @@ If the daemon has a pinned broker image and policy for `openai`, request that
 provider in task admission:
 
 ```sh
-vouch --repo /path/to/service run \
+gatemole --repo /path/to/service run \
   --namespace payments \
   --intent "Fix the failing idempotency test" \
   --agent coding-agent \
@@ -235,24 +235,24 @@ migration deployment patterns.
 Verification, preparation and authority remain explicit operations:
 
 ```sh
-vouch --repo /path/to/service tx verify \
+gatemole --repo /path/to/service tx verify \
   --namespace payments --id <transaction-id> \
   --name tests \
   --image registry.example/verifier@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   -- /usr/local/bin/verify
 
-vouch --repo /path/to/service tx prepare \
+gatemole --repo /path/to/service tx prepare \
   --namespace payments --id <transaction-id> \
   --git-ref refs/heads/agent/upgrade-001
 
-vouch --repo /path/to/service approve <transaction-id> \
+gatemole --repo /path/to/service approve <transaction-id> \
   --namespace payments \
   --key /secure/approver.key \
   --key-id key:approver \
   --approver human:alice \
   --class security-reviewer
 
-vouch --repo /path/to/service release <transaction-id> \
+gatemole --repo /path/to/service release <transaction-id> \
   --namespace payments
 ```
 
@@ -263,7 +263,7 @@ For production task creation, require the profile explicitly so a development
 daemon is rejected during preflight:
 
 ```sh
-vouch --repo /srv/vouch/repository run \
+gatemole --repo /srv/gatemole/repository run \
   --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --require-enforcement-profile production \
@@ -271,7 +271,7 @@ vouch --repo /srv/vouch/repository run \
   --agent coding-agent
 ```
 
-The lower-level `vouch tx create` command remains a development-only manual
+The lower-level `gatemole tx create` command remains a development-only manual
 lifecycle entrypoint, but on a real configured Runtime it creates the same
 Runtime/profile-bound v1 task admission rather than raw transaction authority.
 The raw `POST /v0/namespaces/{namespace}/transactions` creation route exists
@@ -283,7 +283,7 @@ discards an unreleased isolated worktree after execution; it is not a live
 workload-cancellation command:
 
 ```sh
-vouch --repo /path/to/service tx abort \
+gatemole --repo /path/to/service tx abort \
   --namespace payments --id <transaction-id>
 ```
 
@@ -309,7 +309,7 @@ Deep connectors will replace path/name heuristics with typed semantic facts.
 - Worktrees are registered to the source repository and pinned to their base
   revision.
 - Paths are NUL-delimited from Git, normalized, sorted, and validated.
-- Symlinks are recorded as link text; Vouch does not follow them to read data
+- Symlinks are recorded as link text; Gatemole does not follow them to read data
   outside the worktree.
 - Staging writes the agent view through a private Git index to an immutable
   tree object, then derives effects and digests from that tree rather than a

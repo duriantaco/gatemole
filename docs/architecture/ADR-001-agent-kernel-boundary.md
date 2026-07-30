@@ -1,16 +1,16 @@
-# ADR-001: Vouch Agent Kernel Boundary
+# ADR-001: Gatemole Agent Kernel Boundary
 
 - Status: accepted for implementation
 - Date: 2026-07-23
-- Owners: Vouch maintainers
+- Owners: Gatemole maintainers
 
 ## Context
 
-Vouch currently compiles human-owned release intent into typed specifications,
+Gatemole currently compiles human-owned release intent into typed specifications,
 stable obligations, verification plans, evidence requirements, and release
 decisions. That runtime begins near the end of an agent-authored change.
 
-Moving toward the Vouch Agent OS requires the customer-side Runtime to govern
+Moving toward the Gatemole Agent OS requires the customer-side Runtime to govern
 the execution that produces the change without becoming the component that
 reasons about how to implement it. The architectural risk is collapsing four
 separate concerns into one service:
@@ -25,14 +25,14 @@ tool, agent adapter, or external data is malicious or simply wrong.
 
 ## Decision
 
-Vouch Runtime will contain the `gatemoled` user-space kernel inside a
+Gatemole Runtime will contain the `gatemoled` user-space kernel inside a
 customer-side enforcement boundary. It will run above a host operating system
 and integrate with existing agent frameworks, sandboxes, identity systems,
-durable execution engines and protocols. The organization-wide Vouch Control
+durable execution engines and protocols. The organization-wide Gatemole Control
 Plane will manage Runtime fleets; it is not the local kernel described by this
 ADR.
 
-Vouch owns:
+Gatemole owns:
 
 - Execution-contract compilation.
 - Agent run identity, lineage, and lifecycle state.
@@ -43,7 +43,7 @@ Vouch owns:
 - Human approval as a durable kernel operation.
 - Explanation of why work may advance.
 
-Vouch does not own:
+Gatemole does not own:
 
 - Model inference or prompting strategy.
 - The agent's planner or reasoning loop.
@@ -112,7 +112,7 @@ be reconciled instead of retried blindly.
 
 ## Complete mediation
 
-Vouch can only claim authority over resources reached through its broker. A
+Gatemole can only claim authority over resources reached through its broker. A
 Runtime whose agent sandbox also possesses direct credentials or unrestricted
 host access can bypass the kernel.
 
@@ -124,7 +124,7 @@ Therefore:
 - Protocol integrations are exposed as typed driver operations, not raw
   passthrough connections.
 - The audit result states which resource classes were mediated and which were
-  outside Vouch's enforcement boundary.
+  outside Gatemole's enforcement boundary.
 
 ## Initial deployment shape
 
@@ -163,7 +163,7 @@ not import storage, daemon or agent-adapter packages.
 
 Positive:
 
-- Vouch remains agent-framework- and model-independent.
+- Gatemole remains agent-framework- and model-independent.
 - Deterministic policy stays outside probabilistic reasoning.
 - The existing compiler/evidence investment becomes a kernel subsystem.
 - Local invariants can be proven before distributed complexity is introduced.
@@ -173,7 +173,7 @@ Costs:
 
 - Useful operations require broker and connector-driver coverage.
 - Complete mediation depends on sandbox and credential configuration outside
-  Vouch itself.
+  Gatemole itself.
 - Event compatibility and recovery become long-term public contracts.
 - Connector-specific reconciliation is required for ambiguous non-idempotent
   effects.
@@ -183,7 +183,7 @@ Costs:
 ### Build a new agent framework
 
 Rejected because planning, prompting, model routing, and tool-loop frameworks
-are already abundant. Owning them would couple Vouch's authority semantics to
+are already abundant. Owning them would couple Gatemole's authority semantics to
 one reasoning architecture.
 
 ### Treat telemetry as enforcement

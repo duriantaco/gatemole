@@ -1,15 +1,15 @@
-site_name: Vouch Runtime
+site_name: Gatemole Runtime
 site_description: Transaction runtime for autonomous software agents
-site_url: https://duriantaco.github.io/vouch/
-repo_url: https://github.com/duriantaco/vouch
-repo_name: duriantaco/vouch
+site_url: https://duriantaco.github.io/gatemole/
+repo_url: https://github.com/duriantaco/gatemole
+repo_name: duriantaco/gatemole
 docs_dir: docs/site
 site_dir: _site
 
 theme:
   name: material
-  logo: assets/vouch.png
-  favicon: assets/vouch.png
+  logo: assets/gatemole.png
+  favicon: assets/gatemole.png
   palette:
     scheme: default
     primary: white

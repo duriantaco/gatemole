@@ -1,15 +1,15 @@
 # Production Runtime Operations
 
-Vouch's production profile is a single-node Vouch Runtime for autonomous
+Gatemole's production profile is a single-node Gatemole Runtime for autonomous
 software changes released through local Git refs. It enforces the Runtime
 boundary; it does not turn the current implementation into a multi-tenant or
-highly available Vouch Agent OS. It is the hardened operator profile for the
-same kernel used by the Vouch Developer Runtime, not a fleet product. This
+highly available Gatemole Agent OS. It is the hardened operator profile for the
+same kernel used by the Gatemole Developer Runtime, not a fleet product. This
 narrow, single-tenant Git profile is supported only for revisions that pass the
 mandatory Go formatting,
-module, test, vet, and `govulncheck` checks; kernel race tests; VouchBench,
-VouchKernelBench, VouchTransactionBench, VouchRuntimeBench; and production OCI
-acceptance. Vouch Contracts has separate beta status. Enterprise connector
+module, test, vet, and `govulncheck` checks; kernel race tests; GatemoleBench,
+GatemoleKernelBench, GatemoleTransactionBench, GatemoleRuntimeBench; and production OCI
+acceptance. Gatemole Contracts has separate beta status. Enterprise connector
 drivers, multi-tenancy, HA and the Control Plane are not implemented in this
 profile.
 
@@ -18,7 +18,7 @@ profile.
 The daemon refuses to start unless it has:
 
 - A valid, local-only `.gatemole/runtime.json` created for the exact repository
-  root by `vouch runtime init`.
+  root by `gatemole runtime init`.
 - At least one digest-pinned OCI image in its allowlist.
 - An Ed25519 approval trust document with at least one trusted reviewer.
 - A static OIDC trust document containing an HTTPS issuer, accepted audiences,
@@ -118,7 +118,7 @@ The production runtime:
 - Permanently denies mediated filesystem reads and writes through any `.git`
   or `.gatemole` path component, regardless of the requested capability.
 - Gives an agent model access only when admission explicitly declares the
-  daemon provider, such as `vouch run --model-provider openai`. The
+  daemon provider, such as `gatemole run --model-provider openai`. The
   transaction-specific broker remains a daemon ceiling: the agent receives no
   provider credential and has no direct Internet route; the broker enforces
   the provider origin, model/tool allowlists, byte and token budgets, stateless
@@ -143,12 +143,12 @@ and its backups accordingly.
 
 ## Immutable Git-tree staging and verification
 
-Staging does not derive effects from a mutable filesystem walk. Vouch first
+Staging does not derive effects from a mutable filesystem walk. Gatemole first
 constructs a private Git index, writes an immutable tree object, and derives the
 effect ledger, patch digest, and staged-state digest from that exact tree.
 Preparation later commits only the tree revision bound into the frozen plan.
 
-Before each verifier starts, Vouch re-inspects the agent worktree into an
+Before each verifier starts, Gatemole re-inspects the agent worktree into an
 immutable tree and requires its tree, effect-set, and staged-state digests to
 match the frozen transaction. It then materializes that exact tree revision
 into a new private directory outside both the source repository and agent
@@ -208,7 +208,7 @@ executing a transaction.
 Create approval material:
 
 ```sh
-vouch approval keygen \
+gatemole approval keygen \
   --key-id key:security-reviewer-1 \
   --principal human:security-reviewer-1 \
   --issuer https://login.example.com/ \
@@ -220,7 +220,7 @@ vouch approval keygen \
 Give the daemon configuration only the public trust document. The current
 `tx approve` command reads the private key, fetches the pending package and
 submits the signed decision in one process. Because the socket accepts only the
-daemon account's effective UID, Vouch does not yet provide a separate offline
+daemon account's effective UID, Gatemole does not yet provide a separate offline
 sign-and-submit flow that keeps the reviewer key inaccessible to that OS
 account while approval runs. If that limitation is acceptable inside the
 trusted single-tenant host boundary, make the key available to the reviewer-
@@ -232,7 +232,7 @@ loads a new snapshot, changes the approval-trust digest, and invalidates
 transactions prepared under the previous trust set.
 
 Configure `/etc/gatemole/identity-trust.json` from the issuer metadata and JWKS.
-Vouch currently consumes a static trust document rather than performing OIDC
+Gatemole currently consumes a static trust document rather than performing OIDC
 discovery:
 
 ```json
@@ -250,10 +250,10 @@ discovery:
 }
 ```
 
-The custom claims must contain a Vouch principal ID, `human`, `service`, or
+The custom claims must contain a Gatemole principal ID, `human`, `service`, or
 `operator` kind, one or more namespaces, and one or more roles from `viewer`,
 `operator`, `approver`, or `admin`. Configure those claims in the enterprise
-IdP. `vouch identity keygen` and `vouch identity issue` exist only for local
+IdP. `gatemole identity keygen` and `gatemole identity issue` exist only for local
 bootstrap and acceptance testing; the daemon is not an identity provider.
 
 Configure `/etc/gatemole/verifier-profiles.json`. Every profile in the document is
@@ -283,7 +283,7 @@ Initialize the canonical repository once as the dedicated daemon account,
 using the exact agent profile that will be deployed:
 
 ```sh
-vouch --repo /srv/vouch/repository runtime init \
+gatemole --repo /srv/gatemole/repository runtime init \
   --agent coding-agent \
   --image registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
@@ -306,7 +306,7 @@ Start the production daemon:
 
 ```sh
 gatemoled \
-  --repo /srv/vouch/repository \
+  --repo /srv/gatemole/repository \
   --db /var/lib/gatemole/kernel.db \
   --socket /run/gatemole/gatemoled.sock \
   --transaction-root /var/lib/gatemole/transactions \
@@ -331,7 +331,7 @@ after ledger validation and recovery succeed.
 The documented production profile runs the daemon as a dedicated non-root
 account and uses that same numeric UID/GID for agent and verifier containers.
 Linux bind-mounted worktrees and broker receipt directories must have the same
-owner. Vouch refuses a mismatched non-root production configuration rather
+owner. Gatemole refuses a mismatched non-root production configuration rather
 than starting containers that cannot write their staged state. A root-run
 daemon configuration is outside this narrow hardened execution boundary.
 
@@ -339,7 +339,7 @@ Set the caller's short-lived access token for every CLI process:
 
 ```sh
 export GATEMOLE_IDENTITY_TOKEN='eyJ…'
-vouch --repo /srv/vouch/repository tx list \
+gatemole --repo /srv/gatemole/repository tx list \
   --socket /run/gatemole/gatemoled.sock \
   --namespace engineering
 ```
@@ -359,7 +359,7 @@ With the daemon running, verify its exact Runtime ID and enforcement profile
 through authoritative preflight:
 
 ```sh
-vouch --repo /srv/vouch/repository doctor \
+gatemole --repo /srv/gatemole/repository doctor \
   --socket /run/gatemole/gatemoled.sock \
   --namespace engineering \
   --agent coding-agent \
@@ -385,7 +385,7 @@ the internal broker URL as `OPENAI_BASE_URL`; it never sees the provider key.
 Model access is still absent by default. Admit it for one task with:
 
 ```sh
-vouch --repo /srv/vouch/repository run \
+gatemole --repo /srv/gatemole/repository run \
   --socket /run/gatemole/gatemoled.sock \
   --namespace engineering \
   --require-enforcement-profile production \
@@ -399,9 +399,9 @@ a provider that does not exactly match the daemon broker policy is denied
 before a broker or agent workload starts.
 
 Use a dedicated release ref that is not checked out in the source repository.
-Vouch rejects publication to a checked-out ref because the worktree and index
+Gatemole rejects publication to a checked-out ref because the worktree and index
 would not be updated atomically with the ref. Publication ends at the local
-compare-and-swap ref update; Vouch has no remote Git push, pull-request merge,
+compare-and-swap ref update; Gatemole has no remote Git push, pull-request merge,
 or deployment connector in this profile.
 
 The Unix socket is mode `0600`. Put its parent directory on a local filesystem
@@ -452,12 +452,12 @@ go test ./...
 go vet ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 go test -race -count=1 ./internal/kernel/...
-scripts/vouchbench.sh --out /tmp/vouchbench
-scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
-scripts/vouchtransactionbench.sh
-scripts/vouchruntimebench.sh
-image="$(scripts/vouchproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
-GATEMOLE_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+scripts/gatemolebench.sh --out /tmp/gatemolebench
+scripts/gatemolekernelbench.sh --out /tmp/gatemolekernelbench
+scripts/gatemoletransactionbench.sh
+scripts/gatemoleruntimebench.sh
+image="$(scripts/gatemoleproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
+GATEMOLE_PRODUCTION_IMAGE="$image" scripts/gatemoleproductionbench.sh
 ```
 
 The normal Go CI job also enforces formatting and a tidy module graph. The
@@ -507,12 +507,12 @@ Preserving both `.gatemole/runtime.json` and its bound ledger restores the same
 logical Runtime. Never run the original and restored copy concurrently on
 different hosts: `.gatemole/runtime.lock` and the ledger lock are same-host and
 same-UID only. Startup verifies every transaction event chain before recovery.
-If an agent execution was active, Vouch removes its deterministic container and
+If an agent execution was active, Gatemole removes its deterministic container and
 appends an `interrupted` receipt. A cleanup or ledger-integrity failure
 prevents startup.
 
 To create a separate Runtime, start from a normal Git clone, run
-`vouch runtime init` to create a new ignored identity and use a new empty
+`gatemole runtime init` to create a new ignored identity and use a new empty
 ledger. Deliberately copying both the ignored identity and ledger deliberately
 clones the trust target; the local identity mechanism does not detect that
 cross-host operation.
@@ -533,7 +533,7 @@ Monitor:
 - OIDC key rotation and access-token issuance failures.
 - Model-broker unknown calls, exhausted budgets, and receipt-ledger integrity.
 
-Use `vouch tx get` and `vouch tx events` as the primary incident record. Do not
+Use `gatemole tx get` and `gatemole tx events` as the primary incident record. Do not
 edit the SQLite database or transaction worktree to force a state transition.
 Preserve the database, evidence directory, target Git ref, and daemon log
 before manual recovery.
@@ -544,14 +544,14 @@ The production profile is suitable only when all of these constraints are
 acceptable:
 
 - One daemon, one security tenant, and one local SQLite ledger on a dedicated
-  trusted host or VM; no HA, failover or Vouch Control Plane.
+  trusted host or VM; no HA, failover or Gatemole Control Plane.
 - Runtime identity prevents accidental repository/ledger/socket confusion and
   the repository-local Runtime lock prevents same-host, same-UID duplicate
   ownership for that repository. It does
   not provide cross-UID or cross-host uniqueness, hardware-backed identity,
   cryptographic same-UID attestation, organization enrollment or fleet
   revocation.
-- A trusted dedicated daemon account and same-UID container boundary. Vouch
+- A trusted dedicated daemon account and same-UID container boundary. Gatemole
   does not protect against a malicious host administrator, OCI-engine operator,
   or identity able to replace configured parent paths.
 - Every connected CLI, including approval and release, must use the daemon
