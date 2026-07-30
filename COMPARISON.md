@@ -15,7 +15,7 @@ One-sentence version:
 | Layer | Primary job | Relationship to Vouch |
 | --- | --- | --- |
 | Agent framework or coding agent | Plan, reason, call models and tools, produce a solution | Runs inside or connects through Vouch; remains untrusted at the authority boundary |
-| Container, microVM or host OS | Process and resource isolation | Supplies isolation primitives that `vouchd` configures and constrains |
+| Container, microVM or host OS | Process and resource isolation | Supplies isolation primitives that `gatemoled` configures and constrains |
 | Identity provider | Authenticate people, services and workloads | Supplies principals and claims; Vouch applies them to transaction authority |
 | Policy engine | Evaluate deterministic policy over structured facts | Can evaluate Vouch transaction/effect facts; does not stage or commit effects |
 | CI and scanners | Execute tests, builds and analysis | Produce verifier results and evidence bound to the exact staged state |

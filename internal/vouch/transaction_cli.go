@@ -221,7 +221,7 @@ func transactionCreate(repo string, args []string, jsonOut bool, stdout, stderr 
 	sponsorID := flags.String("sponsor", "human:local", "human or service sponsor ID")
 	sponsorKind := flags.String("sponsor-kind", string(model.PrincipalHuman), "sponsor principal kind")
 	runID := flags.String("run", "", "participating agent run ID")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID creating the transaction")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "creator principal kind")
 	if err := flags.Parse(args); err != nil {
@@ -259,7 +259,7 @@ func transactionCreate(repo string, args []string, jsonOut bool, stdout, stderr 
 	manualProfile, err := resolveAdHocAgentProfile(
 		"host",
 		"",
-		[]string{"vouch-manual-transaction"},
+		[]string{"gatemole-manual-transaction"},
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -354,7 +354,7 @@ func transactionWorktree(repo string, args []string, jsonOut bool, stdout, stder
 	namespace := flags.String("namespace", "", "transaction namespace")
 	id := flags.String("id", "", "transaction ID")
 	revision := flags.String("revision", "HEAD", "base Git revision")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "requesting principal ID")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "requesting principal kind")
 	if err := flags.Parse(args); err != nil {
@@ -441,7 +441,7 @@ func transactionPrepare(repo string, args []string, jsonOut bool, stdout, stderr
 	namespace := flags.String("namespace", "", "transaction namespace")
 	id := flags.String("id", "", "transaction ID")
 	gitRef := flags.String("git-ref", "", "full Git branch ref to bind into the commit plan")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "requesting principal ID")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "requesting principal kind")
 	if err := flags.Parse(args); err != nil {
@@ -540,7 +540,7 @@ func transactionList(repo string, args []string, jsonOut bool, stdout, stderr io
 	flags := flag.NewFlagSet("tx list", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	namespace := flags.String("namespace", "", "transaction namespace")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -587,7 +587,7 @@ func transactionEvents(repo string, args []string, jsonOut bool, stdout, stderr 
 	namespace := flags.String("namespace", "", "transaction namespace")
 	id := flags.String("id", "", "transaction ID")
 	after := flags.Int64("after", 0, "only events after this sequence")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -647,7 +647,7 @@ func parseTransactionTarget(command, repo string, args []string, stderr io.Write
 	flags.SetOutput(stderr)
 	namespace := flags.String("namespace", "", "transaction namespace")
 	id := flags.String("id", "", "transaction ID")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "requesting principal ID")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "requesting principal kind")
 	if err := flags.Parse(args); err != nil {

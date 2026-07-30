@@ -10,7 +10,7 @@ architecture: the Vouch Control Plane plus a fleet of customer-side Vouch
 Runtimes. **Vouch Runtime** is the first sellable product and the enforcement
 boundary for autonomous-agent actions.
 
-One `vouchd` kernel supports two experiences:
+One `gatemoled` kernel supports two experiences:
 
 - **Vouch Developer Runtime** is the local developer experience around one
   Runtime: initialize a real agent profile, execute it in a bounded Git
@@ -48,7 +48,7 @@ Keep these names distinct:
   boundary.
 - **Vouch Developer Runtime**: the local product experience around one Runtime,
   not a separate or weaker engine.
-- **`vouchd` kernel**: the trusted authority and transaction engine inside each
+- **`gatemoled` kernel**: the trusted authority and transaction engine inside each
   Runtime.
 - **Vouch Contracts**: an optional module that compiles release intent into
   verification obligations and maps evidence to them.
@@ -145,7 +145,7 @@ Use:
 - “Vouch Developer Runtime” for the local developer experience around the same
   kernel
 - “the controlled boundary between an agent proposal and a real effect”
-- “`vouchd` kernel” for the trusted authority and transaction engine
+- “`gatemoled` kernel” for the trusted authority and transaction engine
 - “isolated, verified and authorized agent execution”
 - “Vouch Runtime”
 - “Vouch Agent OS” for the complete Control Plane plus Runtime-fleet

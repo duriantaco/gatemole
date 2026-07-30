@@ -35,10 +35,10 @@ func run() int {
 }
 
 func parseDaemonConfig(args []string, stderr io.Writer) (daemon.Config, int) {
-	flags := flag.NewFlagSet("vouchd", flag.ContinueOnError)
+	flags := flag.NewFlagSet("gatemoled", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	databasePath := flags.String("db", ".gatemole/kernel.db", "SQLite kernel database path")
-	socketPath := flags.String("socket", ".gatemole/vouchd.sock", "Unix socket path")
+	socketPath := flags.String("socket", ".gatemole/gatemoled.sock", "Unix socket path")
 	repositoryRoot := flags.String("repo", ".", "repository root for mediated workspaces")
 	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
 	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")
@@ -66,13 +66,13 @@ func parseDaemonConfig(args []string, stderr io.Writer) (daemon.Config, int) {
 		return daemon.Config{}, 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "vouchd: unexpected argument %q\n", flags.Arg(0))
+		fmt.Fprintf(stderr, "gatemoled: unexpected argument %q\n", flags.Arg(0))
 		return daemon.Config{}, 2
 	}
 
 	repository, err := canonicalRepositoryRoot(*repositoryRoot)
 	if err != nil {
-		fmt.Fprintf(stderr, "vouchd: resolve repository root: %v\n", err)
+		fmt.Fprintf(stderr, "gatemoled: resolve repository root: %v\n", err)
 		return daemon.Config{}, 1
 	}
 	*databasePath = repositoryPath(repository, *databasePath)

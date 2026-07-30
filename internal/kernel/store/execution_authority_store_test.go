@@ -473,7 +473,7 @@ func advanceAuthorityLifecycle(
 ) (reducer.Projection, transactionreducer.Projection) {
 	t.Helper()
 	actor := model.Principal{
-		ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd",
+		ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled",
 	}
 	advancedAt := initial.Task.CreatedAt.Add(time.Second)
 	runEvent, err := eventlog.Next(

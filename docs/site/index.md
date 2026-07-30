@@ -15,7 +15,7 @@ intent
 ```
 
 Vouch does not decide how an agent reasons or writes code. The trusted local
-kernel, `vouchd`, orchestrates sandboxed execution and owns authoritative
+kernel, `gatemoled`, orchestrates sandboxed execution and owns authoritative
 transaction state, verification, policy decisions and commit coordination.
 
 ## Product hierarchy
@@ -31,12 +31,12 @@ transaction state, verification, policy decisions and commit coordination.
   Runtime fleets, organization policy, approvals, audit and incident response.
 - **Vouch Runtime** is the deployable customer-side enforcement boundary. A
   narrow single-node local-Git profile is implemented today.
-- **`vouchd`** is the trusted transaction kernel inside each Runtime.
+- **`gatemoled`** is the trusted transaction kernel inside each Runtime.
 - **Vouch Contracts** is an optional verification module that compiles release
   intent into obligations and maps evidence to them.
 
 The Developer Runtime and enterprise **Vouch Agent OS** experience use the same
-`vouchd` kernel; they are not separate engines.
+`gatemoled` kernel; they are not separate engines.
 
 ## Try the Developer Runtime
 
@@ -80,11 +80,11 @@ requirements; it does not prove that every future task will succeed.
 The product `run`, transaction, low-level `kernel` and `action` CLI surfaces
 also send that exact Runtime ID on every daemon read and lifecycle call,
 including long-running agent and verifier operations. Preflight and admission
-validate it in their versioned bodies; later calls use `Vouch-Runtime-ID`. The
+validate it in their versioned bodies; later calls use `Gatemole-Runtime-ID`. The
 binding catches accidental cross-Runtime wiring but is not an authentication
 secret.
 
-An agent integration only needs to read `$VOUCH_TASK_PATH`, edit `/workspace`
+An agent integration only needs to read `$GATEMOLE_TASK_PATH`, edit `/workspace`
 and exit. It should never receive the daemon socket or production credentials.
 Without explicit model authority the container has no network:
 
@@ -113,7 +113,7 @@ Production callers should add
 development daemon then fails preflight before task authority is created.
 
 For a runnable deterministic payments-service fixture, including building the
-agent image, starting `vouchd`, inspecting effects and understanding why an
+agent image, starting `gatemoled`, inspecting effects and understanding why an
 authentication change requires approval, read the
 [Runtime examples guide](https://github.com/duriantaco/vouch/blob/main/docs/EXAMPLES.md).
 
@@ -165,4 +165,4 @@ Contracts and evidence enrich runtime verification and approval. They are not a
 generic AI code reviewer and do not prove arbitrary code correct.
 
 Use the **Contracts** navigation only when working with that optional module.
-Vouch Runtime is the current product; `vouchd` is its trusted kernel.
+Vouch Runtime is the current product; `gatemoled` is its trusted kernel.

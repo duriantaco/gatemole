@@ -53,11 +53,11 @@ func TestDaemonConfigDefaultsStayWithRepositoryOutsideWorkingDirectory(t *testin
 		t.Fatalf("repository root = %q, want %q", configA.RepositoryRoot, canonicalA)
 	}
 	assertPathEqual(t, "database", configA.DatabasePath, filepath.Join(canonicalA, ".gatemole", "kernel.db"))
-	assertPathEqual(t, "socket", configA.SocketPath, filepath.Join(canonicalA, ".gatemole", "vouchd.sock"))
+	assertPathEqual(t, "socket", configA.SocketPath, filepath.Join(canonicalA, ".gatemole", "gatemoled.sock"))
 	if configA.DatabasePath == filepath.Join(workingDirectory, ".gatemole", "kernel.db") {
 		t.Fatalf("database path was redirected to caller working directory: %q", configA.DatabasePath)
 	}
-	if configA.SocketPath == filepath.Join(workingDirectory, ".gatemole", "vouchd.sock") {
+	if configA.SocketPath == filepath.Join(workingDirectory, ".gatemole", "gatemoled.sock") {
 		t.Fatalf("socket path was redirected to caller working directory: %q", configA.SocketPath)
 	}
 
@@ -94,7 +94,7 @@ func TestDaemonConfigResolvesRelativePathsAgainstCanonicalRepository(t *testing.
 	config, exitCode := parseDaemonConfig([]string{
 		"--repo", repositoryLink,
 		"--db", filepath.Join("state", "kernel.db"),
-		"--socket", filepath.Join("run", "vouchd.sock"),
+		"--socket", filepath.Join("run", "gatemoled.sock"),
 		"--transaction-root", "transactions",
 		"--approval-trust", filepath.Join("config", "approval-trust.json"),
 		"--identity-trust", filepath.Join("config", "identity-trust.json"),
@@ -112,7 +112,7 @@ func TestDaemonConfigResolvesRelativePathsAgainstCanonicalRepository(t *testing.
 	}
 	assertPathEqual(t, "repository", config.RepositoryRoot, canonical)
 	assertPathEqual(t, "database", config.DatabasePath, filepath.Join(canonical, "state", "kernel.db"))
-	assertPathEqual(t, "socket", config.SocketPath, filepath.Join(canonical, "run", "vouchd.sock"))
+	assertPathEqual(t, "socket", config.SocketPath, filepath.Join(canonical, "run", "gatemoled.sock"))
 	assertPathEqual(t, "transaction root", config.TransactionRoot, filepath.Join(canonical, "transactions"))
 	assertPathEqual(t, "approval trust", config.ApprovalTrustFile, filepath.Join(canonical, "config", "approval-trust.json"))
 	assertPathEqual(t, "identity trust", config.IdentityTrustFile, filepath.Join(canonical, "config", "identity-trust.json"))

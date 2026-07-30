@@ -27,9 +27,9 @@ import (
 
 const maxResponseBytes = 4 << 20
 
-// Client talks to vouchd over a local Unix socket. New verifies that each
+// Client talks to gatemoled over a local Unix socket. New verifies that each
 // connection's peer owns the stable, private socket path before HTTP can send
-// a bearer token. vouchd still validates every request and never trusts this
+// a bearer token. gatemoled still validates every request and never trusts this
 // client.
 type Client struct {
 	http              *http.Client
@@ -49,12 +49,12 @@ func New(socketPath string) *Client {
 		},
 	}
 	client := NewWithTransport(transport)
-	client.bearerToken = os.Getenv("VOUCH_IDENTITY_TOKEN")
+	client.bearerToken = os.Getenv("GATEMOLE_IDENTITY_TOKEN")
 	return client
 }
 
 // NewWithTransport supports embedded callers and transport-level tests. Most
-// callers should use New so requests stay on the local vouchd Unix socket.
+// callers should use New so requests stay on the local gatemoled Unix socket.
 func NewWithTransport(transport http.RoundTripper) *Client {
 	return &Client{http: &http.Client{Transport: transport, Timeout: 30 * time.Second}}
 }
@@ -678,7 +678,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 		}
 		body = bytes.NewReader(data)
 	}
-	request, err := http.NewRequestWithContext(ctx, method, "http://vouchd"+path, body)
+	request, err := http.NewRequestWithContext(ctx, method, "http://gatemoled"+path, body)
 	if err != nil {
 		return fmt.Errorf("build kernel request: %w", err)
 	}
@@ -696,7 +696,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 	}
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("connect to vouchd: %w", err)
+		return fmt.Errorf("connect to gatemoled: %w", err)
 	}
 	defer response.Body.Close()
 	limited := io.LimitReader(response.Body, maxResponseBytes+1)
@@ -712,7 +712,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 		if err := json.Unmarshal(data, &kernelErr); err == nil && kernelErr.Code != "" {
 			return &kernelErr
 		}
-		return fmt.Errorf("vouchd returned %s", response.Status)
+		return fmt.Errorf("gatemoled returned %s", response.Status)
 	}
 	if output == nil {
 		return nil

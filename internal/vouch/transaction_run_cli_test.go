@@ -432,9 +432,9 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	}
 	intent := "Change authentication through the mounted Vouch task"
 	image := "registry.example.invalid/agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	script := "test -r \"$VOUCH_TASK_PATH\" && " +
-		"test -n \"$VOUCH_TASK_DIGEST\" && " +
-		"grep -Fq '\"intent\":\"" + intent + "\"' \"$VOUCH_TASK_PATH\" && " +
+	script := "test -r \"$GATEMOLE_TASK_PATH\" && " +
+		"test -n \"$GATEMOLE_TASK_DIGEST\" && " +
+		"grep -Fq '\"intent\":\"" + intent + "\"' \"$GATEMOLE_TASK_PATH\" && " +
 		"printf 'package auth\\n\\nfunc Allowed() bool { return true }\\n' > internal/auth/middleware.go"
 	stdout, stderr, code := invokeTransactionRunCLI(
 		repo, newClient, true,
@@ -660,7 +660,7 @@ func TestTransactionRunNamedProfileEnforcesDeclaredEntrypoint(t *testing.T) {
 	profile := validAgentProfileForTest()
 	profile.Descriptor.Runtime.Entrypoint = []string{"/bin/sh", "-c"}
 	profilesPath := writeAgentProfilesForTest(t, repo, profile)
-	script := "test \"$VOUCH_FAKE_ENTRYPOINT\" = /bin/sh && " +
+	script := "test \"$GATEMOLE_FAKE_ENTRYPOINT\" = /bin/sh && " +
 		"printf 'package auth\\n\\nfunc Allowed() bool { return true }\\n' > internal/auth/middleware.go"
 	stdout, stderr, code := invokeTransactionRunCLI(
 		repo, newClient, true,
@@ -985,13 +985,13 @@ while [ "$#" -gt 0 ]; do
       workspace=${workspace%%,dst=/workspace*}
       shift
       ;;
-    --mount=type=bind,src=*,dst=/vouch,readonly)
+    --mount=type=bind,src=*,dst=/gatemole,readonly)
       task_directory=${1#--mount=type=bind,src=}
-      task_directory=${task_directory%%,dst=/vouch,readonly}
+      task_directory=${task_directory%%,dst=/gatemole,readonly}
       shift
       ;;
-    --env=VOUCH_TASK_DIGEST=*)
-      task_digest=${1#--env=VOUCH_TASK_DIGEST=}
+    --env=GATEMOLE_TASK_DIGEST=*)
+      task_digest=${1#--env=GATEMOLE_TASK_DIGEST=}
       shift
       ;;
     --entrypoint=*)
@@ -1011,14 +1011,14 @@ if [ -z "$workspace" ]; then
   exit 125
 fi
 if [ -n "$task_directory" ]; then
-  VOUCH_TASK_PATH=$task_directory/task.json
-  VOUCH_TASK_DIGEST=$task_digest
-  export VOUCH_TASK_PATH VOUCH_TASK_DIGEST
+  GATEMOLE_TASK_PATH=$task_directory/task.json
+  GATEMOLE_TASK_DIGEST=$task_digest
+  export GATEMOLE_TASK_PATH GATEMOLE_TASK_DIGEST
 fi
 cd "$workspace" || exit 125
 if [ -n "$entrypoint" ]; then
-  VOUCH_FAKE_ENTRYPOINT=$entrypoint
-  export VOUCH_FAKE_ENTRYPOINT
+  GATEMOLE_FAKE_ENTRYPOINT=$entrypoint
+  export GATEMOLE_FAKE_ENTRYPOINT
   exec "$entrypoint" "$@"
 fi
 exec "$@"

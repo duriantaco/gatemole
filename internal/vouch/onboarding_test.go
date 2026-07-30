@@ -172,7 +172,7 @@ func TestManifestCreateUsesConfiguredBaseRef(t *testing.T) {
 	writeText(t, filepath.Join(repo, "src", "app", "service.py"), "def service():\n    return 'new'\n")
 	runGit(t, repo, "add", "src/app/service.py")
 	runGit(t, repo, "-c", "user.email=vouch@example.invalid", "-c", "user.name=Vouch Test", "commit", "-m", "change service")
-	t.Setenv("VOUCH_BASE_REF", "trunk")
+	t.Setenv("GATEMOLE_BASE_REF", "trunk")
 
 	manifest, err := CreateManifest(repo, ManifestCreateOptions{
 		TaskID:  "agent-1",

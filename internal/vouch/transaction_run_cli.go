@@ -153,7 +153,7 @@ func transactionRunNamed(
 		"",
 		"require daemon enforcement profile: development or production",
 	)
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID supervising the transaction")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "supervisor principal kind")
 	if err := flags.Parse(args); err != nil {

@@ -7,7 +7,7 @@ Plane, a fleet of customer-side Vouch Runtimes, the transaction protocol and
 connector model. It is not a separate daemon.
 
 **Vouch Runtime** is the deployable enforcement boundary. The trusted
-**`vouchd` kernel** lives inside each Runtime and owns authority, durable
+**`gatemoled` kernel** lives inside each Runtime and owns authority, durable
 transaction state, policy decisions, approvals and commit coordination.
 
 One kernel supports two product experiences:
@@ -78,14 +78,14 @@ operation to persist the exact `AgentTask`, content-bound
 `ExecutionContract`, real `AgentRun`, initial capability grants and
 `AgentTransaction` in one SQLite transaction.
 
-Immediately before OCI launch, `vouchd` now reloads a consistent live snapshot
+Immediately before OCI launch, `gatemoled` now reloads a consistent live snapshot
 of those resources and compiles a fail-closed execution plan. Caller-supplied
 image and command material must match admitted digests; only full-workspace
 read/write and explicitly granted provider-scoped model brokering are
 currently supported. Expired, terminal, narrowed or otherwise unsupported
 authority starts no workload.
 
-Before any broker or agent workload starts, `vouchd` now atomically verifies
+Before any broker or agent workload starts, `gatemoled` now atomically verifies
 that both snapshot heads are still current and records execution start in the
 transaction ledger. A concurrent run or transaction change therefore starts
 no workload. Execution is not yet one paired lifecycle: the OCI workload
@@ -167,7 +167,7 @@ with the first GitHub connector proof.
 
 GitHub is a technical proving ground, not an assumed standalone market. Native
 GitHub agent controls already provide isolated execution, safe write outputs,
-protected branches and human merge. The proof must demonstrate Vouch-specific
+protected branches and human merge. The proof must demonstrate Gatemole-specific
 properties: task authority, exact outcome binding, connector receipts and
 ambiguous-effect reconciliation.
 

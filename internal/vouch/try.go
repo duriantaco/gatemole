@@ -183,7 +183,7 @@ func runTry(repo string, opts tryOptions) (TryResult, error) {
 }
 
 func snapshotRepo(repo string) (snapshotInfo, error) {
-	tmp, err := os.MkdirTemp("", "vouch-try-*")
+	tmp, err := os.MkdirTemp("", "gatemole-try-*")
 	if err != nil {
 		return snapshotInfo{}, err
 	}

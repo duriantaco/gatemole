@@ -283,7 +283,7 @@ func TestTaskAdmissionReplaySurvivesLifecycleAdvancement(t *testing.T) {
 		t.Fatalf("admit task: created=%v err=%v", created, err)
 	}
 	actor := model.Principal{
-		ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd",
+		ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled",
 	}
 	advancedAt := initial.Task.CreatedAt.Add(time.Second)
 	runEvent, err := eventlog.Next(

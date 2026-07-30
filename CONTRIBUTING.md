@@ -18,7 +18,7 @@ Keep the hierarchy clear:
   boundary.
 - Vouch Developer Runtime is the local experience around one Runtime, using the
   same kernel rather than a separate developer-only enforcement path.
-- `vouchd` is the trusted transaction kernel inside each Runtime.
+- `gatemoled` is the trusted transaction kernel inside each Runtime.
 - Vouch Contracts is an optional verification module.
 - Vouch Control Plane is the future central fleet, policy, approval and audit
   manager; it does not execute downstream agent actions.
@@ -38,7 +38,7 @@ go vet ./...
 Build the runtime:
 
 ```sh
-go install ./cmd/vouch ./cmd/vouchd ./cmd/vouch-model-broker
+go install ./cmd/vouch ./cmd/gatemoled ./cmd/gatemole-model-broker
 ```
 
 If the binaries are not on `PATH`:
@@ -58,8 +58,8 @@ scripts/vouchruntimebench.sh
 The OCI production acceptance requires a working Docker-compatible engine:
 
 ```sh
-image="$(scripts/vouchproductionfixture.sh --tag vouch-production-fixture:acceptance)"
-VOUCH_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+image="$(scripts/vouchproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
+GATEMOLE_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
 ```
 
 The optional Contracts module has its own regression harness:

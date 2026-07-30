@@ -30,7 +30,7 @@
   "contract_refs": ["contract.demo-change"],
   "source_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "publisher": {
-    "id": "service:vouch-fixtures",
+    "id": "service:gatemole-fixtures",
     "kind": "service",
     "issuer": "https://example.invalid"
   }

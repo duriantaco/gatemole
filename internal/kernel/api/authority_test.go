@@ -196,7 +196,7 @@ func TestRequiredVerifierProfilesBindPreparationAndPolicyDigest(t *testing.T) {
 		VerifierDigest:    verifierDigest,
 		InputsDigest:      inputsDigest,
 		Verifier: model.Principal{
-			ID: "service:vouch-verifier", Kind: model.PrincipalService,
+			ID: "service:gatemole-verifier", Kind: model.PrincipalService,
 			ClaimsDigest: profile.Digest,
 		},
 	}}

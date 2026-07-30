@@ -55,7 +55,7 @@ func readConfigFileSnapshotWithOpen(
 	before, err := os.Lstat(filePath)
 	if err != nil {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: inspect %s file: %w",
+			"gatemoled: inspect %s file: %w",
 			configLabel(production, label),
 			err,
 		)
@@ -67,7 +67,7 @@ func readConfigFileSnapshotWithOpen(
 	file, err := openFile(filePath)
 	if err != nil {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: open %s file: %w",
+			"gatemoled: open %s file: %w",
 			configLabel(production, label),
 			err,
 		)
@@ -76,7 +76,7 @@ func readConfigFileSnapshotWithOpen(
 	opened, err := file.Stat()
 	if err != nil {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: inspect opened %s file: %w",
+			"gatemoled: inspect opened %s file: %w",
 			configLabel(production, label),
 			err,
 		)
@@ -86,7 +86,7 @@ func readConfigFileSnapshotWithOpen(
 	}
 	if !os.SameFile(before, opened) {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: %s file changed while it was opened",
+			"gatemoled: %s file changed while it was opened",
 			configLabel(production, label),
 		)
 	}
@@ -94,14 +94,14 @@ func readConfigFileSnapshotWithOpen(
 	data, err := io.ReadAll(io.LimitReader(file, maxConfigSnapshotBytes+1))
 	if err != nil {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: read %s file: %w",
+			"gatemoled: read %s file: %w",
 			configLabel(production, label),
 			err,
 		)
 	}
 	if len(data) > maxConfigSnapshotBytes {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: %s exceeds 2 MiB",
+			"gatemoled: %s exceeds 2 MiB",
 			configLabel(production, label),
 		)
 	}
@@ -109,7 +109,7 @@ func readConfigFileSnapshotWithOpen(
 	after, err := os.Lstat(filePath)
 	if err != nil {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: re-inspect %s file: %w",
+			"gatemoled: re-inspect %s file: %w",
 			configLabel(production, label),
 			err,
 		)
@@ -119,7 +119,7 @@ func readConfigFileSnapshotWithOpen(
 	}
 	if !os.SameFile(opened, after) {
 		return configFileSnapshot{}, fmt.Errorf(
-			"vouchd: %s file changed while it was read",
+			"gatemoled: %s file changed while it was read",
 			configLabel(production, label),
 		)
 	}
@@ -139,13 +139,13 @@ func validateConfigSnapshotInfo(
 	if info == nil || !info.Mode().IsRegular() ||
 		info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf(
-			"vouchd: %s must be a regular non-symlink file",
+			"gatemoled: %s must be a regular non-symlink file",
 			configLabel(production, label),
 		)
 	}
 	if info.Size() < 0 || info.Size() > maxConfigSnapshotBytes {
 		return fmt.Errorf(
-			"vouchd: %s must be no larger than 2 MiB",
+			"gatemoled: %s must be no larger than 2 MiB",
 			configLabel(production, label),
 		)
 	}
@@ -154,14 +154,14 @@ func validateConfigSnapshotInfo(
 	}
 	if info.Mode().Perm()&0o022 != 0 {
 		return fmt.Errorf(
-			"vouchd: production %s must not be group- or world-writable",
+			"gatemoled: production %s must not be group- or world-writable",
 			label,
 		)
 	}
 	ownerUID, err := peercred.FileOwnerUID(info)
 	if err != nil {
 		return fmt.Errorf(
-			"vouchd: inspect production %s owner: %w",
+			"gatemoled: inspect production %s owner: %w",
 			label,
 			err,
 		)
@@ -169,7 +169,7 @@ func validateConfigSnapshotInfo(
 	daemonUID := uint32(os.Geteuid())
 	if ownerUID != 0 && ownerUID != daemonUID {
 		return fmt.Errorf(
-			"vouchd: production %s must be owned by root or the daemon user",
+			"gatemoled: production %s must be owned by root or the daemon user",
 			label,
 		)
 	}

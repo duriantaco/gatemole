@@ -142,7 +142,7 @@ func (config OCIConfig) Validate() error {
 		}
 	} else {
 		if config.Role != "agent" || !validContainerName(config.NetworkName) ||
-			config.ModelBroker.URL != "http://vouch-model-broker:8080/v1" ||
+			config.ModelBroker.URL != "http://gatemole-model-broker:8080/v1" ||
 			len(config.ModelBroker.Token) < 32 ||
 			!digestPattern.MatchString(config.ModelBroker.ImageDigest) ||
 			!digestPattern.MatchString(config.ModelBroker.PolicyDigest) ||
@@ -191,7 +191,7 @@ func (config OCIConfig) Invocation() (Invocation, error) {
 		"--interactive",
 		"--pull=never",
 		"--name=" + config.ContainerName,
-		"--hostname=vouch-agent",
+		"--hostname=gatemole-agent",
 		"--network=" + network,
 		"--read-only",
 		"--cap-drop=ALL",
@@ -202,18 +202,18 @@ func (config OCIConfig) Invocation() (Invocation, error) {
 		"--user=" + strconv.Itoa(config.UID) + ":" + strconv.Itoa(config.GID),
 		"--workdir=/workspace",
 		"--env=HOME=/tmp",
-		"--env=VOUCH_TRANSACTION_ID=" + config.TransactionID,
-		"--env=VOUCH_RUN_ID=" + config.RunID,
-		"--env=VOUCH_RUNTIME_ROLE=" + config.Role,
+		"--env=GATEMOLE_TRANSACTION_ID=" + config.TransactionID,
+		"--env=GATEMOLE_RUN_ID=" + config.RunID,
+		"--env=GATEMOLE_RUNTIME_ROLE=" + config.Role,
 		"--tmpfs=/tmp:rw,nosuid,nodev,size=" + strconv.FormatInt(config.TmpfsBytes, 10) +
 			",uid=" + strconv.Itoa(config.UID) + ",gid=" + strconv.Itoa(config.GID) + ",mode=1777",
 		"--mount=type=bind,src=" + config.Workspace + ",dst=/workspace" + mountMode,
 	}
 	if config.TaskDirectory != "" {
 		arguments = append(arguments,
-			"--env=VOUCH_TASK_PATH=/vouch/task.json",
-			"--env=VOUCH_TASK_DIGEST="+config.TaskDigest,
-			"--mount=type=bind,src="+config.TaskDirectory+",dst=/vouch,readonly",
+			"--env=GATEMOLE_TASK_PATH=/gatemole/task.json",
+			"--env=GATEMOLE_TASK_DIGEST="+config.TaskDigest,
+			"--mount=type=bind,src="+config.TaskDirectory+",dst=/gatemole,readonly",
 		)
 	}
 	if config.Entrypoint != "" {
@@ -222,8 +222,8 @@ func (config OCIConfig) Invocation() (Invocation, error) {
 	arguments = append(arguments, config.Image)
 	if config.ModelBroker != nil {
 		brokerEnvironment := []string{
-			"--env=VOUCH_MODEL_BROKER_URL=" + config.ModelBroker.URL,
-			"--env=VOUCH_MODEL_BROKER_TOKEN=" + config.ModelBroker.Token,
+			"--env=GATEMOLE_MODEL_BROKER_URL=" + config.ModelBroker.URL,
+			"--env=GATEMOLE_MODEL_BROKER_TOKEN=" + config.ModelBroker.Token,
 			"--env=OPENAI_BASE_URL=" + config.ModelBroker.URL,
 			"--env=OPENAI_API_KEY=" + config.ModelBroker.Token,
 		}
@@ -381,7 +381,7 @@ func ImageDigest(reference string) (string, error) {
 }
 
 // PrepareWorkspaceOwnership makes a daemon-created bind mount writable by a
-// configured non-root workload when vouchd itself is running as root. A
+// configured non-root workload when gatemoled itself is running as root. A
 // non-root production daemon is required to use its own UID/GID, so no
 // ownership mutation is needed in that deployment.
 func PrepareWorkspaceOwnership(workspace string, uid, gid int) error {
@@ -407,7 +407,7 @@ func PrepareWorkspaceOwnership(workspace string, uid, gid int) error {
 
 func ContainerName(transactionID, runID string) string {
 	sum := sha256.Sum256([]byte(transactionID + "\x00" + runID))
-	return "vouch-" + hex.EncodeToString(sum[:12])
+	return "gatemole-" + hex.EncodeToString(sum[:12])
 }
 
 func CleanupArguments(containerName string) ([]string, error) {

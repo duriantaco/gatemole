@@ -270,7 +270,7 @@ func (s *Server) expectedVerifierDigest(
 		CPUMillis:     s.executionPolicy.VerifierCPUMillis,
 		PIDsLimit:     s.executionPolicy.VerifierPIDsLimit,
 		TmpfsBytes:    s.executionPolicy.VerifierTmpfsBytes,
-		ContainerName: "vouch-verifier-policy",
+		ContainerName: "gatemole-verifier-policy",
 		Role:          "verifier",
 		WorkspaceMode: "staged_ro",
 	}

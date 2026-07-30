@@ -62,21 +62,21 @@ func TestVerifierRejectsUntrustedOrInvalidTokens(t *testing.T) {
 	tooLong := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
 		"aud": "vouch", "iat": now.Unix(), "exp": now.Add(2 * time.Hour).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	future := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
 		"aud": "vouch", "iat": now.Unix(), "nbf": now.Add(10 * time.Minute).Unix(),
-		"exp":                now.Add(20 * time.Minute).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"exp":                   now.Add(20 * time.Minute).Unix(),
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	wrongAudience := signEd25519Claims(t, privateKey, map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:alice",
 		"aud": "somewhere-else", "iat": now.Unix(), "exp": now.Add(10 * time.Minute).Unix(),
-		"vouch_principal_id": "operator:alice", "vouch_principal_kind": "operator",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"operator"},
+		"gatemole_principal_id": "operator:alice", "gatemole_principal_kind": "operator",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"operator"},
 	})
 	noneHeader := base64.RawURLEncoding.EncodeToString(
 		[]byte(`{"alg":"none","kid":"key:test","typ":"JWT"}`),
@@ -85,7 +85,7 @@ func TestVerifierRejectsUntrustedOrInvalidTokens(t *testing.T) {
 	duplicateClaims := signRawEd25519(
 		t,
 		privateKey,
-		[]byte(`{"iss":"https://issuer.example.invalid","iss":"https://issuer.example.invalid","sub":"subject:alice","aud":"vouch","iat":1784800800,"exp":1784801400,"vouch_principal_id":"operator:alice","vouch_principal_kind":"operator","vouch_namespaces":["team-a"],"vouch_roles":["operator"]}`),
+		[]byte(`{"iss":"https://issuer.example.invalid","iss":"https://issuer.example.invalid","sub":"subject:alice","aud":"vouch","iat":1784800800,"exp":1784801400,"gatemole_principal_id":"operator:alice","gatemole_principal_kind":"operator","gatemole_namespaces":["team-a"],"gatemole_roles":["operator"]}`),
 	)
 
 	for name, token := range map[string]string{
@@ -129,8 +129,8 @@ func TestVerifierAcceptsRS256(t *testing.T) {
 	claims, _ := json.Marshal(map[string]any{
 		"iss": "https://issuer.example.invalid", "sub": "subject:service",
 		"aud": "vouch", "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
-		"vouch_principal_id": "service:ci", "vouch_principal_kind": "service",
-		"vouch_namespaces": []string{"team-a"}, "vouch_roles": []string{"viewer"},
+		"gatemole_principal_id": "service:ci", "gatemole_principal_kind": "service",
+		"gatemole_namespaces": []string{"team-a"}, "gatemole_roles": []string{"viewer"},
 	})
 	encoding := base64.RawURLEncoding
 	signingInput := encoding.EncodeToString(header) + "." + encoding.EncodeToString(claims)

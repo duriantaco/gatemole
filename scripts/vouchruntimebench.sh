@@ -2,13 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BENCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouch-runtime-bench.XXXXXX")"
+BENCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gatemole-runtime-bench.XXXXXX")"
 REPO_DIR="$BENCH_DIR/repository"
 STAGE_DIR="$BENCH_DIR/stages"
 DB_PATH="$BENCH_DIR/kernel.db"
-SOCKET_PATH="$BENCH_DIR/vouchd.sock"
-VOUCH_BIN="$BENCH_DIR/vouch"
-DAEMON_LOG="$BENCH_DIR/vouchd.log"
+SOCKET_PATH="$BENCH_DIR/gatemoled.sock"
+GATEMOLE_BIN="$BENCH_DIR/vouch"
+DAEMON_LOG="$BENCH_DIR/gatemoled.log"
 DAEMON_PID=""
 PASSED=0
 TOTAL=10
@@ -36,7 +36,7 @@ fail() {
 }
 
 start_daemon() {
-  "$VOUCH_BIN" --repo "$REPO_DIR" daemon \
+  "$GATEMOLE_BIN" --repo "$REPO_DIR" daemon \
     --db "$DB_PATH" \
     --socket "$SOCKET_PATH" \
     --transaction-root "$STAGE_DIR" \
@@ -71,16 +71,16 @@ printf 'package auth\n\nfunc Allowed() bool { return false }\n' >"$REPO_DIR/inte
 printf 'package auth\n\nfunc TestAllowed() {}\n' >"$REPO_DIR/internal/auth/middleware_test.go"
 git -C "$REPO_DIR" add -- internal/auth/middleware.go internal/auth/middleware_test.go
 BASE_TREE="$(git -C "$REPO_DIR" write-tree)"
-BASE_COMMIT="$(printf 'base\n' | git -C "$REPO_DIR" -c user.name='Vouch Bench' -c user.email='vouch-bench@example.invalid' commit-tree "$BASE_TREE" -F -)"
+BASE_COMMIT="$(printf 'base\n' | git -C "$REPO_DIR" -c user.name='Vouch Bench' -c user.email='gatemole-bench@example.invalid' commit-tree "$BASE_TREE" -F -)"
 git -C "$REPO_DIR" update-ref refs/heads/main "$BASE_COMMIT"
 
 cd "$ROOT_DIR"
-env GOCACHE="$BENCH_DIR/go-cache" go build -o "$VOUCH_BIN" ./cmd/vouch
-"$VOUCH_BIN" --repo "$REPO_DIR" runtime init >/dev/null
+env GOCACHE="$BENCH_DIR/go-cache" go build -o "$GATEMOLE_BIN" ./cmd/vouch
+"$GATEMOLE_BIN" --repo "$REPO_DIR" runtime init >/dev/null
 start_daemon
 
 COMMAND_SECRET="runtime-command-secret-not-for-ledger"
-"$VOUCH_BIN" --repo "$REPO_DIR" --json tx run \
+"$GATEMOLE_BIN" --repo "$REPO_DIR" --json tx run \
   --id tx:runtime-success \
   --namespace bench \
   --intent "Change authentication behavior with independent verification" \
@@ -116,7 +116,7 @@ pass "successful child changes became an exact ordered effect ledger"
 jq -e '.decision.findings[] | select(.rule_id == "gatemole.sequence.control-and-evidence-coupling")' "$BENCH_DIR/success.json" >/dev/null || fail "runtime finding missing"
 pass "combined control and test changes required focused approval"
 
-"$VOUCH_BIN" --repo "$REPO_DIR" --json tx events \
+"$GATEMOLE_BIN" --repo "$REPO_DIR" --json tx events \
   --namespace bench --id tx:runtime-success --socket "$SOCKET_PATH" >"$BENCH_DIR/events.json"
 [[ "$(jq 'length' "$BENCH_DIR/events.json")" == "9" ]] || fail "unexpected runtime event count"
 if grep -q "$COMMAND_SECRET" "$BENCH_DIR/events.json"; then
@@ -128,7 +128,7 @@ pass "execution start and finish were durable without retaining raw command argu
 pass "source repository remained unchanged after successful supervision"
 
 set +e
-"$VOUCH_BIN" --repo "$REPO_DIR" --json tx run \
+"$GATEMOLE_BIN" --repo "$REPO_DIR" --json tx run \
   --id tx:runtime-failure \
   --namespace bench \
   --intent "Attempt a change that fails" \
@@ -148,11 +148,11 @@ pass "failed agent command propagated its exit code"
 [[ "$(jq '.projection.effects | length' "$BENCH_DIR/failure.json")" == "0" ]] || fail "failed execution staged effects"
 pass "failed agent remained durable and did not stage or validate effects"
 
-"$VOUCH_BIN" --repo "$REPO_DIR" --json tx get \
+"$GATEMOLE_BIN" --repo "$REPO_DIR" --json tx get \
   --namespace bench --id tx:runtime-success --socket "$SOCKET_PATH" >"$BENCH_DIR/before-restart.json"
 stop_daemon
 start_daemon
-"$VOUCH_BIN" --repo "$REPO_DIR" --json tx get \
+"$GATEMOLE_BIN" --repo "$REPO_DIR" --json tx get \
   --namespace bench --id tx:runtime-success --socket "$SOCKET_PATH" >"$BENCH_DIR/after-restart.json"
 jq -S . "$BENCH_DIR/before-restart.json" >"$BENCH_DIR/before-restart.sorted.json"
 jq -S . "$BENCH_DIR/after-restart.json" >"$BENCH_DIR/after-restart.sorted.json"

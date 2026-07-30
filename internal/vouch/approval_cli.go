@@ -131,7 +131,7 @@ func transactionApprove(
 	decisionValue := flags.String("decision", string(model.ApprovalApprove), "approve, reject, or revise")
 	reason := flags.String("reason", "", "required for reject or revise")
 	ttl := flags.Duration("ttl", 5*time.Minute, "signed decision lifetime, maximum 15 minutes")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}

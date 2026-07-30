@@ -15,9 +15,9 @@ go test ./...
 
 AGENT_IMAGE="$(
   scripts/vouchproductionfixture.sh \
-    --tag vouch-production-fixture:example
+    --tag gatemole-production-fixture:example
 )"
-VOUCH_PRODUCTION_IMAGE="$AGENT_IMAGE" \
+GATEMOLE_PRODUCTION_IMAGE="$AGENT_IMAGE" \
   scripts/vouchproductionbench.sh
 ```
 
@@ -70,7 +70,7 @@ git -C "$REPO" \
 
 The program below is intentionally deterministic so the example is
 reproducible. A real coding-agent image follows the same contract: read
-`$VOUCH_TASK_PATH`, edit `/workspace`, and exit.
+`$GATEMOLE_TASK_PATH`, edit `/workspace`, and exit.
 
 ```sh
 AGENT_SRC="$EXAMPLE_ROOT/auth-hotfix-agent"
@@ -98,7 +98,7 @@ func replace(path, before, after string) error {
 }
 
 func main() {
-	if _, err := os.ReadFile(os.Getenv("VOUCH_TASK_PATH")); err != nil {
+	if _, err := os.ReadFile(os.Getenv("GATEMOLE_TASK_PATH")); err != nil {
 		panic(err)
 	}
 	if err := replace(
@@ -132,12 +132,12 @@ DOCKER
 docker build \
   --network=none \
   --pull=false \
-  --tag vouch-example-auth-agent:local \
+  --tag gatemole-example-auth-agent:local \
   "$AGENT_SRC"
 AGENT_IMAGE="$(
   docker image inspect \
     --format '{{.Id}}' \
-    vouch-example-auth-agent:local
+    gatemole-example-auth-agent:local
 )"
 ```
 
@@ -148,7 +148,7 @@ deployments normally use a registry reference of the form
 ### Start the Runtime and run the task
 
 ```sh
-go install ./cmd/vouch ./cmd/vouchd
+go install ./cmd/vouch ./cmd/gatemoled
 
 # This fixture uses an ad-hoc local image ID below, so initialize only the
 # repository-local Runtime identity. Named production profiles are registered
@@ -156,15 +156,15 @@ go install ./cmd/vouch ./cmd/vouchd
 vouch --repo "$REPO" runtime init
 
 RUNTIME="$EXAMPLE_ROOT/runtime"
-SOCKET="$RUNTIME/vouchd.sock"
+SOCKET="$RUNTIME/gatemoled.sock"
 mkdir -p "$RUNTIME"
 
-vouchd \
+gatemoled \
   --repo "$REPO" \
   --db "$RUNTIME/kernel.db" \
   --socket "$SOCKET" \
   --transaction-root "$RUNTIME/transactions" \
-  >"$RUNTIME/vouchd.log" 2>&1 &
+  >"$RUNTIME/gatemoled.log" 2>&1 &
 DAEMON_PID=$!
 
 while [ ! -S "$SOCKET" ]; do
@@ -251,7 +251,7 @@ The operator uses its short-lived OIDC token for admission, execution,
 verification, and preparation:
 
 ```sh
-export VOUCH_IDENTITY_TOKEN="$PAYMENTS_OPERATOR_TOKEN"
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_OPERATOR_TOKEN"
 ```
 
 The allowed release ref must already exist at the transaction's exact base
@@ -266,7 +266,7 @@ The developer starts exactly one admitted task:
 
 ```sh
 vouch --repo /srv/repos/payments-api run \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
   --run run:pay-1842 \
@@ -277,17 +277,17 @@ vouch --repo /srv/repos/payments-api run \
 
 The coding agent receives the task and detached worktree. It can reach only
 the transaction-specific model broker. `OPENAI_API_KEY` inside the container is
-a short-lived broker token; the provider key remains in `vouchd`. Direct
+a short-lived broker token; the provider key remains in `gatemoled`. Direct
 Internet access, the source checkout, daemon socket, GitHub token and production
 database credentials are absent.
 
 After the agent exits, the team independently verifies the frozen tree:
 
 ```sh
-VERIFIER_IMAGE="$(cat /etc/vouch/images/go-verifier.ref)"
+VERIFIER_IMAGE="$(cat /etc/gatemole/images/go-verifier.ref)"
 
 vouch --repo /srv/repos/payments-api tx verify \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
   --name auth-tests \
@@ -295,7 +295,7 @@ vouch --repo /srv/repos/payments-api tx verify \
   -- /usr/local/bin/run-auth-tests
 
 vouch --repo /srv/repos/payments-api tx prepare \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
   --git-ref refs/heads/agent-release/pay-1842
@@ -305,10 +305,10 @@ The verifier image and command must exactly match a daemon-owned verifier
 profile. A security reviewer then signs the exact frozen approval package:
 
 ```sh
-export VOUCH_IDENTITY_TOKEN="$PAYMENTS_REVIEWER_TOKEN"
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_REVIEWER_TOKEN"
 
 vouch --repo /srv/repos/payments-api tx approve \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
   --key /secure/payments-reviewer.key \
@@ -322,10 +322,10 @@ The issuer must exactly match the trusted OIDC issuer. A different release
 identity performs release:
 
 ```sh
-export VOUCH_IDENTITY_TOKEN="$PAYMENTS_RELEASER_TOKEN"
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_RELEASER_TOKEN"
 
 vouch --repo /srv/repos/payments-api tx release \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --id tx:pay-1842 \
   --actor operator:payments-release \
@@ -344,7 +344,7 @@ authority:
 
 ```sh
 vouch --repo /srv/repos/orders-api run \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace database \
   --id tx:orders-297 \
   --intent-file tickets/ORDERS-297.md \

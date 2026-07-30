@@ -603,7 +603,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			executionPlan.RunID,
 		)
 		config.ModelBroker = &sandbox.ModelBrokerBinding{
-			URL:   "http://vouch-model-broker:8080/v1",
+			URL:   "http://gatemole-model-broker:8080/v1",
 			Token: agentToken, ImageDigest: executionPlan.ModelBroker.ImageDigest,
 			PolicyDigest:      executionPlan.ModelBroker.PolicyDigest,
 			TokenDigest:       "sha256:" + hex.EncodeToString(tokenDigest[:]),
@@ -784,7 +784,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	finished, finishErr := transactionreducer.NextEvent(
 		projection, transactionreducer.EventAgentExecutionFinished,
-		model.Principal{ID: "service:vouchd-runtime", Kind: model.PrincipalService},
+		model.Principal{ID: "service:gatemoled-runtime", Kind: model.PrincipalService},
 		s.now().UTC(),
 		transactionreducer.AgentExecutionFinishedPayload{
 			ExecutionID:  execution.ID,
@@ -1219,7 +1219,7 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		StagedStateDigest: projection.Transaction.StagedStateDigest,
 		Verifier: model.Principal{
 			ID: "service:external-verifier", Kind: model.PrincipalService,
-			Issuer: "vouch-client:external", ClaimsDigest: verifierDigest,
+			Issuer: "gatemole-client:external", ClaimsDigest: verifierDigest,
 		},
 		Independence:   model.VerificationAgentSupplied,
 		VerifierDigest: verifierDigest,
@@ -1525,8 +1525,8 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		EffectSetDigest:   projection.Transaction.EffectSetDigest,
 		StagedStateDigest: projection.Transaction.StagedStateDigest,
 		Verifier: model.Principal{
-			ID: "service:vouch-verifier", Kind: model.PrincipalService,
-			Issuer: "vouchd:oci", ClaimsDigest: verifierClaimsDigest,
+			ID: "service:gatemole-verifier", Kind: model.PrincipalService,
+			Issuer: "gatemoled:oci", ClaimsDigest: verifierClaimsDigest,
 		},
 		Independence:   model.VerificationPlatformRun,
 		VerifierDigest: verifierDigest,

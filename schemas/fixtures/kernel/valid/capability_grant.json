@@ -3,9 +3,9 @@
   "id": "cap:demo-workspace",
   "subject_run_id": "run:demo-001",
   "issuer": {
-    "id": "service:vouchd",
+    "id": "service:gatemoled",
     "kind": "service",
-    "issuer": "vouchd"
+    "issuer": "gatemoled"
   },
   "resource": {
     "kind": "filesystem",

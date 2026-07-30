@@ -46,7 +46,7 @@ Rules:
 random, opaque Runtime ID. The file identifies this local repository Runtime;
 it is not a user identity, signing key or fleet enrollment credential.
 
-Before listening, `vouchd` loads that identity, acquires the repository-local
+Before listening, `gatemoled` loads that identity, acquires the repository-local
 same-host, same-UID `.gatemole/runtime.lock`, validates and canonicalizes the
 transaction staging root, then acquires the separate ledger lock and opens
 SQLite with the expected Runtime ID and enforcement profile. Existing metadata
@@ -65,7 +65,7 @@ deadlines. A success reports the actual Runtime ID and enforcement profile but
 grants no task or execution authority.
 
 For every configured-daemon run/transaction lifecycle or read request, the
-server requires an exact `Vouch-Runtime-ID` header before the handler runs.
+server requires an exact `Gatemole-Runtime-ID` header before the handler runs.
 `/healthz` and `/readyz` are deliberately exempt. Preflight and current v1 task
 admission instead require the expected identity in their validated bodies;
 the product client also sends the header when configured. Legacy v0 replay is
@@ -96,7 +96,7 @@ Runtime ID and enforcement profile plus caller-owned intent, sponsor, agent
 profile, contract limits and an idempotency key. It cannot contain event
 envelopes, lifecycle state, timestamps or authoritative digests.
 
-For a new admission, `vouchd` derives and persists the exact `AgentTask`,
+For a new admission, `gatemoled` derives and persists the exact `AgentTask`,
 content-digest `ExecutionContract`, `AgentRun`, initial capability grants and
 `AgentTransaction` in one database transaction. It authors
 `run.created`, `capabilities.granted`, `run.state_changed` to `admitted`, and
@@ -121,7 +121,7 @@ capability-compilation route.
 ## Live execution authority
 
 Before daemon-owned OCI execution performs workspace ownership changes, starts
-a model broker or launches a container, `vouchd` reads one consistent
+a model broker or launches a container, `gatemoled` reads one consistent
 transaction-keyed authority snapshot. It verifies the complete run and
 transaction event histories, then compiles an execution plan from the current
 task, contract, admitted run, grants and transaction.
@@ -159,7 +159,7 @@ Rules:
 
 - `denied`, `rejected`, `expired`, `committed`, and `failed` are terminal.
 - `unknown` is not success or failure. It means an effect may have occurred and
-  requires connector-specific reconciliation coordinated by `vouchd` or human
+  requires connector-specific reconciliation coordinated by `gatemoled` or human
   resolution.
 - Authorization is persisted before `executing`.
 - `committed` requires a validated receipt.

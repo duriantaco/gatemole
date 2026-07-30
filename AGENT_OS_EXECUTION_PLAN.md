@@ -5,7 +5,7 @@
 > [`AGENT_TRANSACTION_EXECUTION_PLAN.md`](./AGENT_TRANSACTION_EXECUTION_PLAN.md).
 > The canonical hierarchy is now defined by [`README.md`](./README.md) and
 > [`ROADMAP.md`](./ROADMAP.md): Vouch Agent OS is the complete architecture,
-> Vouch Runtime is the customer-side enforcement product, `vouchd` is its
+> Vouch Runtime is the customer-side enforcement product, `gatemoled` is its
 > kernel, and Vouch Control Plane manages Runtime fleets. The run lifecycle,
 > durable event store, capability broker, and connector-driver
 > boundary remain required substrate for the transaction product.
@@ -13,7 +13,7 @@
 ## Purpose
 
 Evolve Vouch from a release-contract compiler and evidence gate into the
-trusted `vouchd` authority kernel inside Vouch Runtime.
+trusted `gatemoled` authority kernel inside Vouch Runtime.
 
 The intended system is not another reasoning framework. Existing agents and
 frameworks should continue to own prompting, planning, model calls, and their
@@ -37,7 +37,7 @@ Implementation status as of 2026-07-23:
 
 - Milestone 0 is implemented: kernel boundary, threat model, semantics, eight
   schemas, strict models, fixtures, reducer, and error taxonomy.
-- Milestone 1 is implemented locally: SQLite event/projection storage, `vouchd`,
+- Milestone 1 is implemented locally: SQLite event/projection storage, `gatemoled`,
   Unix-socket HTTP API, lifecycle CLI, optimistic concurrency, deterministic
   replay, and all-non-terminal restart tests.
 - The first Milestone 2 vertical slice is implemented: execution-contract
@@ -104,7 +104,7 @@ infrastructure.
                          Vouch Control API
                                |
           +--------------------+--------------------+
-          |                 vouchd kernel             |
+          |                 gatemoled kernel             |
           |                                           |
           |  Run supervisor      Contract compiler   |
           |  Admission/scheduler Policy evaluator    |
@@ -122,11 +122,11 @@ infrastructure.
          +---------------------+    +--------------------+
 ```
 
-### `vouchd` authority and Runtime workload subsystems
+### `gatemoled` authority and Runtime workload subsystems
 
 Keep these boundaries explicit:
 
-- The `vouchd` authority subsystem stores contracts, runs, capabilities, policy, approvals,
+- The `gatemoled` authority subsystem stores contracts, runs, capabilities, policy, approvals,
   checkpoints, and decisions.
 - The Runtime workload subsystem executes model operations through agent
   adapters; connector drivers perform authorized downstream operations.
@@ -302,7 +302,7 @@ Goal: define the public semantics before writing a daemon.
 
 Deliverables:
 
-- Architecture decision record for `vouchd` authority versus Runtime workload
+- Architecture decision record for `gatemoled` authority versus Runtime workload
   and connector subsystems.
 - Threat model covering malicious prompts, agents, tools, adapters, evidence,
   and operators.
@@ -325,7 +325,7 @@ Goal: make an agent run a durable first-class object on one machine.
 
 Deliverables:
 
-- `vouchd`, initially exposed over a Unix socket and local HTTP API.
+- `gatemoled`, initially exposed over a Unix socket and local HTTP API.
 - `RunStore` and `EventStore` interfaces.
 - A transactional SQLite implementation for local development.
 - Append-only run events and materialized run state.
@@ -541,7 +541,7 @@ Proposed initial layout:
 
 ```text
 cmd/vouch/                 existing CLI plus run commands
-cmd/vouchd/                local daemon entrypoint
+cmd/gatemoled/                local daemon entrypoint
 internal/vouch/            existing compiler, evidence, and release runtime
 internal/kernel/model/     public kernel resource types and validation
 internal/kernel/reducer/   lifecycle and action state reducers
@@ -619,7 +619,7 @@ authority behavior, not model intelligence.
 
 ## Metrics
 
-Track metrics that reveal whether `vouchd` is functioning as an authority
+Track metrics that reveal whether `gatemoled` is functioning as an authority
 kernel:
 
 - Percentage of privileged actions mediated by the broker.

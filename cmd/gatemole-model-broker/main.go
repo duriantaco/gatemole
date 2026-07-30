@@ -20,7 +20,7 @@ func main() {
 }
 
 func run() int {
-	flags := flag.NewFlagSet("vouch-model-broker", flag.ContinueOnError)
+	flags := flag.NewFlagSet("gatemole-model-broker", flag.ContinueOnError)
 	listen := flags.String("listen", "0.0.0.0:8080", "broker listen address")
 	policyPath := flags.String("policy", "", "model broker policy JSON")
 	receiptsPath := flags.String("receipts", "", "append-only model receipt JSONL")
@@ -33,13 +33,13 @@ func run() int {
 	}
 	if flags.NArg() != 0 || *policyPath == "" || *receiptsPath == "" ||
 		*transactionID == "" || *runID == "" {
-		fmt.Fprintln(os.Stderr, "vouch-model-broker requires --policy, --receipts, --transaction, and --run")
+		fmt.Fprintln(os.Stderr, "gatemole-model-broker requires --policy, --receipts, --transaction, and --run")
 		return 2
 	}
-	agentToken := os.Getenv("VOUCH_MODEL_BROKER_TOKEN")
-	providerToken := os.Getenv("VOUCH_PROVIDER_BEARER_TOKEN")
+	agentToken := os.Getenv("GATEMOLE_MODEL_BROKER_TOKEN")
+	providerToken := os.Getenv("GATEMOLE_PROVIDER_BEARER_TOKEN")
 	if agentToken == "" || providerToken == "" {
-		fmt.Fprintln(os.Stderr, "vouch-model-broker requires transaction and provider credentials in the environment")
+		fmt.Fprintln(os.Stderr, "gatemole-model-broker requires transaction and provider credentials in the environment")
 		return 1
 	}
 	policy, err := modelbroker.LoadPolicy(*policyPath, *production)
@@ -55,7 +55,7 @@ func run() int {
 		return 1
 	}
 	defer recorder.Close()
-	logger := log.New(os.Stderr, "vouch-model-broker: ", log.LstdFlags|log.LUTC)
+	logger := log.New(os.Stderr, "gatemole-model-broker: ", log.LstdFlags|log.LUTC)
 	broker, err := modelbroker.New(modelbroker.Config{
 		Policy: policy, Production: *production,
 		TransactionID: *transactionID, RunID: *runID,

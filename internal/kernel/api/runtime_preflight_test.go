@@ -289,7 +289,7 @@ func TestRuntimePreflightRequiresOperatorInExactNamespaceBeforeEngine(
 	verifier, err := identity.NewVerifier(identity.TrustDocument{
 		Version:                 identity.TrustDocumentVersion,
 		Issuer:                  "https://issuer.example.invalid",
-		Audiences:               []string{"vouch-api"},
+		Audiences:               []string{"gatemole-api"},
 		MaxTokenLifetimeSeconds: 3600,
 		JWKS:                    identity.JWKS{Keys: []identity.JWK{jwk}},
 	})

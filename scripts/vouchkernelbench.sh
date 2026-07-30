@@ -36,8 +36,8 @@ mkdir -p "$OUT_DIR"
 RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouchkernelbench.XXXXXX")"
 REPO="$RUN_DIR/repo"
 VOUCH="$RUN_DIR/vouch"
-VOUCHD="$RUN_DIR/vouchd"
-SOCKET="$REPO/.gatemole/vouchd.sock"
+VOUCHD="$RUN_DIR/gatemoled"
+SOCKET="$REPO/.gatemole/gatemoled.sock"
 DATABASE="$REPO/.gatemole/kernel.db"
 DAEMON_PID=""
 
@@ -63,7 +63,7 @@ start_daemon() {
   "$VOUCHD" --repo "$REPO" --db "$DATABASE" --socket "$SOCKET" \
     --transaction-root "$RUN_DIR/transactions" \
     --allow-unsafe-host-execution \
-    >> "$RUN_DIR/vouchd.stdout" 2>> "$RUN_DIR/vouchd.stderr" &
+    >> "$RUN_DIR/gatemoled.stdout" 2>> "$RUN_DIR/gatemoled.stderr" &
   DAEMON_PID=$!
   for _ in $(seq 1 100); do
     if [[ -S "$SOCKET" ]]; then
@@ -84,13 +84,13 @@ printf '%s\n' 'governed kernel output' > "$REPO/input.txt"
 git -C "$REPO" init --initial-branch=main >/dev/null
 git -C "$REPO" add -- input.txt
 git -C "$REPO" -c user.name='Vouch Kernel Bench' \
-  -c user.email='vouch-kernel-bench@example.invalid' \
+  -c user.email='gatemole-kernel-bench@example.invalid' \
   commit -m fixture >/dev/null
 
 (
   cd "$ROOT"
   go build -o "$VOUCH" ./cmd/vouch
-  go build -o "$VOUCHD" ./cmd/vouchd
+  go build -o "$VOUCHD" ./cmd/gatemoled
 )
 
 "$VOUCH" --repo "$REPO" runtime init >/dev/null

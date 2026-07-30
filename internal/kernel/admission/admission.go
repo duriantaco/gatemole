@@ -41,7 +41,7 @@ type ContractSpec struct {
 	ReleaseContractRef string                        `json:"release_contract_ref,omitempty"`
 }
 
-// Request is the non-authoritative task admission input accepted by vouchd.
+// Request is the non-authoritative task admission input accepted by gatemoled.
 // Digests, event envelopes, timestamps and lifecycle state are intentionally
 // absent.
 type Request struct {
@@ -278,7 +278,7 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 		Namespace:              namespace,
 		ImageDigest:            imageDigest,
 		ContractDigest:         contract.Digest,
-		Principal:              model.Principal{ID: runID, Kind: model.PrincipalRun, Issuer: "vouchd"},
+		Principal:              model.Principal{ID: runID, Kind: model.PrincipalRun, Issuer: "gatemoled"},
 		DelegationChain:        []model.Principal{request.Sponsor},
 		State:                  model.RunCreated,
 		Deadline:               cloneTime(contract.Deadline),
@@ -759,9 +759,9 @@ func createRunEvent(
 
 func daemonPrincipal() model.Principal {
 	return model.Principal{
-		ID:     "service:vouchd",
+		ID:     "service:gatemoled",
 		Kind:   model.PrincipalService,
-		Issuer: "vouchd",
+		Issuer: "gatemoled",
 	}
 }
 

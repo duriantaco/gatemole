@@ -22,13 +22,13 @@ type transactionDirectorySnapshot struct {
 func DefaultTransactionRoot(repository string) (string, error) {
 	if !filepath.IsAbs(repository) {
 		return "", errors.New(
-			"vouchd: repository root must be absolute before selecting a transaction root",
+			"gatemoled: repository root must be absolute before selecting a transaction root",
 		)
 	}
 	canonicalRepository, err := filepath.EvalSymlinks(repository)
 	if err != nil {
 		return "", fmt.Errorf(
-			"vouchd: canonicalize repository for transaction root: %w",
+			"gatemoled: canonicalize repository for transaction root: %w",
 			err,
 		)
 	}
@@ -49,7 +49,7 @@ func DefaultTransactionRoot(repository string) (string, error) {
 		cacheDirectory, err := os.UserCacheDir()
 		if err != nil {
 			return "", fmt.Errorf(
-				"vouchd: resolve secure per-user transaction base: %w",
+				"gatemoled: resolve secure per-user transaction base: %w",
 				err,
 			)
 		}
@@ -60,7 +60,7 @@ func DefaultTransactionRoot(repository string) (string, error) {
 		)
 		if err != nil {
 			return "", fmt.Errorf(
-				"vouchd: secure per-user transaction base is unavailable: %w",
+				"gatemoled: secure per-user transaction base is unavailable: %w",
 				err,
 			)
 		}
@@ -127,36 +127,36 @@ func prepareTransactionRootForRepository(
 ) (string, error) {
 	if path == "" || !filepath.IsAbs(path) {
 		return "", errors.New(
-			"vouchd: transaction staging root must be an absolute path",
+			"gatemoled: transaction staging root must be an absolute path",
 		)
 	}
 	if info, err := os.Lstat(path); err == nil &&
 		info.Mode()&os.ModeSymlink != 0 {
 		return "", errors.New(
-			"vouchd: transaction staging root must be a real directory, not a symlink",
+			"gatemoled: transaction staging root must be a real directory, not a symlink",
 		)
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf(
-			"vouchd: inspect transaction staging root: %w",
+			"gatemoled: inspect transaction staging root: %w",
 			err,
 		)
 	}
 	cleaned, err := canonicalTransactionPath(path)
 	if err != nil {
 		return "", fmt.Errorf(
-			"vouchd: canonicalize transaction staging root: %w",
+			"gatemoled: canonicalize transaction staging root: %w",
 			err,
 		)
 	}
 	if cleaned == filepath.Clean(string(filepath.Separator)) {
 		return "", errors.New(
-			"vouchd: transaction staging root cannot be the filesystem root",
+			"gatemoled: transaction staging root cannot be the filesystem root",
 		)
 	}
 	if repositoryRoot != "" {
 		if !filepath.IsAbs(repositoryRoot) {
 			return "", errors.New(
-				"vouchd: repository root must be absolute before validating transaction staging",
+				"gatemoled: repository root must be absolute before validating transaction staging",
 			)
 		}
 		canonicalRepository, err := canonicalTransactionPath(
@@ -164,7 +164,7 @@ func prepareTransactionRootForRepository(
 		)
 		if err != nil {
 			return "", fmt.Errorf(
-				"vouchd: canonicalize repository before validating transaction staging: %w",
+				"gatemoled: canonicalize repository before validating transaction staging: %w",
 				err,
 			)
 		}
@@ -173,7 +173,7 @@ func prepareTransactionRootForRepository(
 			cleaned,
 		) {
 			return "", errors.New(
-				"vouchd: transaction staging root must be outside and disjoint from the source repository",
+				"gatemoled: transaction staging root must be outside and disjoint from the source repository",
 			)
 		}
 	}
@@ -184,14 +184,14 @@ func prepareTransactionRootForRepository(
 	)
 	if err != nil {
 		return "", fmt.Errorf(
-			"vouchd: secure transaction staging root %s: %w",
+			"gatemoled: secure transaction staging root %s: %w",
 			cleaned,
 			err,
 		)
 	}
 	if !complete {
 		return "", errors.New(
-			"vouchd: transaction staging root was not created completely",
+			"gatemoled: transaction staging root was not created completely",
 		)
 	}
 	return cleaned, nil

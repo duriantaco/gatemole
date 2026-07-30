@@ -14,7 +14,7 @@ Full benchmark documentation lives in
 
 - 10 required scenarios
 - 114 scenario assertions
-- at least 4 tests-passed scenarios blocked by Vouch-specific checks
+- at least 4 tests-passed scenarios blocked by Gatemole-specific checks
 - at least 2 medium/high multi-component scenarios with 25 obligations
 - canary, human escalation, and auto-merge routes all exercised
 - at least 1 invalid-evidence negative control

@@ -32,7 +32,7 @@ func TestJUnitMapConvertsRawPytestJUnitToObligationJUnit(t *testing.T) {
 		ManifestPath: manifestPath,
 		JUnitPath:    ".gatemole/artifacts/pytest.xml",
 		TestMapPath:  ".gatemole/test-map.json",
-		Out:          ".gatemole/artifacts/vouch-junit.xml",
+		Out:          ".gatemole/artifacts/gatemole-junit.xml",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestJUnitMapConvertsRawPytestJUnitToObligationJUnit(t *testing.T) {
 	if result.Cases != 1 || !contains(result.CoveredObligations, obligation) {
 		t.Fatalf("expected mapped obligation %s, got %#v", obligation, result)
 	}
-	data := mustReadFile(t, filepath.Join(repo, ".gatemole", "artifacts", "vouch-junit.xml"))
+	data := mustReadFile(t, filepath.Join(repo, ".gatemole", "artifacts", "gatemole-junit.xml"))
 	if !bytes.Contains(data, []byte(`classname="`+obligation+`"`)) {
 		t.Fatalf("mapped JUnit does not contain obligation id: %s", string(data))
 	}
@@ -63,7 +63,7 @@ func TestAttachArtifactWithTestMapUsesMappedJUnit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if artifact.Path != ".gatemole/artifacts/pytest-vouch-junit.xml" {
+	if artifact.Path != ".gatemole/artifacts/pytest-gatemole-junit.xml" {
 		t.Fatalf("expected mapped artifact path, got %s", artifact.Path)
 	}
 	if !contains(artifact.Obligations, obligation) {
@@ -85,7 +85,7 @@ func TestCLIJUnitMap(t *testing.T) {
 		"--manifest", manifestPath,
 		"--junit", ".gatemole/artifacts/pytest.xml",
 		"--test-map", ".gatemole/test-map.json",
-		"--out", ".gatemole/artifacts/vouch-junit.xml",
+		"--out", ".gatemole/artifacts/gatemole-junit.xml",
 		"--json",
 	}, &stdout, &stderr)
 	if code != 0 {
@@ -105,7 +105,7 @@ func TestJUnitMapFailsWhenRequiredObligationHasNoSelector(t *testing.T) {
 		ManifestPath: manifestPath,
 		JUnitPath:    ".gatemole/artifacts/pytest.xml",
 		TestMapPath:  ".gatemole/test-map.json",
-		Out:          ".gatemole/artifacts/vouch-junit.xml",
+		Out:          ".gatemole/artifacts/gatemole-junit.xml",
 	})
 	if err == nil || !strings.Contains(err.Error(), "has no test-map selectors") {
 		t.Fatalf("expected missing selector error, got %v", err)

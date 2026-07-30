@@ -204,12 +204,12 @@ jobs:
       - name: Build local production fixture image
         id: fixture
         run: |
-          image="$(scripts/vouchproductionfixture.sh --tag "vouch-production-fixture:${GITHUB_SHA}")"
+          image="$(scripts/vouchproductionfixture.sh --tag "gatemole-production-fixture:${GITHUB_SHA}")"
           echo "image=$image" >> "$GITHUB_OUTPUT"
 
       - name: Run production acceptance
         env:
-          VOUCH_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
+          GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
         run: scripts/vouchproductionbench.sh
 
   skylos:

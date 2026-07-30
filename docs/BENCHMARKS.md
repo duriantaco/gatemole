@@ -112,7 +112,7 @@ The current acceptance floor is:
 
 - 10 required scenarios
 - 114 scenario assertions
-- at least 4 tests-passed scenarios blocked by Vouch-specific checks
+- at least 4 tests-passed scenarios blocked by Gatemole-specific checks
 - at least 2 medium/high multi-component scenarios with 25 obligations
 - canary, human escalation, and auto-merge routes all exercised
 - at least 1 invalid-evidence negative control
@@ -155,11 +155,11 @@ The multi-component platform manifest touches all three components, so the gate 
 
 ## Baseline Accounting
 
-The benchmark separates Vouch-only catches from cases tests already catch.
+The benchmark separates Gatemole-only catches from cases tests already catch.
 
 Tests-passed block scenarios support the narrow adoption claim: a test-only baseline would continue, while Vouch blocks due to missing release evidence or manifest traceability.
 
-The non-zero test artifact scenario is a negative control. It proves the harness validates artifact exit codes and invalid evidence, but it is not counted as a Vouch-only catch because tests already failed.
+The non-zero test artifact scenario is a negative control. It proves the harness validates artifact exit codes and invalid evidence, but it is not counted as a Gatemole-only catch because tests already failed.
 
 The non-blocking scenarios prove Vouch is not just a blocker. Complete evidence can route to canary, high-risk evidence without canary escalates to a human, and low-risk complete evidence auto-merges.
 

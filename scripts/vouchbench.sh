@@ -779,7 +779,7 @@ add_auth_nonzero_test_artifact() {
       \"tests_passed\": false,
       \"caught_by_tests\": true,
       \"would_continue_without_vouch\": false,
-      \"description\": \"The test runner already failed, so this is a negative-control scenario rather than a Vouch-only catch.\"
+      \"description\": \"The test runner already failed, so this is a negative-control scenario rather than a Gatemole-only catch.\"
     },
     \"expected\": {
       \"decision\": \"block\",
@@ -1107,7 +1107,7 @@ add_docs_low_risk_full_evidence() {
   mkdir -p "$repo/.gatemole/artifacts"
   write_text_file "$repo/.gatemole/artifacts/behavior.json" '{"status":"pass","obligations":["docs.readme.behavior.readme_documents_usage"]}'
   write_text_file "$repo/.gatemole/artifacts/security.json" '{"status":"pass","obligations":["docs.readme.security.no_secrets_introduced"]}'
-  write_text_file "$repo/.gatemole/artifacts/runtime.json" '{"status":"pass","obligations":["docs.readme.runtime_signal.vouch_gate_decision"]}'
+  write_text_file "$repo/.gatemole/artifacts/runtime.json" '{"status":"pass","obligations":["docs.readme.runtime_signal.gatemole_gate_decision"]}'
   write_text_file "$repo/.gatemole/artifacts/rollback.json" '{"status":"pass","obligations":["docs.readme.rollback.revert_change"]}'
   write_text_file "$repo/.gatemole/test-map.json" '{"version":"gatemole.test_map.v0","mappings":{"docs.readme.required_test.documentation_smoke_check":["tests/docs/test_readme.py::test_documentation_smoke_check"]}}'
   write_text_file "$repo/.gatemole/artifacts/tests.xml" '<testsuite name="docs" tests="1" failures="0" errors="0" skipped="0"><testcase classname="tests.docs.test_readme" name="test_documentation_smoke_check" file="tests/docs/test_readme.py"></testcase></testsuite>'
@@ -1246,8 +1246,8 @@ summary = {
     "tests_passed_scenarios": len(tests_passed_rows),
     "tests_failed_scenarios": len(tests_failed_rows),
     "tests_passed_expected_block_scenarios": len([row for row in rows if row["baseline"]["tests_passed"] and row["expected"]["decision"] == "block"]),
-    "tests_passed_scenarios_vouch_blocked": len(tests_passed_block_rows),
-    "tests_failed_scenarios_vouch_blocked": len([row for row in tests_failed_rows if row["actual"]["decision"] == "block"]),
+    "tests_passed_scenarios_gatemole_blocked": len(tests_passed_block_rows),
+    "tests_failed_scenarios_gatemole_blocked": len([row for row in tests_failed_rows if row["actual"]["decision"] == "block"]),
     "nonblocking_policy_routes": len(nonblocking_rows),
     "nonblocking_policy_routes_met": sum(1 for row in nonblocking_rows if row["actual"]["decision"] == row["expected"]["decision"]),
     "full_coverage_block_scenarios": len(full_coverage_block_rows),
@@ -1282,7 +1282,7 @@ criterion(
     len(tests_passed_block_rows) >= 4,
     ">=4",
     len(tests_passed_block_rows),
-    "at least four tests-passed scenarios must still be blocked by Vouch-specific checks",
+    "at least four tests-passed scenarios must still be blocked by Gatemole-specific checks",
 )
 criterion(
     criteria,
@@ -1370,7 +1370,7 @@ lines.extend([
     f"- Tests-passed scenarios: {summary['tests_passed_scenarios']}/{summary['scenario_count']}",
     f"- Tests-failed negative controls: {summary['tests_failed_scenarios']}/{summary['scenario_count']}",
     f"- Tests-passed scenarios expected to block: {summary['tests_passed_expected_block_scenarios']}",
-    f"- Tests-passed scenarios Vouch blocked: {summary['tests_passed_scenarios_vouch_blocked']}/{summary['tests_passed_expected_block_scenarios']}",
+    f"- Tests-passed scenarios Vouch blocked: {summary['tests_passed_scenarios_gatemole_blocked']}/{summary['tests_passed_expected_block_scenarios']}",
     f"- Non-blocking policy routes matched: {summary['nonblocking_policy_routes_met']}/{summary['nonblocking_policy_routes']}",
     f"- Full-coverage block scenarios: {summary['full_coverage_block_scenarios']}",
     f"- Medium/high scale scenarios: {summary['medium_high_scale_scenarios']} with max {summary['max_obligations_in_scenario']} obligations",

@@ -33,7 +33,7 @@ func TestResolveNamedAgentProfileBindsDescriptorAndFinalCommand(t *testing.T) {
 		resolved.ImageDigest != testAgentImageDigest {
 		t.Fatalf("unexpected resolved profile: %#v", resolved)
 	}
-	wantCommand := []string{"/opt/vouch-agent", "serve", "--task-mode", "safe"}
+	wantCommand := []string{"/opt/gatemole-agent", "serve", "--task-mode", "safe"}
 	if strings.Join(resolved.Command, "\x00") != strings.Join(wantCommand, "\x00") {
 		t.Fatalf("command=%q, want %q", resolved.Command, wantCommand)
 	}
@@ -48,7 +48,7 @@ func TestResolveNamedAgentProfileBindsDescriptorAndFinalCommand(t *testing.T) {
 	if binding.ID != "coding-agent" ||
 		binding.Digest == "" ||
 		binding.ImageDigest != testAgentImageDigest ||
-		binding.Entrypoint != "/opt/vouch-agent" ||
+		binding.Entrypoint != "/opt/gatemole-agent" ||
 		binding.CommandDigest != wantCommandDigest {
 		t.Fatalf("unexpected task binding: %#v", binding)
 	}
@@ -209,7 +209,7 @@ func TestTopLevelTransactionAliasesRemainThin(t *testing.T) {
 func TestTopLevelTransactionAliasesAcceptPositionalIDAndDefaultLocalNamespace(t *testing.T) {
 	normalized, err := normalizeTopLevelTransactionArgs([]string{
 		"tx:auth-fix",
-		"--socket", "/tmp/vouchd.sock",
+		"--socket", "/tmp/gatemoled.sock",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestTopLevelTransactionAliasesAcceptPositionalIDAndDefaultLocalNamespace(t 
 	for _, required := range []string{
 		"--namespace\x00local",
 		"--id\x00tx:auth-fix",
-		"--socket\x00/tmp/vouchd.sock",
+		"--socket\x00/tmp/gatemoled.sock",
 	} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("normalized args %q do not contain %q", normalized, required)
@@ -254,7 +254,7 @@ func validAgentProfileForTest() agentProfileEntry {
 			Runtime: model.AgentRuntime{
 				Adapter:        "oci",
 				AdapterVersion: "v1",
-				Entrypoint:     []string{"/opt/vouch-agent", "serve"},
+				Entrypoint:     []string{"/opt/gatemole-agent", "serve"},
 			},
 			SourceDigest: testAgentSourceDigest,
 			Publisher: model.Principal{

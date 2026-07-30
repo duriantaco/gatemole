@@ -54,7 +54,7 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 		"kernel.db-wal\n",
 		"kernel.db.lock\n",
 		"runtime.lock\n",
-		"vouchd.sock\n",
+		"gatemoled.sock\n",
 		"runtime.json\n",
 	} {
 		if !bytes.Contains(ignore, []byte(entry)) {
@@ -565,7 +565,7 @@ func TestRuntimeDoctorUsesDaemonPreflightAsAuthority(t *testing.T) {
 	identity := initializeRuntimeIdentityForDoctorTest(t, repo)
 	profile := validAgentProfileForTest()
 	profilesPath := writeAgentProfilesForTest(t, repo, profile)
-	socketPath := filepath.Join(repo, ".gatemole", "vouchd.sock")
+	socketPath := filepath.Join(repo, ".gatemole", "gatemoled.sock")
 
 	preflightCalls := 0
 	probes := runtimeDoctorProbes{
@@ -662,7 +662,7 @@ func TestRuntimeDoctorClassifiesProfileRejectionBeforeEngine(
 ) {
 	repo := runtimeGitRepoForTest(t)
 	identity := initializeRuntimeIdentityForDoctorTest(t, repo)
-	socketPath := filepath.Join(repo, ".gatemole", "vouchd.sock")
+	socketPath := filepath.Join(repo, ".gatemole", "gatemoled.sock")
 	probes := runtimeDoctorProbes{
 		gitRoot: func(context.Context, string) (string, error) {
 			return repo, nil
@@ -849,7 +849,7 @@ func runtimeGitRepoForTest(t *testing.T) string {
 	command = exec.Command(
 		"git", "-C", repo,
 		"-c", "user.name=Vouch Test",
-		"-c", "user.email=vouch-test@example.invalid",
+		"-c", "user.email=gatemole-test@example.invalid",
 		"commit", "--allow-empty", "--quiet", "-m", "initial",
 	)
 	if output, err := command.CombinedOutput(); err != nil {
@@ -903,7 +903,7 @@ func doctorCheckStatusForTest(result runtimeDoctorResult, name string) string {
 
 type runtimeSocketInfoForTest struct{}
 
-func (runtimeSocketInfoForTest) Name() string       { return "vouchd.sock" }
+func (runtimeSocketInfoForTest) Name() string       { return "gatemoled.sock" }
 func (runtimeSocketInfoForTest) Size() int64        { return 0 }
 func (runtimeSocketInfoForTest) Mode() os.FileMode  { return os.ModeSocket | 0o600 }
 func (runtimeSocketInfoForTest) ModTime() time.Time { return time.Time{} }

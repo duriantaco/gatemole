@@ -12,7 +12,7 @@
           "adapter": "oci",
           "adapter_version": "v1",
           "entrypoint": [
-            "/opt/vouch-agent",
+            "/opt/gatemole-agent",
             "serve"
           ]
         },

@@ -1,6 +1,6 @@
 # Local Agent Kernel
 
-Vouch Runtime includes a single-machine `vouchd` authority kernel. This
+Vouch Runtime includes a single-machine `gatemoled` authority kernel. This
 document describes its lower-level run/action substrate; the supported
 production Runtime path adds the OCI sandbox, OIDC authorization, signed
 approvals, model broker, verification and Git commit coordinator described in
@@ -28,7 +28,7 @@ their existing CLI behavior.
 - Append-only hash-chained events plus byte-replayable materialized run state.
 - SQLite transactions, optimistic event cursors, namespace predicates, and
   restart recovery.
-- `vouchd` over a mode-`0600` Unix socket and `vouch daemon` as a convenience.
+- `gatemoled` over a mode-`0600` Unix socket and `vouch daemon` as a convenience.
 - Run create, inspect, list, event, pause, resume, cancel and capability
   installation commands. Pause, resume and cancel currently transition only
   the lower-level run record; they do not control a running production OCI

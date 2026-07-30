@@ -58,7 +58,7 @@ func recoverAgentExecutions(
 		event, err := transactionreducer.NextEvent(
 			projection,
 			transactionreducer.EventAgentExecutionFinished,
-			model.Principal{ID: "service:vouchd-recovery", Kind: model.PrincipalService},
+			model.Principal{ID: "service:gatemoled-recovery", Kind: model.PrincipalService},
 			now().UTC(),
 			transactionreducer.AgentExecutionFinishedPayload{
 				ExecutionID:  execution.ID,

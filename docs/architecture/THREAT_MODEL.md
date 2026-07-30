@@ -38,7 +38,7 @@ Initially trusted:
 - Event and materialized-state transaction boundary.
 - Capability resolution and policy evaluator.
 - Action broker and trusted driver code.
-- Local host isolation used to protect `vouchd` and its store.
+- Local host isolation used to protect `gatemoled` and its store.
 - Operator identity provider and configured trust roots.
 
 These components are still treated as fallible and must emit enough state for

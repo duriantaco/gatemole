@@ -20,7 +20,7 @@
       "principal": {
         "id": "run:demo-001",
         "kind": "run",
-        "issuer": "vouchd"
+        "issuer": "gatemoled"
       },
       "delegation_chain": [
         {

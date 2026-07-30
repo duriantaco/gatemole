@@ -6,7 +6,7 @@ usage() {
 }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE_TAG="vouch-production-fixture:local"
+IMAGE_TAG="gatemole-production-fixture:local"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vouch-production-fixture.XXXXXX")"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gatemole-production-fixture.XXXXXX")"
 cleanup() {
   rm -rf "$BUILD_DIR"
 }
@@ -54,19 +54,19 @@ func main() {
 	if os.Getuid() == 0 {
 		fail(90, "fixture must run as a non-root user")
 	}
-	switch os.Getenv("VOUCH_RUNTIME_ROLE") {
+	switch os.Getenv("GATEMOLE_RUNTIME_ROLE") {
 	case "agent":
 		runAgent()
 	case "verifier":
 		runVerifier()
 	default:
-		fail(89, "unexpected VOUCH_RUNTIME_ROLE")
+		fail(89, "unexpected GATEMOLE_RUNTIME_ROLE")
 	}
 }
 
 func runAgent() {
-	taskPath := os.Getenv("VOUCH_TASK_PATH")
-	if taskPath != "/vouch/task.json" {
+	taskPath := os.Getenv("GATEMOLE_TASK_PATH")
+	if taskPath != "/gatemole/task.json" {
 		fail(86, "agent task path is not the fixed read-only mount")
 	}
 	taskData, err := os.ReadFile(taskPath)
@@ -83,14 +83,14 @@ func runAgent() {
 	if task.Intent != expectedTaskIntent {
 		fail(86, "agent task envelope contains an unexpected intent")
 	}
-	taskDigest := os.Getenv("VOUCH_TASK_DIGEST")
+	taskDigest := os.Getenv("GATEMOLE_TASK_DIGEST")
 	if !validSHA256Digest(taskDigest) || taskDigest != task.Digest {
 		fail(86, "agent task digest is invalid or does not match the envelope")
 	}
 	if err := os.WriteFile(taskPath, []byte("forbidden"), 0o600); err == nil {
 		fail(87, "agent task envelope is writable")
 	}
-	if err := os.WriteFile("/vouch-rootfs-probe", []byte("forbidden"), 0o600); err == nil {
+	if err := os.WriteFile("/gatemole-rootfs-probe", []byte("forbidden"), 0o600); err == nil {
 		fail(91, "container root filesystem is writable")
 	}
 	for _, environment := range os.Environ() {
@@ -188,7 +188,7 @@ fi
 GO111MODULE=off CGO_ENABLED=0 GOOS=linux GOARCH="$docker_arch" go build \
   -trimpath \
   -ldflags='-s -w -buildid=' \
-  -o "$BUILD_DIR/vouch-production-fixture" \
+  -o "$BUILD_DIR/gatemole-production-fixture" \
   "$BUILD_DIR/main.go"
 
 docker build \

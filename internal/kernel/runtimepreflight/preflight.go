@@ -1,5 +1,5 @@
 // Package runtimepreflight defines the versioned, non-authoritative Runtime
-// diagnostic contract shared by vouchd and local clients. Successful preflight
+// diagnostic contract shared by gatemoled and local clients. Successful preflight
 // never grants authority; admission and launch independently recheck policy.
 package runtimepreflight
 

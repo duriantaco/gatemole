@@ -35,7 +35,7 @@ kernel.db-shm
 kernel.db-wal
 kernel.db.lock
 runtime.lock
-vouchd.sock
+gatemoled.sock
 runtime.json
 `)
 
@@ -444,7 +444,7 @@ func missingRuntimeIgnoreEntries(data []byte) []string {
 	var missing []string
 	for _, entry := range []string{
 		"kernel.db", "kernel.db-journal", "kernel.db-shm", "kernel.db-wal",
-		"kernel.db.lock", "runtime.lock", "vouchd.sock", "runtime.json",
+		"kernel.db.lock", "runtime.lock", "gatemoled.sock", "runtime.json",
 	} {
 		if _, exists := lines[entry]; exists {
 			continue
@@ -567,7 +567,7 @@ func runtimeDoctorCommandWithProbes(
 		"agent-profiles", defaultAgentProfiles,
 		"agent profile document",
 	)
-	socketPath := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socketPath := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	timeout := flags.Duration("timeout", 5*time.Second, "timeout for each external readiness check")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -1017,7 +1017,7 @@ func runDaemonDoctorChecks(
 		"daemon",
 		"pass",
 		fmt.Sprintf(
-			"vouchd accepted Runtime %s using the %s enforcement profile",
+			"gatemoled accepted Runtime %s using the %s enforcement profile",
 			preflight.RuntimeID,
 			preflight.EnforcementProfile,
 		),
@@ -1246,7 +1246,7 @@ var runtimeLocalStatePaths = []string{
 	".gatemole/kernel.db-wal",
 	".gatemole/kernel.db.lock",
 	".gatemole/runtime.lock",
-	".gatemole/vouchd.sock",
+	".gatemole/gatemoled.sock",
 }
 
 func trackedRuntimeState(

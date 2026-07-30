@@ -506,7 +506,7 @@ func TestRawGitContentDriversNeverExecuteAndMaterializationIsExact(t *testing.T)
 	mustWrite(
 		t,
 		filepath.Join(repository, ".gitattributes"),
-		[]byte("*.txt filter=vouch-evil diff=vouch-evil\n"),
+		[]byte("*.txt filter=gatemole-evil diff=gatemole-evil\n"),
 	)
 	mustWrite(t, filepath.Join(repository, ".gitignore"), []byte("ignored.secret\n"))
 	mustWrite(t, filepath.Join(repository, "payload.txt"), []byte("base raw payload\n"))
@@ -527,16 +527,16 @@ func TestRawGitContentDriversNeverExecuteAndMaterializationIsExact(t *testing.T)
 	driver := filepath.Join(t.TempDir(), "content-driver")
 	mustWrite(t, driver, []byte(
 		"#!/bin/sh\n"+
-			"printf 'invoked\\n' >> \"$VOUCH_TEST_FILTER_MARKER\"\n"+
+			"printf 'invoked\\n' >> \"$GATEMOLE_TEST_FILTER_MARKER\"\n"+
 			"if [ \"$#\" -gt 0 ]; then cat \"$1\"; else cat; fi\n",
 	))
 	if err := os.Chmod(driver, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_TEST_FILTER_MARKER", marker)
-	runGit(t, repository, "config", "filter.vouch-evil.clean", driver)
-	runGit(t, repository, "config", "filter.vouch-evil.smudge", driver)
-	runGit(t, repository, "config", "diff.vouch-evil.textconv", driver)
+	t.Setenv("GATEMOLE_TEST_FILTER_MARKER", marker)
+	runGit(t, repository, "config", "filter.gatemole-evil.clean", driver)
+	runGit(t, repository, "config", "filter.gatemole-evil.smudge", driver)
+	runGit(t, repository, "config", "diff.gatemole-evil.textconv", driver)
 
 	manager, err := New()
 	if err != nil {
@@ -859,17 +859,17 @@ func TestPrepareCommitUsesApprovedTreeWhenWorktreeMutatesBeforeCommitTree(t *tes
 	mustWrite(t, shim, []byte(
 		"#!/bin/sh\n"+
 			"if [ \"$1\" = \"commit-tree\" ]; then\n"+
-			"  printf 'unapproved\\n' > \"$VOUCH_TEST_APPROVED_PATH\"\n"+
-			"  printf 'outside\\n' > \"$VOUCH_TEST_OUTSIDE_PATH\"\n"+
+			"  printf 'unapproved\\n' > \"$GATEMOLE_TEST_APPROVED_PATH\"\n"+
+			"  printf 'outside\\n' > \"$GATEMOLE_TEST_OUTSIDE_PATH\"\n"+
 			"fi\n"+
-			"exec \"$VOUCH_TEST_REAL_GIT\" \"$@\"\n",
+			"exec \"$GATEMOLE_TEST_REAL_GIT\" \"$@\"\n",
 	))
 	if err := os.Chmod(shim, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_TEST_REAL_GIT", realGit)
-	t.Setenv("VOUCH_TEST_APPROVED_PATH", approvedPath)
-	t.Setenv("VOUCH_TEST_OUTSIDE_PATH", outsidePath)
+	t.Setenv("GATEMOLE_TEST_REAL_GIT", realGit)
+	t.Setenv("GATEMOLE_TEST_APPROVED_PATH", approvedPath)
+	t.Setenv("GATEMOLE_TEST_OUTSIDE_PATH", outsidePath)
 	manager.gitPath = shim
 
 	prepared, err := manager.PrepareCommit(context.Background(), workspace, plan)
@@ -1088,17 +1088,17 @@ func TestPublishNoDerefCASCannotMoveReferentDuringSymbolicRefRace(t *testing.T) 
 			"    printf 'missing --no-deref\\n' >&2\n"+
 			"    exit 97\n"+
 			"  fi\n"+
-			"  \"$VOUCH_TEST_REAL_GIT\" symbolic-ref \"$VOUCH_TEST_TARGET_REF\" refs/heads/main || exit $?\n"+
-			"  : > \"$VOUCH_TEST_UPDATE_MARKER\"\n"+
+			"  \"$GATEMOLE_TEST_REAL_GIT\" symbolic-ref \"$GATEMOLE_TEST_TARGET_REF\" refs/heads/main || exit $?\n"+
+			"  : > \"$GATEMOLE_TEST_UPDATE_MARKER\"\n"+
 			"fi\n"+
-			"exec \"$VOUCH_TEST_REAL_GIT\" \"$@\"\n",
+			"exec \"$GATEMOLE_TEST_REAL_GIT\" \"$@\"\n",
 	))
 	if err := os.Chmod(shim, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_TEST_REAL_GIT", realGit)
-	t.Setenv("VOUCH_TEST_TARGET_REF", "refs/heads/release/race")
-	t.Setenv("VOUCH_TEST_UPDATE_MARKER", marker)
+	t.Setenv("GATEMOLE_TEST_REAL_GIT", realGit)
+	t.Setenv("GATEMOLE_TEST_TARGET_REF", "refs/heads/release/race")
+	t.Setenv("GATEMOLE_TEST_UPDATE_MARKER", marker)
 	manager.gitPath = shim
 
 	result, err := manager.PublishCommit(context.Background(), workspace, PreparedCommit{
@@ -1195,7 +1195,7 @@ func createRepository(t *testing.T) string {
 	runGit(t, repository, "add", "--", "internal/auth/middleware.go", "delete.txt")
 	tree := runGit(t, repository, "write-tree")
 	commit := runGitWithInput(t, repository, []byte("base\n"),
-		"-c", "user.name=Vouch Test", "-c", "user.email=vouch-test@example.invalid",
+		"-c", "user.name=Vouch Test", "-c", "user.email=gatemole-test@example.invalid",
 		"commit-tree", tree, "-F", "-")
 	runGit(t, repository, "update-ref", "refs/heads/main", commit)
 	return repository

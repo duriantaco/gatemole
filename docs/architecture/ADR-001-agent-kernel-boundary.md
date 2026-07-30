@@ -25,7 +25,7 @@ tool, agent adapter, or external data is malicious or simply wrong.
 
 ## Decision
 
-Vouch Runtime will contain the `vouchd` user-space kernel inside a
+Vouch Runtime will contain the `gatemoled` user-space kernel inside a
 customer-side enforcement boundary. It will run above a host operating system
 and integrate with existing agent frameworks, sandboxes, identity systems,
 durable execution engines and protocols. The organization-wide Vouch Control
@@ -56,9 +56,9 @@ Those systems connect through adapters. An adapter may report observations and
 request actions; it cannot create authoritative decisions, capabilities, or
 committed action receipts.
 
-## `vouchd` authority subsystem
+## `gatemoled` authority subsystem
 
-The local `vouchd` authority subsystem is authoritative for:
+The local `gatemoled` authority subsystem is authoritative for:
 
 - `AgentImage`
 - `ExecutionContract`
@@ -130,7 +130,7 @@ Therefore:
 
 The first implementation is local and single-node:
 
-- A `vouchd` process.
+- A `gatemoled` process.
 - HTTP-framed control API over a mode-`0600` Unix socket.
 - SQLite transactions for events and materialized state.
 - Execution contracts compiled into time-bounded capability grants.

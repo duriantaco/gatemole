@@ -30,7 +30,7 @@ Implemented locally on 2026-07-23:
   checkpoints, and policy decisions.
 - Deterministic run reducer and append-only, hash-chained event history.
 - Transactional SQLite event/projection persistence and restart recovery.
-- `vouchd` over a mode-`0600` Unix socket.
+- `gatemoled` over a mode-`0600` Unix socket.
 - Capability compilation and traversal-resistant filesystem mediation.
 - Persist-before-execute action audit and unknown-without-retry recovery.
 - VouchKernelBench acceptance coverage.

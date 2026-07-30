@@ -83,7 +83,7 @@ func TestAppendTransactionEventsIfRunCurrentConflictsWithoutAppend(
 	}
 
 	actor := model.Principal{
-		ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd",
+		ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled",
 	}
 	runEvent, err := eventlog.Next(
 		fixture.admission.Run,
@@ -161,7 +161,7 @@ func prepareLaunchClaim(
 		t.Fatalf("admit task: created=%v err=%v", created, err)
 	}
 	actor := model.Principal{
-		ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd",
+		ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled",
 	}
 	startedAt := admitted.Task.CreatedAt.Add(time.Second)
 	started, err := transactionreducer.NextEvent(

@@ -336,7 +336,7 @@ func validAdmissionRequest() Request {
 			Digest:        testDigest("a"),
 			RuntimeClass:  "oci",
 			ImageDigest:   testDigest("b"),
-			Entrypoint:    "/opt/vouch-agent",
+			Entrypoint:    "/opt/gatemole-agent",
 			CommandDigest: testDigest("c"),
 		},
 		Sponsor: model.Principal{

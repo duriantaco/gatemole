@@ -129,8 +129,8 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 	_ = os.Remove(readyPath)
 	envPath := filepath.Join(config.ReceiptDirectory, "broker.env")
 	envData := []byte(
-		"VOUCH_MODEL_BROKER_TOKEN=" + config.AgentToken + "\n" +
-			"VOUCH_PROVIDER_BEARER_TOKEN=" + config.ProviderBearerToken + "\n",
+		"GATEMOLE_MODEL_BROKER_TOKEN=" + config.AgentToken + "\n" +
+			"GATEMOLE_PROVIDER_BEARER_TOKEN=" + config.ProviderBearerToken + "\n",
 	)
 	if err := os.WriteFile(envPath, envData, 0o600); err != nil {
 		return ModelBrokerSession{}, fmt.Errorf("write model broker secret environment: %w", err)
@@ -158,7 +158,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 	runArguments := []string{
 		"run", "--detach", "--rm",
 		"--name=" + session.ContainerName,
-		"--hostname=vouch-model-broker",
+		"--hostname=gatemole-model-broker",
 		"--network=bridge",
 		"--pull=never",
 		"--read-only",
@@ -171,19 +171,19 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		"--env-file=" + envPath,
 		"--tmpfs=/tmp:rw,nosuid,nodev,size=" + strconv.FormatInt(config.TmpfsBytes, 10) +
 			",uid=" + strconv.Itoa(config.UID) + ",gid=" + strconv.Itoa(config.GID) + ",mode=1777",
-		"--mount=type=bind,src=" + runtimePolicyPath + ",dst=/run/vouch/model-policy.json,readonly",
-		"--mount=type=bind,src=" + config.ReceiptDirectory + ",dst=/var/lib/vouch",
+		"--mount=type=bind,src=" + runtimePolicyPath + ",dst=/run/gatemole/model-policy.json,readonly",
+		"--mount=type=bind,src=" + config.ReceiptDirectory + ",dst=/var/lib/gatemole",
 	}
 	runArguments = append(runArguments, labels...)
 	runArguments = append(
 		runArguments,
 		config.Image,
 		"--listen", "0.0.0.0:8080",
-		"--policy", "/run/vouch/model-policy.json",
-		"--receipts", "/var/lib/vouch/model-calls.jsonl",
+		"--policy", "/run/gatemole/model-policy.json",
+		"--receipts", "/var/lib/gatemole/model-calls.jsonl",
 		"--transaction", config.TransactionID,
 		"--run", config.RunID,
-		"--ready-file", "/var/lib/vouch/ready",
+		"--ready-file", "/var/lib/gatemole/ready",
 		"--production=true",
 	)
 	if _, err := runEngine(ctx, config.EnginePath, runArguments...); err != nil {
@@ -191,7 +191,7 @@ func StartModelBroker(ctx context.Context, config ModelBrokerConfig) (ModelBroke
 		return ModelBrokerSession{}, fmt.Errorf("start model broker sidecar: %w", err)
 	}
 	connectArguments := []string{
-		"network", "connect", "--alias", "vouch-model-broker",
+		"network", "connect", "--alias", "gatemole-model-broker",
 		session.NetworkName, session.ContainerName,
 	}
 	if _, err := runEngine(ctx, config.EnginePath, connectArguments...); err != nil {
@@ -226,11 +226,11 @@ func RemoveModelBroker(
 }
 
 func ModelBrokerNetworkName(transactionID, runID string) string {
-	return "vouch-net-" + resourceSuffix(transactionID, runID)
+	return "gatemole-net-" + resourceSuffix(transactionID, runID)
 }
 
 func ModelBrokerContainerName(transactionID, runID string) string {
-	return "vouch-broker-" + resourceSuffix(transactionID, runID)
+	return "gatemole-broker-" + resourceSuffix(transactionID, runID)
 }
 
 func resourceSuffix(transactionID, runID string) string {

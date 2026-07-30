@@ -889,7 +889,7 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "  tx create (development-only manual Runtime-bound admission)")
 	fmt.Fprintln(out, "  tx start|worktree|stage|validate|verify|prepare|get|list|effects|events|abort (advanced transaction lifecycle)")
 	fmt.Fprintln(out, "  kernel run get|list|events|transition|pause|resume|cancel (low-level run lifecycle)")
-	fmt.Fprintln(out, "  kernel run create|grant (embedded/unbound compatibility only; vouchd rejects them)")
+	fmt.Fprintln(out, "  kernel run create|grant (embedded/unbound compatibility only; gatemoled rejects them)")
 	fmt.Fprintln(out, "  contracts <command> (optional release-contract verification module)")
 	fmt.Fprintln(out, "  approval keygen --key-id ID --principal ID --class CLASS --private-key FILE --trust-file FILE")
 	fmt.Fprintln(out, "  identity keygen|issue (local OIDC bootstrap and acceptance testing)")

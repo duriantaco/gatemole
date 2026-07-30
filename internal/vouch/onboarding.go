@@ -512,7 +512,7 @@ func defaultMappedJUnitArtifactPath(artifactID string) string {
 	if name == "" {
 		name = "test"
 	}
-	return filepath.ToSlash(filepath.Join(".gatemole", "artifacts", name+"-vouch-junit.xml"))
+	return filepath.ToSlash(filepath.Join(".gatemole", "artifacts", name+"-gatemole-junit.xml"))
 }
 
 func supportedProfile(profile string) bool {
@@ -882,7 +882,7 @@ func gitChangedFiles(repo string, base string, head string) ([]string, error) {
 }
 
 func defaultGitBaseRef(repo string) (string, error) {
-	if base := strings.TrimSpace(os.Getenv("VOUCH_BASE_REF")); base != "" {
+	if base := strings.TrimSpace(os.Getenv("GATEMOLE_BASE_REF")); base != "" {
 		return base, nil
 	}
 	if base := strings.TrimSpace(os.Getenv("GITHUB_BASE_REF")); base != "" {

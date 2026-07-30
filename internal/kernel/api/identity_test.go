@@ -31,7 +31,7 @@ func TestIdentityMiddlewareEnforcesRoleNamespaceAndActorBinding(t *testing.T) {
 		Version: identity.TrustDocumentVersion,
 		Issuer:  "https://issuer.example.invalid",
 		Audiences: []string{
-			"vouch-api",
+			"gatemole-api",
 		},
 		ClockSkewSeconds:        30,
 		MaxTokenLifetimeSeconds: 3600,
@@ -182,7 +182,7 @@ func TestIdentityMiddlewareRequiresApproverRoleAndIssuerBinding(t *testing.T) {
 	verifier, err := identity.NewVerifier(identity.TrustDocument{
 		Version:                 identity.TrustDocumentVersion,
 		Issuer:                  "https://issuer.example.invalid",
-		Audiences:               []string{"vouch-api"},
+		Audiences:               []string{"gatemole-api"},
 		ClockSkewSeconds:        30,
 		MaxTokenLifetimeSeconds: 3600,
 		JWKS:                    identity.JWKS{Keys: []identity.JWK{jwk}},
@@ -253,7 +253,7 @@ func apiIdentityToken(
 	t.Helper()
 	token, err := identity.IssueEd25519(identity.IssueRequest{
 		KeyID: keyID, Issuer: "https://issuer.example.invalid",
-		Audience: "vouch-api", Subject: principalID,
+		Audience: "gatemole-api", Subject: principalID,
 		PrincipalID: principalID, Kind: kind, Namespaces: namespaces, Roles: roles,
 		IssuedAt: now, ExpiresAt: now.Add(15 * time.Minute),
 		TokenID: "token:" + principalID,

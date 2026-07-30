@@ -61,9 +61,9 @@ permissions:
   contents: read
 
 env:
-  VOUCH_MANIFEST: .gatemole/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
-  VOUCH_GATE_RESULT: .gatemole/build/gate-result.json
-  VOUCH_JUNIT: .gatemole/artifacts/pytest.xml
+  GATEMOLE_MANIFEST: .gatemole/manifests/pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}.json
+  GATEMOLE_GATE_RESULT: .gatemole/build/gate-result.json
+  GATEMOLE_JUNIT: .gatemole/artifacts/pytest.xml
 
 jobs:
   vouch:
@@ -86,28 +86,28 @@ jobs:
 
       - name: Create PR manifest
         env:
-          VOUCH_TASK_ID: pr-${{ github.event.pull_request.number }}
-          VOUCH_TASK_SUMMARY: ${{ github.event.pull_request.title }}
-          VOUCH_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
-          VOUCH_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
+          GATEMOLE_TASK_ID: pr-${{ github.event.pull_request.number }}
+          GATEMOLE_TASK_SUMMARY: ${{ github.event.pull_request.title }}
+          GATEMOLE_RUN_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+          GATEMOLE_RUNNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/vouch.yml@${{ github.ref }}
         run: |
           vouch contracts manifest create \
-            --task-id "$VOUCH_TASK_ID" \
-            --summary "$VOUCH_TASK_SUMMARY" \
+            --task-id "$GATEMOLE_TASK_ID" \
+            --summary "$GATEMOLE_TASK_SUMMARY" \
             --agent github-actions \
-            --run-id "$VOUCH_RUN_ID" \
-            --runner-identity "$VOUCH_RUNNER_IDENTITY" \
+            --run-id "$GATEMOLE_RUN_ID" \
+            --runner-identity "$GATEMOLE_RUNNER_IDENTITY" \
             --runner-oidc-issuer https://token.actions.githubusercontent.com \
             --base "origin/${{ github.base_ref }}" \
             --head HEAD \
-            --out "$VOUCH_MANIFEST"
+            --out "$GATEMOLE_MANIFEST"
 
       - name: Run tests for evidence
         id: tests
         run: |
           mkdir -p .gatemole/artifacts
           set +e
-          pytest --junitxml "$VOUCH_JUNIT"
+          pytest --junitxml "$GATEMOLE_JUNIT"
           exit_code=$?
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -116,23 +116,23 @@ jobs:
         if: steps.tests.outputs.exit_code == '0'
         run: |
           vouch contracts manifest attach-artifact \
-            --manifest "$VOUCH_MANIFEST" \
+            --manifest "$GATEMOLE_MANIFEST" \
             --id pytest \
             --kind test_coverage \
-            --path "$VOUCH_JUNIT" \
+            --path "$GATEMOLE_JUNIT" \
             --producer github-actions \
-            --command "pytest --junitxml $VOUCH_JUNIT" \
+            --command "pytest --junitxml $GATEMOLE_JUNIT" \
             --exit-code "${{ steps.tests.outputs.exit_code }}" \
-            --out "$VOUCH_MANIFEST"
+            --out "$GATEMOLE_MANIFEST"
 
       - name: Gate PR
-        run: vouch --manifest "$VOUCH_MANIFEST" gate --github-summary --out "$VOUCH_GATE_RESULT"
+        run: vouch --manifest "$GATEMOLE_MANIFEST" gate --github-summary --out "$GATEMOLE_GATE_RESULT"
 
       - name: Upload Vouch artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vouch-shadow-pr-${{ github.event.pull_request.number }}
+          name: gatemole-shadow-pr-${{ github.event.pull_request.number }}
           path: |
             .gatemole/manifests/
             .gatemole/build/

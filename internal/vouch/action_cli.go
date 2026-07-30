@@ -76,7 +76,7 @@ func filesystemActionCommand(
 	actionID := flags.String("action-id", "", "stable action ID (generated when omitted)")
 	idempotencyKey := flags.String("idempotency-key", "", "idempotency key (generated when omitted)")
 	capabilityHint := flags.String("capability", "", "specific capability grant ID")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}

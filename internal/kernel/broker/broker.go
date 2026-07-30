@@ -413,7 +413,7 @@ func decodeInput(value string) ([]byte, error) {
 }
 
 func servicePrincipal() model.Principal {
-	return model.Principal{ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd"}
+	return model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled"}
 }
 
 func capabilityError(code model.ErrorCode, resource, message string) *model.KernelError {

@@ -80,7 +80,7 @@ vouch --repo /path/to/service run \
   --agent coding-agent
 ```
 
-For OCI execution, `vouch run` first asks `vouchd` to match the exact local
+For OCI execution, `vouch run` first asks `gatemoled` to match the exact local
 Runtime ID, report its enforcement profile, check ledger health and inspect the
 selected pull-never image. A failed preflight creates neither admission
 authority nor a worktree. After a successful preflight, `vouch run` creates and
@@ -111,11 +111,11 @@ profile, pinned image and final command. Daemon-owned OCI agents receive the
 same envelope in a read-only mount:
 
 ```sh
-VOUCH_TASK_PATH=/vouch/task.json
-VOUCH_TASK_DIGEST=<sha256 digest>
+GATEMOLE_TASK_PATH=/gatemole/task.json
+GATEMOLE_TASK_DIGEST=<sha256 digest>
 ```
 
-The agent should read the task from `VOUCH_TASK_PATH`. Do not put credentials
+The agent should read the task from `GATEMOLE_TASK_PATH`. Do not put credentials
 or other secrets in task intent; the envelope is intentionally retained in the
 durable transaction history.
 
@@ -133,7 +133,7 @@ unless they resolve to current v1 authority.
 
 Preflight and admission v1 carry the expected Runtime ID in validated request
 bodies. Every later lifecycle mutation and read against a configured daemon
-must carry the same ID in the `Vouch-Runtime-ID` header. The product `run`,
+must carry the same ID in the `Gatemole-Runtime-ID` header. The product `run`,
 transaction, low-level `kernel` and `action` commands load
 `.gatemole/runtime.json` and use a bound client for every call, including
 long-running agent and verifier operations. Health and readiness are the
@@ -147,16 +147,16 @@ receives:
 
 ```text
 /workspace                 writable detached Git worktree
-/vouch/task.json           read-only admitted AgentTask
-VOUCH_TASK_PATH            /vouch/task.json
-VOUCH_TASK_DIGEST          digest of that exact task
-VOUCH_TRANSACTION_ID       kernel transaction identity
-VOUCH_RUN_ID               kernel run identity
-VOUCH_RUNTIME_ROLE         agent
+/gatemole/task.json           read-only admitted AgentTask
+GATEMOLE_TASK_PATH            /gatemole/task.json
+GATEMOLE_TASK_DIGEST          digest of that exact task
+GATEMOLE_TRANSACTION_ID       kernel transaction identity
+GATEMOLE_RUN_ID               kernel run identity
+GATEMOLE_RUNTIME_ROLE         agent
 ```
 
 The process edits `/workspace` and exits. It must not receive the source
-repository, the `vouchd` socket, Git hosting credentials or downstream
+repository, the `gatemoled` socket, Git hosting credentials or downstream
 production credentials. Vouch re-inspects the worktree, freezes the exact
 effects and records the daemon-authored process receipt.
 
@@ -165,10 +165,10 @@ Example entrypoint:
 ```sh
 #!/bin/sh
 set -eu
-test "$VOUCH_RUNTIME_ROLE" = agent
-test -r "$VOUCH_TASK_PATH"
+test "$GATEMOLE_RUNTIME_ROLE" = agent
+test -r "$GATEMOLE_TASK_PATH"
 cd /workspace
-exec /opt/acme-agent --task-file "$VOUCH_TASK_PATH"
+exec /opt/acme-agent --task-file "$GATEMOLE_TASK_PATH"
 ```
 
 ### No model access
@@ -198,7 +198,7 @@ vouch --repo /path/to/service run \
 
 The agent then receives `OPENAI_BASE_URL` and a transaction-scoped
 `OPENAI_API_KEY` that authenticate only to the internal broker. The real
-provider credential remains in `vouchd`. The broker enforces the configured
+provider credential remains in `gatemoled`. The broker enforces the configured
 origin, model allowlist and request/token ceilings and writes a hash-chained
 receipt ledger.
 
@@ -264,7 +264,7 @@ daemon is rejected during preflight:
 
 ```sh
 vouch --repo /srv/vouch/repository run \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace payments \
   --require-enforcement-profile production \
   --intent "Upgrade the approved payments service" \
@@ -275,7 +275,7 @@ The lower-level `vouch tx create` command remains a development-only manual
 lifecycle entrypoint, but on a real configured Runtime it creates the same
 Runtime/profile-bound v1 task admission rather than raw transaction authority.
 The raw `POST /v0/namespaces/{namespace}/transactions` creation route exists
-only for embedded, unbound compatibility servers and `vouchd` rejects it.
+only for embedded, unbound compatibility servers and `gatemoled` rejects it.
 Existing-transaction operations such as `start|worktree|stage|validate` remain
 available for connector development, recovery and debugging. They do not
 replace the primary task-oriented path. Abort

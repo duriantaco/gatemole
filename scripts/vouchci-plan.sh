@@ -141,7 +141,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       runtimebench=true
       production=true
       ;;
-    cmd/vouchd/*|cmd/vouch-model-broker/*)
+    cmd/gatemoled/*|cmd/gatemole-model-broker/*)
       runtimebench=true
       production=true
       ;;

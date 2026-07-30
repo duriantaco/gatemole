@@ -65,7 +65,7 @@ The production runtime:
 - Persists the exact task intent and its selected agent-profile, image, command,
   transaction and run bindings in a digest-bound `gatemole.agent_task.v0`
   resource. The agent receives that envelope through a separate read-only
-  `/vouch/task.json` mount with `VOUCH_TASK_PATH` and `VOUCH_TASK_DIGEST`;
+  `/gatemole/task.json` mount with `GATEMOLE_TASK_PATH` and `GATEMOLE_TASK_DIGEST`;
   it is never written into the mutable worktree.
 - Rejects client-asserted agent and verification receipts.
 - Uses a read-only container root filesystem, no Linux capabilities,
@@ -73,7 +73,7 @@ The production runtime:
 - Verifies every non-health API request as a signed OIDC token, enforces
   viewer/operator/approver roles and namespace membership, rejects actor
   impersonation, and binds the verified issuer and claims digest into events.
-- Requires the exact `Vouch-Runtime-ID` header on every configured-daemon
+- Requires the exact `Gatemole-Runtime-ID` header on every configured-daemon
   lifecycle and read request. Runtime preflight and admission v1 carry the same
   expected identity in their validated bodies. Health and readiness remain
   unbound liveness/readiness endpoints.
@@ -214,7 +214,7 @@ vouch approval keygen \
   --issuer https://login.example.com/ \
   --class security-reviewer \
   --private-key /secure/operator/reviewer.key \
-  --trust-file /etc/vouch/approval-trust.json
+  --trust-file /etc/gatemole/approval-trust.json
 ```
 
 Give the daemon configuration only the public trust document. The current
@@ -231,7 +231,7 @@ path exists. Restarting the daemon after rotating the public trust document
 loads a new snapshot, changes the approval-trust digest, and invalidates
 transactions prepared under the previous trust set.
 
-Configure `/etc/vouch/identity-trust.json` from the issuer metadata and JWKS.
+Configure `/etc/gatemole/identity-trust.json` from the issuer metadata and JWKS.
 Vouch currently consumes a static trust document rather than performing OIDC
 discovery:
 
@@ -239,13 +239,13 @@ discovery:
 {
   "version": "gatemole.oidc_trust.v0",
   "issuer": "https://login.example.com/",
-  "audiences": ["vouch-production"],
+  "audiences": ["gatemole-production"],
   "clock_skew_seconds": 60,
   "max_token_lifetime_seconds": 3600,
-  "principal_id_claim": "vouch_principal_id",
-  "principal_kind_claim": "vouch_principal_kind",
-  "namespace_claim": "vouch_namespaces",
-  "roles_claim": "vouch_roles",
+  "principal_id_claim": "gatemole_principal_id",
+  "principal_kind_claim": "gatemole_principal_kind",
+  "namespace_claim": "gatemole_namespaces",
+  "roles_claim": "gatemole_roles",
   "jwks": {"keys": [{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "…", "n": "…", "e": "AQAB"}]}
 }
 ```
@@ -256,7 +256,7 @@ The custom claims must contain a Vouch principal ID, `human`, `service`, or
 IdP. `vouch identity keygen` and `vouch identity issue` exist only for local
 bootstrap and acceptance testing; the daemon is not an identity provider.
 
-Configure `/etc/vouch/verifier-profiles.json`. Every profile in the document is
+Configure `/etc/gatemole/verifier-profiles.json`. Every profile in the document is
 a mandatory verification gate for every production transaction:
 
 ```json
@@ -305,17 +305,17 @@ copy signed or digest-bound artifacts between namespaces.
 Start the production daemon:
 
 ```sh
-vouchd \
+gatemoled \
   --repo /srv/vouch/repository \
-  --db /var/lib/vouch/kernel.db \
-  --socket /run/vouch/vouchd.sock \
-  --transaction-root /var/lib/vouch/transactions \
+  --db /var/lib/gatemole/kernel.db \
+  --socket /run/gatemole/gatemoled.sock \
+  --transaction-root /var/lib/gatemole/transactions \
   --runtime-profile production \
   --runtime-engine /usr/bin/docker \
   --allowed-images 'registry.example/agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
-  --verifier-profiles /etc/vouch/verifier-profiles.json \
-  --approval-trust /etc/vouch/approval-trust.json \
-  --identity-trust /etc/vouch/identity-trust.json \
+  --verifier-profiles /etc/gatemole/verifier-profiles.json \
+  --approval-trust /etc/gatemole/approval-trust.json \
+  --identity-trust /etc/gatemole/identity-trust.json \
   --allowed-git-refs 'refs/heads/agent-release/*'
 ```
 
@@ -338,9 +338,9 @@ daemon configuration is outside this narrow hardened execution boundary.
 Set the caller's short-lived access token for every CLI process:
 
 ```sh
-export VOUCH_IDENTITY_TOKEN='eyJ…'
+export GATEMOLE_IDENTITY_TOKEN='eyJ…'
 vouch --repo /srv/vouch/repository tx list \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace engineering
 ```
 
@@ -353,14 +353,14 @@ exact ID to requests from the `run`, transaction, low-level `kernel` and
 `action` surfaces, including reads, lifecycle changes and long-running agent
 or verifier calls. Preflight and admission v1 validate the same binding in
 their versioned bodies. Direct API clients must provide the equivalent
-`Vouch-Runtime-ID` header for other configured-daemon requests.
+`Gatemole-Runtime-ID` header for other configured-daemon requests.
 
 With the daemon running, verify its exact Runtime ID and enforcement profile
 through authoritative preflight:
 
 ```sh
 vouch --repo /srv/vouch/repository doctor \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace engineering \
   --agent coding-agent \
   --require-enforcement-profile production
@@ -370,11 +370,11 @@ For hosted-model agents, preload the digest-pinned broker image, provide the
 provider secret only to the daemon, and add:
 
 ```sh
-export OPENAI_API_KEY='provider-secret-visible-only-to-vouchd'
-vouchd \
+export OPENAI_API_KEY='provider-secret-visible-only-to-gatemoled'
+gatemoled \
   … \
-  --model-broker-image 'registry.example/vouch-model-broker@sha256:…' \
-  --model-broker-policy /etc/vouch/model-policy.json \
+  --model-broker-image 'registry.example/gatemole-model-broker@sha256:…' \
+  --model-broker-policy /etc/gatemole/model-policy.json \
   --model-provider-token-env OPENAI_API_KEY
 ```
 
@@ -386,7 +386,7 @@ Model access is still absent by default. Admit it for one task with:
 
 ```sh
 vouch --repo /srv/vouch/repository run \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace engineering \
   --require-enforcement-profile production \
   --intent "Fix the approved authentication regression" \
@@ -418,7 +418,7 @@ kernel-reported UID owns that socket. The daemon likewise accepts only clients
 with its own effective UID. The protected parent and same OS account remain
 part of this same-host boundary; same-UID malware or root can still impersonate
 the daemon. Run the daemon under a dedicated OS account; neither peer-UID
-checks nor `Vouch-Runtime-ID` provide cryptographic same-UID attestation.
+checks nor `Gatemole-Runtime-ID` provide cryptographic same-UID attestation.
 Operators, reviewers and releasers must therefore invoke the connected CLI
 under that same OS account. Their OIDC tokens preserve logical separation of
 duties, but do not create an OS-account boundary.
@@ -456,8 +456,8 @@ scripts/vouchbench.sh --out /tmp/vouchbench
 scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
 scripts/vouchtransactionbench.sh
 scripts/vouchruntimebench.sh
-image="$(scripts/vouchproductionfixture.sh --tag vouch-production-fixture:acceptance)"
-VOUCH_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+image="$(scripts/vouchproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
+GATEMOLE_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
 ```
 
 The normal Go CI job also enforces formatting and a tidy module graph. The
@@ -476,7 +476,7 @@ publication.
 
 Successful benchmark runs remove their private repository, Go caches, ledger,
 and evidence so local acceptance does not accumulate thousands of temporary
-files. Set `VOUCH_PRODUCTION_KEEP=1` only when those artifacts are needed for
+files. Set `GATEMOLE_PRODUCTION_KEEP=1` only when those artifacts are needed for
 debugging.
 
 ## Backup and restore
@@ -497,7 +497,7 @@ change is an operational change and should preserve enough reserved bytes and
 inodes for Git-object creation, WAL rollback, evidence finalization, and
 incident recovery.
 
-For a simple consistent backup, stop the daemon cleanly, verify no `vouchd`
+For a simple consistent backup, stop the daemon cleanly, verify no `gatemoled`
 process owns the database lock, then snapshot the complete recovery set. Do not
 copy only the SQLite main file while the daemon is running; committed pages may
 still be in the WAL.

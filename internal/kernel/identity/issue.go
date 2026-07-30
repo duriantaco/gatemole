@@ -97,17 +97,17 @@ func IssueEd25519(request IssueRequest, privateKey ed25519.PrivateKey) (string, 
 		return "", err
 	}
 	claimsData, err := json.Marshal(map[string]any{
-		"iss":                  request.Issuer,
-		"sub":                  request.Subject,
-		"aud":                  request.Audience,
-		"exp":                  expiresAt.Unix(),
-		"iat":                  issuedAt.Unix(),
-		"nbf":                  issuedAt.Unix(),
-		"jti":                  request.TokenID,
-		"vouch_principal_id":   request.PrincipalID,
-		"vouch_principal_kind": request.Kind,
-		"vouch_namespaces":     request.Namespaces,
-		"vouch_roles":          request.Roles,
+		"iss":                     request.Issuer,
+		"sub":                     request.Subject,
+		"aud":                     request.Audience,
+		"exp":                     expiresAt.Unix(),
+		"iat":                     issuedAt.Unix(),
+		"nbf":                     issuedAt.Unix(),
+		"jti":                     request.TokenID,
+		"gatemole_principal_id":   request.PrincipalID,
+		"gatemole_principal_kind": request.Kind,
+		"gatemole_namespaces":     request.Namespaces,
+		"gatemole_roles":          request.Roles,
 	})
 	if err != nil {
 		return "", err

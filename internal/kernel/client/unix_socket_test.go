@@ -171,7 +171,7 @@ func listenPrivateUnixSocket(
 	if err := os.Chmod(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	socketPath := filepath.Join(directory, "vouchd.sock")
+	socketPath := filepath.Join(directory, "gatemoled.sock")
 	listener, err := net.ListenUnix(
 		"unix",
 		&net.UnixAddr{Name: socketPath, Net: "unix"},

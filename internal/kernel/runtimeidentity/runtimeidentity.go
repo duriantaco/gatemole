@@ -35,7 +35,7 @@ const (
 	IdentityRelativePath = ControlDirectory + "/runtime.json"
 	// HTTPHeader carries a client's expected Runtime identity on requests that
 	// do not otherwise have a versioned Runtime binding in their body.
-	HTTPHeader = "Vouch-Runtime-ID"
+	HTTPHeader = "Gatemole-Runtime-ID"
 
 	maxIdentityBytes = 4 << 10
 	runtimeIDPrefix  = "runtime:"

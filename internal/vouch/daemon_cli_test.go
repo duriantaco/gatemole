@@ -10,7 +10,7 @@ func TestRepositoryExecutablePathPreservesNamesAndResolvesPaths(
 	t *testing.T,
 ) {
 	t.Parallel()
-	repository := filepath.Join(string(filepath.Separator), "srv", "vouch-repo")
+	repository := filepath.Join(string(filepath.Separator), "srv", "gatemole-repo")
 	absolute := filepath.Join(
 		string(filepath.Separator),
 		"opt",

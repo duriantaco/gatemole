@@ -142,7 +142,7 @@ func runCreate(repo string, args []string, jsonOut bool, stdout io.Writer, stder
 	flags := flag.NewFlagSet("run create", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	file := flags.String("file", "", "AgentRun JSON file")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID creating the run")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "principal kind creating the run")
 	if err := flags.Parse(args); err != nil {
@@ -197,7 +197,7 @@ func runGet(repo string, args []string, jsonOut bool, stdout io.Writer, stderr i
 	flags.SetOutput(stderr)
 	namespace := flags.String("namespace", "", "run namespace")
 	runID := flags.String("id", "", "run ID")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -217,7 +217,7 @@ func runList(repo string, args []string, jsonOut bool, stdout io.Writer, stderr 
 	flags := flag.NewFlagSet("run list", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	namespace := flags.String("namespace", "", "run namespace")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -249,7 +249,7 @@ func runEvents(repo string, args []string, jsonOut bool, stdout io.Writer, stder
 	namespace := flags.String("namespace", "", "run namespace")
 	runID := flags.String("id", "", "run ID")
 	after := flags.Int64("after", 0, "only events after this sequence")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -278,7 +278,7 @@ func runTransition(repo string, args []string, jsonOut bool, stdout io.Writer, s
 	runID := flags.String("id", "", "run ID")
 	to := flags.String("to", "", "target run state")
 	reason := flags.String("reason", "", "transition reason")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID requesting the transition")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "principal kind requesting the transition")
 	if err := flags.Parse(args); err != nil {
@@ -356,7 +356,7 @@ func runGrant(repo string, args []string, jsonOut bool, stdout io.Writer, stderr
 	namespace := flags.String("namespace", "", "run namespace")
 	runID := flags.String("id", "", "run ID")
 	contractPath := flags.String("contract", "", "ExecutionContract JSON file")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID installing the grants")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "principal kind installing the grants")
 	if err := flags.Parse(args); err != nil {
@@ -426,7 +426,7 @@ func readKernelFile[T any](repo, path string) (T, error) {
 }
 
 func defaultKernelSocket(repo string) string {
-	return filepath.Join(repo, ".gatemole", "vouchd.sock")
+	return filepath.Join(repo, ".gatemole", "gatemoled.sock")
 }
 
 func kernelEventID(runID string, sequence int64) string {
@@ -464,7 +464,7 @@ func runUsage(out io.Writer) {
 	fmt.Fprintln(out, "  run transition --namespace NS --id ID --to STATE [--reason TEXT] [--socket FILE]")
 	fmt.Fprintln(out, "  run pause|resume|cancel --namespace NS --id ID [--reason TEXT] [--socket FILE]")
 	fmt.Fprintln(out, "")
-	fmt.Fprintln(out, "embedded/unbound compatibility only; configured vouchd rejects raw authority creation:")
+	fmt.Fprintln(out, "embedded/unbound compatibility only; configured gatemoled rejects raw authority creation:")
 	fmt.Fprintln(out, "  run create --file FILE [--socket FILE] [--actor ID] [--actor-kind KIND]")
 	fmt.Fprintln(out, "  run grant --namespace NS --id ID --contract FILE [--socket FILE]")
 }

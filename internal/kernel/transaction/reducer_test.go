@@ -264,7 +264,7 @@ func TestAgentExecutionReceiptReplaysAndMustFinishBeforeStage(t *testing.T) {
 		ID:           "stage:git-demo",
 		Kind:         "git.worktree",
 		Resource:     model.ResourceSelector{Kind: "git.repository", Pattern: "repo:demo"},
-		Location:     "/tmp/vouch-demo",
+		Location:     "/tmp/gatemole-demo",
 		BaseRevision: strings.Repeat("a", 40),
 		CreatedAt:    bindingTime,
 	}})

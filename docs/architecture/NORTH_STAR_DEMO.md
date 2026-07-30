@@ -40,7 +40,7 @@ The fixture contains:
 
 ## Scenario
 
-1. Start `vouchd` with an empty local store.
+1. Start `gatemoled` with an empty local store.
 2. Register the agent image and execution contract.
 3. Create the run and assert state `created`.
 4. Admit it and assert state `admitted`.
@@ -51,7 +51,7 @@ The fixture contains:
 9. Assert the action is denied and the target was never changed.
 10. Request the protected push action.
 11. Assert the run enters `waiting_for_approval` with a normalized action digest.
-12. Stop and restart `vouchd`.
+12. Stop and restart `gatemoled`.
 13. Assert event replay reconstructs identical state and pending approval.
 14. Approve as an authenticated fixture operator.
 15. Assert the exact action resumes; a mutated request cannot reuse approval.

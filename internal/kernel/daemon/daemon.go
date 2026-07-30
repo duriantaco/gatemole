@@ -55,13 +55,13 @@ type Config struct {
 // non-socket paths, and only removes the socket it owns.
 func Run(ctx context.Context, config Config) error {
 	if strings.TrimSpace(config.DatabasePath) == "" {
-		return errors.New("vouchd: database path is required")
+		return errors.New("gatemoled: database path is required")
 	}
 	if strings.TrimSpace(config.SocketPath) == "" {
-		return errors.New("vouchd: socket path is required")
+		return errors.New("gatemoled: socket path is required")
 	}
 	if strings.TrimSpace(config.TransactionRoot) == "" {
-		return errors.New("vouchd: transaction staging root is required")
+		return errors.New("gatemoled: transaction staging root is required")
 	}
 	executionPolicy, err := executionRuntimePolicy(config.RuntimeProfile, config.AllowedImages)
 	if err != nil {
@@ -73,7 +73,7 @@ func Run(ctx context.Context, config Config) error {
 	}
 	executionPolicy.EnforcementProfile = enforcementProfile
 	if config.AllowUnsafeHostExecution && config.RuntimeProfile == "production" {
-		return errors.New("vouchd: production profile forbids client-supervised host execution")
+		return errors.New("gatemoled: production profile forbids client-supervised host execution")
 	}
 	runtimeEngine := strings.TrimSpace(config.RuntimeEngine)
 	if runtimeEngine == "" {
@@ -81,12 +81,12 @@ func Run(ctx context.Context, config Config) error {
 	}
 	enginePath, engineErr := exec.LookPath(runtimeEngine)
 	if engineErr != nil && config.RuntimeProfile == "production" {
-		return fmt.Errorf("vouchd: find production OCI engine %q: %w", runtimeEngine, engineErr)
+		return fmt.Errorf("gatemoled: find production OCI engine %q: %w", runtimeEngine, engineErr)
 	}
 	if engineErr == nil {
 		enginePath, err = filepath.Abs(enginePath)
 		if err != nil {
-			return fmt.Errorf("vouchd: resolve OCI engine: %w", err)
+			return fmt.Errorf("gatemoled: resolve OCI engine: %w", err)
 		}
 		executionPolicy.EnginePath = enginePath
 	}
@@ -136,12 +136,12 @@ func Run(ctx context.Context, config Config) error {
 		}
 		approvalTrust, err = approval.ParseTrustDocument(snapshot.Data)
 		if err != nil {
-			return fmt.Errorf("vouchd: decode approval trust: %w", err)
+			return fmt.Errorf("gatemoled: decode approval trust: %w", err)
 		}
 		executionPolicy.ApprovalTrustDigest = snapshot.Digest
 	}
 	if production && approvalTrust.Len() == 0 {
-		return errors.New("vouchd: production profile requires at least one trusted approval key")
+		return errors.New("gatemoled: production profile requires at least one trusted approval key")
 	}
 	var identityVerifier *identity.Verifier
 	if identityTrustPath := strings.TrimSpace(
@@ -157,12 +157,12 @@ func Run(ctx context.Context, config Config) error {
 		}
 		identityVerifier, err = identity.ParseTrustDocument(snapshot.Data)
 		if err != nil {
-			return fmt.Errorf("vouchd: decode OIDC identity trust: %w", err)
+			return fmt.Errorf("gatemoled: decode OIDC identity trust: %w", err)
 		}
 		executionPolicy.IdentityTrustDigest = snapshot.Digest
 	}
 	if production && identityVerifier == nil {
-		return errors.New("vouchd: production profile requires an OIDC identity trust document")
+		return errors.New("gatemoled: production profile requires an OIDC identity trust document")
 	}
 	releasePolicy, err := releaseRuntimePolicy(config.RuntimeProfile, config.AllowedGitRefs)
 	if err != nil {
@@ -182,18 +182,18 @@ func Run(ctx context.Context, config Config) error {
 		}
 		verifierProfiles, err = verification.ParseProfiles(snapshot.Data)
 		if err != nil {
-			return fmt.Errorf("vouchd: decode verifier profiles: %w", err)
+			return fmt.Errorf("gatemoled: decode verifier profiles: %w", err)
 		}
 		executionPolicy.VerifierProfilesSourceDigest = snapshot.Digest
 	}
 	if production && verifierProfiles == nil {
-		return errors.New("vouchd: production profile requires daemon-owned verifier profiles")
+		return errors.New("gatemoled: production profile requires daemon-owned verifier profiles")
 	}
 	if verifierProfiles != nil {
 		for _, profile := range verifierProfiles.Profiles() {
 			if profile.TimeoutSeconds > executionPolicy.MaxVerificationTimeoutSecs {
 				return fmt.Errorf(
-					"vouchd: verifier profile %q timeout exceeds daemon maximum",
+					"gatemoled: verifier profile %q timeout exceeds daemon maximum",
 					profile.Name,
 				)
 			}
@@ -212,17 +212,17 @@ func Run(ctx context.Context, config Config) error {
 	runtimeIdentity, err := runtimeidentity.Load(ctx, repositoryRoot)
 	if err != nil {
 		return fmt.Errorf(
-			"vouchd: load Runtime identity; run `vouch runtime init` first: %w",
+			"gatemoled: load Runtime identity; run `vouch runtime init` first: %w",
 			err,
 		)
 	}
 	repositoryRoot, err = filepath.EvalSymlinks(repositoryRoot)
 	if err != nil {
-		return fmt.Errorf("vouchd: canonicalize repository root: %w", err)
+		return fmt.Errorf("gatemoled: canonicalize repository root: %w", err)
 	}
 	repositoryRoot, err = filepath.Abs(repositoryRoot)
 	if err != nil {
-		return fmt.Errorf("vouchd: resolve repository root: %w", err)
+		return fmt.Errorf("gatemoled: resolve repository root: %w", err)
 	}
 	runtimeLock, err := acquireRuntimeLock(
 		repositoryRoot,
@@ -252,7 +252,7 @@ func Run(ctx context.Context, config Config) error {
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"vouchd: open Runtime-bound ledger: %w",
+			"gatemoled: open Runtime-bound ledger: %w",
 			err,
 		)
 	}
@@ -264,25 +264,25 @@ func Run(ctx context.Context, config Config) error {
 		time.Now,
 	)
 	if err != nil {
-		return fmt.Errorf("vouchd: recover interrupted agent executions: %w", err)
+		return fmt.Errorf("gatemoled: recover interrupted agent executions: %w", err)
 	}
 	if recoveredExecutions > 0 {
-		fmt.Fprintf(stdout, "vouchd marked %d interrupted agent execution(s)\n", recoveredExecutions)
+		fmt.Fprintf(stdout, "gatemoled marked %d interrupted agent execution(s)\n", recoveredExecutions)
 	}
 	actionBroker, err := broker.New(kernelStore, repositoryRoot)
 	if err != nil {
-		return fmt.Errorf("vouchd: configure action broker: %w", err)
+		return fmt.Errorf("gatemoled: configure action broker: %w", err)
 	}
 	recovered, err := actionBroker.Recover(ctx)
 	if err != nil {
-		return fmt.Errorf("vouchd: recover interrupted actions: %w", err)
+		return fmt.Errorf("gatemoled: recover interrupted actions: %w", err)
 	}
 	if recovered > 0 {
-		fmt.Fprintf(stdout, "vouchd marked %d interrupted action(s) for reconciliation\n", recovered)
+		fmt.Fprintf(stdout, "gatemoled marked %d interrupted action(s) for reconciliation\n", recovered)
 	}
 	transactionManager, err := gitstage.New()
 	if err != nil {
-		return fmt.Errorf("vouchd: configure transaction staging: %w", err)
+		return fmt.Errorf("gatemoled: configure transaction staging: %w", err)
 	}
 	if err := ensurePrivateSocketDirectory(config.SocketPath); err != nil {
 		return err
@@ -295,20 +295,20 @@ func Run(ctx context.Context, config Config) error {
 		&net.UnixAddr{Name: config.SocketPath, Net: "unix"},
 	)
 	if err != nil {
-		return fmt.Errorf("vouchd: listen: %w", err)
+		return fmt.Errorf("gatemoled: listen: %w", err)
 	}
 	listener.SetUnlinkOnClose(false)
 	ownedSocket, err := os.Lstat(config.SocketPath)
 	if err != nil {
 		_ = listener.Close()
-		return fmt.Errorf("vouchd: inspect created socket: %w", err)
+		return fmt.Errorf("gatemoled: inspect created socket: %w", err)
 	}
 	defer func() {
 		_ = listener.Close()
 		_ = removeOwnedSocket(config.SocketPath, ownedSocket)
 	}()
 	if err := os.Chmod(config.SocketPath, 0o600); err != nil {
-		return fmt.Errorf("vouchd: restrict socket permissions: %w", err)
+		return fmt.Errorf("gatemoled: restrict socket permissions: %w", err)
 	}
 
 	server := &http.Server{
@@ -345,14 +345,14 @@ func Run(ctx context.Context, config Config) error {
 			_ = server.Close()
 		}
 	}()
-	fmt.Fprintf(stdout, "vouchd listening on %s\n", config.SocketPath)
+	fmt.Fprintf(stdout, "gatemoled listening on %s\n", config.SocketPath)
 	authenticatedListener := &peerAuthenticatedUnixListener{
 		UnixListener: listener,
 		expectedUID:  uint32(os.Geteuid()),
 	}
 	if err := server.Serve(authenticatedListener); err != nil &&
 		!errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("vouchd: serve: %w", err)
+		return fmt.Errorf("gatemoled: serve: %w", err)
 	}
 	return nil
 }
@@ -372,7 +372,7 @@ func (listener *peerAuthenticatedUnixListener) Accept() (net.Conn, error) {
 		if credentialErr != nil {
 			_ = connection.Close()
 			return nil, fmt.Errorf(
-				"vouchd: authenticate Unix client: %w",
+				"gatemoled: authenticate Unix client: %w",
 				credentialErr,
 			)
 		}
@@ -387,29 +387,29 @@ func (listener *peerAuthenticatedUnixListener) Accept() (net.Conn, error) {
 func ensurePrivateSocketDirectory(socketPath string) error {
 	directory := filepath.Dir(socketPath)
 	if err := os.MkdirAll(directory, 0o750); err != nil {
-		return fmt.Errorf("vouchd: create socket directory: %w", err)
+		return fmt.Errorf("gatemoled: create socket directory: %w", err)
 	}
 	info, err := os.Lstat(directory)
 	if err != nil {
-		return fmt.Errorf("vouchd: inspect socket directory: %w", err)
+		return fmt.Errorf("gatemoled: inspect socket directory: %w", err)
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New(
-			"vouchd: socket directory must be a real directory",
+			"gatemoled: socket directory must be a real directory",
 		)
 	}
 	ownerUID, err := peercred.FileOwnerUID(info)
 	if err != nil {
-		return fmt.Errorf("vouchd: inspect socket directory owner: %w", err)
+		return fmt.Errorf("gatemoled: inspect socket directory owner: %w", err)
 	}
 	if ownerUID != uint32(os.Geteuid()) {
 		return errors.New(
-			"vouchd: socket directory must be owned by the daemon user",
+			"gatemoled: socket directory must be owned by the daemon user",
 		)
 	}
 	if info.Mode().Perm()&0o022 != 0 {
 		return errors.New(
-			"vouchd: socket directory must not be group- or world-writable",
+			"gatemoled: socket directory must not be group- or world-writable",
 		)
 	}
 	return nil
@@ -431,22 +431,22 @@ func prepareSocketPathWithDial(
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("vouchd: inspect socket path: %w", err)
+		return fmt.Errorf("gatemoled: inspect socket path: %w", err)
 	}
 	if info.Mode()&os.ModeSocket == 0 {
-		return fmt.Errorf("vouchd: socket path exists and is not a socket: %s", socketPath)
+		return fmt.Errorf("gatemoled: socket path exists and is not a socket: %s", socketPath)
 	}
 	connection, dialErr := dial(
 		"unix", socketPath, 250*time.Millisecond,
 	)
 	if dialErr == nil {
 		_ = connection.Close()
-		return fmt.Errorf("vouchd: socket already has an active listener: %s", socketPath)
+		return fmt.Errorf("gatemoled: socket already has an active listener: %s", socketPath)
 	}
 	if !errors.Is(dialErr, syscall.ECONNREFUSED) &&
 		!errors.Is(dialErr, syscall.ENOENT) {
 		return fmt.Errorf(
-			"vouchd: cannot prove Unix socket is stale; preserving %s: %w",
+			"gatemoled: cannot prove Unix socket is stale; preserving %s: %w",
 			socketPath,
 			dialErr,
 		)
@@ -456,17 +456,17 @@ func prepareSocketPathWithDial(
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("vouchd: re-inspect stale socket path: %w", err)
+		return fmt.Errorf("gatemoled: re-inspect stale socket path: %w", err)
 	}
 	if current.Mode()&os.ModeSocket == 0 ||
 		!os.SameFile(info, current) {
 		return fmt.Errorf(
-			"vouchd: socket path changed during stale-socket recovery; preserving %s",
+			"gatemoled: socket path changed during stale-socket recovery; preserving %s",
 			socketPath,
 		)
 	}
 	if err := os.Remove(socketPath); err != nil {
-		return fmt.Errorf("vouchd: remove stale socket: %w", err)
+		return fmt.Errorf("gatemoled: remove stale socket: %w", err)
 	}
 	return nil
 }
@@ -491,14 +491,14 @@ func validateWorkloadIdentity(profile string, uid, gid, daemonUID, daemonGID int
 		return nil
 	}
 	if uid <= 0 || gid <= 0 {
-		return errors.New("vouchd: production profile requires non-root workload UID and GID")
+		return errors.New("gatemoled: production profile requires non-root workload UID and GID")
 	}
 	// A non-root daemon cannot safely chown bind-mounted worktrees or evidence.
 	// Requiring the same numeric identity keeps the OCI process writable only
 	// where the daemon deliberately mounted daemon-owned transaction state.
 	if daemonUID != 0 && (uid != daemonUID || gid != daemonGID) {
 		return fmt.Errorf(
-			"vouchd: production workload UID:GID %d:%d must match non-root daemon UID:GID %d:%d for bind-mount ownership",
+			"gatemoled: production workload UID:GID %d:%d must match non-root daemon UID:GID %d:%d for bind-mount ownership",
 			uid, gid, daemonUID, daemonGID,
 		)
 	}
@@ -512,15 +512,15 @@ func configureModelBroker(config Config, executionPolicy *kernelapi.ExecutionRun
 		return nil
 	}
 	if image == "" || policyPath == "" {
-		return errors.New("vouchd: model broker image and policy must be configured together")
+		return errors.New("gatemoled: model broker image and policy must be configured together")
 	}
 	if _, err := sandbox.ImageDigest(image); err != nil {
-		return fmt.Errorf("vouchd: invalid model broker image: %w", err)
+		return fmt.Errorf("gatemoled: invalid model broker image: %w", err)
 	}
 	if !filepath.IsAbs(policyPath) {
 		absolute, err := filepath.Abs(policyPath)
 		if err != nil {
-			return fmt.Errorf("vouchd: resolve model broker policy path: %w", err)
+			return fmt.Errorf("gatemoled: resolve model broker policy path: %w", err)
 		}
 		policyPath = absolute
 	}
@@ -535,7 +535,7 @@ func configureModelBroker(config Config, executionPolicy *kernelapi.ExecutionRun
 	}
 	policy, err := modelbroker.ParsePolicy(snapshot.Data, production)
 	if err != nil {
-		return fmt.Errorf("vouchd: decode model broker policy: %w", err)
+		return fmt.Errorf("gatemoled: decode model broker policy: %w", err)
 	}
 	tokenEnvironment := strings.TrimSpace(config.ModelTokenEnv)
 	if tokenEnvironment == "" {
@@ -543,7 +543,7 @@ func configureModelBroker(config Config, executionPolicy *kernelapi.ExecutionRun
 	}
 	providerToken, exists := os.LookupEnv(tokenEnvironment)
 	if !exists || strings.TrimSpace(providerToken) == "" {
-		return fmt.Errorf("vouchd: model provider credential environment %s is not set", tokenEnvironment)
+		return fmt.Errorf("gatemoled: model provider credential environment %s is not set", tokenEnvironment)
 	}
 	executionPolicy.ModelBroker = &kernelapi.ModelBrokerRuntimePolicy{
 		Image: image, PolicyData: cloneConfigBytes(snapshot.Data),
@@ -558,16 +558,16 @@ func releaseRuntimePolicy(profile string, allowedGitRefs []string) (kernelapi.Re
 		profile = "development"
 	}
 	if profile == "production" && len(allowedGitRefs) == 0 {
-		return kernelapi.ReleasePolicy{}, errors.New("vouchd: production profile requires at least one allowed Git ref pattern")
+		return kernelapi.ReleasePolicy{}, errors.New("gatemoled: production profile requires at least one allowed Git ref pattern")
 	}
 	patterns := make([]string, 0, len(allowedGitRefs))
 	for _, raw := range allowedGitRefs {
 		pattern := strings.TrimSpace(raw)
 		if !strings.HasPrefix(pattern, "refs/heads/") {
-			return kernelapi.ReleasePolicy{}, fmt.Errorf("vouchd: allowed Git ref pattern must start with refs/heads/: %q", raw)
+			return kernelapi.ReleasePolicy{}, fmt.Errorf("gatemoled: allowed Git ref pattern must start with refs/heads/: %q", raw)
 		}
 		if _, err := path.Match(pattern, "refs/heads/probe"); err != nil {
-			return kernelapi.ReleasePolicy{}, fmt.Errorf("vouchd: invalid Git ref pattern %q: %w", raw, err)
+			return kernelapi.ReleasePolicy{}, fmt.Errorf("gatemoled: invalid Git ref pattern %q: %w", raw, err)
 		}
 		patterns = append(patterns, pattern)
 	}
@@ -579,7 +579,7 @@ func executionRuntimePolicy(profile string, allowedImages []string) (kernelapi.E
 		profile = "development"
 	}
 	if profile != "development" && profile != "production" {
-		return kernelapi.ExecutionRuntimePolicy{}, errors.New("vouchd: runtime profile must be development or production")
+		return kernelapi.ExecutionRuntimePolicy{}, errors.New("gatemoled: runtime profile must be development or production")
 	}
 	allowed := make(map[string]struct{}, len(allowedImages))
 	fullImages := make([]string, 0, len(allowedImages))
@@ -588,7 +588,7 @@ func executionRuntimePolicy(profile string, allowedImages []string) (kernelapi.E
 		image = strings.TrimSpace(image)
 		digest, err := sandbox.ImageDigest(image)
 		if err != nil {
-			return kernelapi.ExecutionRuntimePolicy{}, fmt.Errorf("vouchd: invalid allowed image %q: %w", image, err)
+			return kernelapi.ExecutionRuntimePolicy{}, fmt.Errorf("gatemoled: invalid allowed image %q: %w", image, err)
 		}
 		allowed[digest] = struct{}{}
 		if _, seen := seenImages[image]; !seen {
@@ -597,7 +597,7 @@ func executionRuntimePolicy(profile string, allowedImages []string) (kernelapi.E
 		}
 	}
 	if profile == "production" && len(allowed) == 0 {
-		return kernelapi.ExecutionRuntimePolicy{}, errors.New("vouchd: production profile requires at least one digest-pinned allowed image")
+		return kernelapi.ExecutionRuntimePolicy{}, errors.New("gatemoled: production profile requires at least one digest-pinned allowed image")
 	}
 	return kernelapi.ExecutionRuntimePolicy{
 		AllowHost:                profile == "development",

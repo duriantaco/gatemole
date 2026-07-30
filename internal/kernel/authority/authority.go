@@ -457,7 +457,7 @@ func sameTime(left, right *time.Time) bool {
 }
 
 func daemonPrincipal() model.Principal {
-	return model.Principal{ID: "service:vouchd", Kind: model.PrincipalService, Issuer: "vouchd"}
+	return model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService, Issuer: "gatemoled"}
 }
 
 func cloneModelPlan(plan *ModelBrokerPlan) *ModelBrokerPlan {

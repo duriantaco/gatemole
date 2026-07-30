@@ -104,7 +104,7 @@ func TestConfigureModelBrokerRetainsParsedAndHashedSnapshot(t *testing.T) {
 	if err := os.WriteFile(path, policyA, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("VOUCH_SNAPSHOT_PROVIDER_TOKEN", "provider-token")
+	t.Setenv("GATEMOLE_SNAPSHOT_PROVIDER_TOKEN", "provider-token")
 
 	executionPolicy, err := executionRuntimePolicy("development", nil)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestConfigureModelBrokerRetainsParsedAndHashedSnapshot(t *testing.T) {
 		RuntimeProfile:    "development",
 		ModelBrokerImage:  "broker@sha256:" + strings.Repeat("a", 64),
 		ModelBrokerPolicy: path,
-		ModelTokenEnv:     "VOUCH_SNAPSHOT_PROVIDER_TOKEN",
+		ModelTokenEnv:     "GATEMOLE_SNAPSHOT_PROVIDER_TOKEN",
 	}, &executionPolicy)
 	if err != nil {
 		t.Fatal(err)

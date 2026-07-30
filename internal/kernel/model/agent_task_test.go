@@ -165,7 +165,7 @@ func validAgentTask(t *testing.T) AgentTask {
 			Digest:        "sha256:" + strings.Repeat("a", 64),
 			RuntimeClass:  "oci",
 			ImageDigest:   "sha256:" + strings.Repeat("b", 64),
-			Entrypoint:    "/opt/vouch-agent",
+			Entrypoint:    "/opt/gatemole-agent",
 			CommandDigest: "sha256:" + strings.Repeat("c", 64),
 		},
 		time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC),

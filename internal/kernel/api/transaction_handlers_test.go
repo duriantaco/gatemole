@@ -77,7 +77,7 @@ func TestFrozenStageFreshnessRequiresStateAndEffectDigests(t *testing.T) {
 
 func TestPersistedTaskAuthorizesExactAgentProfileAndMaterializesReadOnly(t *testing.T) {
 	t.Parallel()
-	command := []string{"agent", "--task-file", "/vouch/task.json"}
+	command := []string{"agent", "--task-file", "/gatemole/task.json"}
 	commandDigest, err := transactionreducer.ComputeCommandDigest(command)
 	if err != nil {
 		t.Fatal(err)

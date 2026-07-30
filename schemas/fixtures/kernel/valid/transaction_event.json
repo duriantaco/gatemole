@@ -5,7 +5,7 @@
   "sequence": 1,
   "type": "transaction.created",
   "actor": {
-    "id": "service:vouchd",
+    "id": "service:gatemoled",
     "kind": "service"
   },
   "occurred_at": "2026-07-23T08:00:00Z",

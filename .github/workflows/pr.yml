@@ -38,8 +38,8 @@ jobs:
         run: |
           merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           git diff --name-only --no-renames "$merge_base" "$HEAD_SHA" \
-            > "$RUNNER_TEMP/vouch-changed-files"
-          scripts/vouchci-plan.sh --paths "$RUNNER_TEMP/vouch-changed-files" \
+            > "$RUNNER_TEMP/gatemole-changed-files"
+          scripts/vouchci-plan.sh --paths "$RUNNER_TEMP/gatemole-changed-files" \
             >> "$GITHUB_OUTPUT"
 
       - name: Check formatting
@@ -78,11 +78,11 @@ jobs:
 
       - name: Run VouchBench
         if: steps.plan.outputs.vouchbench == 'true'
-        run: scripts/vouchbench.sh --out /tmp/vouch-pr-validation/vouchbench
+        run: scripts/vouchbench.sh --out /tmp/gatemole-pr-validation/vouchbench
 
       - name: Run VouchKernelBench
         if: steps.plan.outputs.kernelbench == 'true'
-        run: scripts/vouchkernelbench.sh --out /tmp/vouch-pr-validation/kernelbench
+        run: scripts/vouchkernelbench.sh --out /tmp/gatemole-pr-validation/kernelbench
 
       - name: Run VouchTransactionBench
         if: steps.plan.outputs.transactionbench == 'true'
@@ -104,13 +104,13 @@ jobs:
         id: fixture
         run: |
           image="$(scripts/vouchproductionfixture.sh \
-            --tag "vouch-production-fixture:${GITHUB_SHA}")"
+            --tag "gatemole-production-fixture:${GITHUB_SHA}")"
           echo "image=$image" >> "$GITHUB_OUTPUT"
 
       - name: Run production OCI acceptance
         if: steps.plan.outputs.production == 'true'
         env:
-          VOUCH_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
+          GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
         run: scripts/vouchproductionbench.sh
 
       - name: Summarize validation plan

@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+func TestHTTPHeaderUsesGatemoleNamespace(t *testing.T) {
+	if HTTPHeader != "Gatemole-Runtime-ID" {
+		t.Fatalf("HTTPHeader=%q, want Gatemole-Runtime-ID", HTTPHeader)
+	}
+}
+
 func TestCreateOrLoadIsStrictPrivateAndIdempotent(t *testing.T) {
 	repository := newGitRepository(t, filepath.Join(t.TempDir(), "repository"))
 	first, created, err := CreateOrLoad(context.Background(), repository)

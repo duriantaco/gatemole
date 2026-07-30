@@ -35,7 +35,7 @@ func transactionVerify(
 	name := flags.String("name", "", "stable verifier name")
 	image := flags.String("image", "", "digest-pinned verifier OCI image")
 	timeout := flags.Duration("timeout", 15*time.Minute, "maximum verifier duration")
-	socket := flags.String("socket", defaultKernelSocket(repo), "vouchd Unix socket")
+	socket := flags.String("socket", defaultKernelSocket(repo), "gatemoled Unix socket")
 	actorID := flags.String("actor", "operator:local", "principal ID requesting verification")
 	actorKind := flags.String("actor-kind", string(model.PrincipalOperator), "requesting principal kind")
 	if err := flags.Parse(args); err != nil {

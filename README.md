@@ -19,7 +19,7 @@ One kernel serves two product experiences:
   exact effects and control release. A low-level, manually operated local-Git
   integration exists today; the self-serve developer preview is still a
   milestone.
-- **Vouch Agent OS** is the target enterprise experience: the same `vouchd`
+- **Vouch Agent OS** is the target enterprise experience: the same `gatemoled`
   kernel plus non-bypassable action connectors, cross-run policy and a Control
   Plane for a fleet of Runtimes. Those fleet and remote-system capabilities
   are planned, not implemented.
@@ -31,7 +31,7 @@ semantics that future enterprise deployments require.
 
 **Vouch Agent OS** names the complete target system; it is not another process
 or deployment. The enforcement function lives in one or more customer-side
-**Vouch Runtime** installations. Each Runtime contains a trusted **`vouchd`
+**Vouch Runtime** installations. Each Runtime contains a trusted **`gatemoled`
 kernel**. The planned **Vouch Control Plane** manages a fleet of Runtimes.
 
 ```text
@@ -49,7 +49,7 @@ kernel**. The planned **Vouch Control Plane** manages a fleet of Runtimes.
 task   |  +------- Vouch Runtime [customer-side] ------+  |
 ------>|  | customer-side enforcement boundary         |  |
        |  |                                             |  |
-       |  |              vouchd kernel                  |  |
+       |  |              gatemoled kernel                  |  |
        |  |  admission | live authority | Git journal  |  |
        |  |  Git effects | sequence policy | approval  |  |
        |  |  local-ref commit                  [current]|  |
@@ -78,11 +78,11 @@ The operating-system analogy is precise:
 | **Vouch Developer Runtime** | The local product experience around one Runtime: package an agent, execute it in an isolated Git transaction, inspect exact effects and control release. | Low-level integration, Runtime profile initialization and diagnostics implemented; packaged adapters, `watch`, live cancellation and review UX planned |
 | **Vouch Agent OS** | The enterprise product experience and complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Vouch Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
-| **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `vouchd`, agent sandboxes, local durable state and connector drivers. | Runtime identity, a narrow single-node local-Git profile and exact profile-bound admission are implemented |
-| **`vouchd` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Runtime preflight, atomic task admission, live OCI authority revalidation and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
+| **Vouch Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `gatemoled`, agent sandboxes, local durable state and connector drivers. | Runtime identity, a narrow single-node local-Git profile and exact profile-bound admission are implemented |
+| **`gatemoled` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Runtime preflight, atomic task admission, live OCI authority revalidation and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
-| **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `vouchd` records authoritative receipts and coordinates recovery. | Generic interface and remote drivers planned. Local Git currently uses a dedicated transaction path, not that future interface |
+| **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `gatemoled` records authoritative receipts and coordinates recovery. | Generic interface and remote drivers planned. Local Git currently uses a dedicated transaction path, not that future interface |
 | **Vouch Contracts** | Optional verification module that turns human-owned intent into evidence obligations used by Runtime policy. | Beta |
 
 The diagram states the intended ownership boundary, not a completion claim.
@@ -92,7 +92,7 @@ selected digest-pinned image. This preflight happens before
 task authority or a worktree is created. Task admission then durably binds the
 exact Runtime ID and daemon enforcement profile with the content-bound
 contract, real run, initial grants and transaction. Before OCI launch,
-`vouchd` reloads that live authority and fail-closed derives the permitted
+`gatemoled` reloads that live authority and fail-closed derives the permitted
 image, command, full-workspace access, model-broker access and deadline. It
 then atomically verifies the admitted run and transaction heads while
 recording execution start, before starting any broker or agent workload.
@@ -103,11 +103,11 @@ The target remote-effect path is:
 
 ```text
 agent proposes an action
-  -> vouchd authenticates the run and delegated authority
-  -> vouchd evaluates the action and complete transaction sequence
+  -> gatemoled authenticates the run and delegated authority
+  -> gatemoled evaluates the action and complete transaction sequence
   -> deny | request approval | authorize
   -> connector driver stages or executes with scoped credentials
-  -> vouchd records the receipt and verifies the outcome
+  -> gatemoled records the receipt and verifies the outcome
   -> commit | compensate | reconcile | require manual recovery
 ```
 
@@ -129,7 +129,7 @@ those Runtimes.
 ## Developer Runtime: current local-Git integration
 
 The current runtime requires Git, an OCI engine such as Docker, a running
-`vouchd`, and a digest-pinned agent image.
+`gatemoled`, and a digest-pinned agent image.
 
 This is a low-level developer integration, not yet a self-serve desktop agent
 environment. `vouch runtime init` creates a strict repository-owned profile
@@ -175,7 +175,7 @@ vouch --repo /path/to/service daemon
 
 By default, transaction worktrees live in a canonical, repository-scoped
 directory beneath the current user's validated runtime or cache directory,
-not in a shared predictable `/tmp/vouch-transactions` path. A custom
+not in a shared predictable `/tmp/gatemole-transactions` path. A custom
 `--transaction-root` is validated before the ledger opens.
 
 In another terminal, diagnose the selected integration and run it:
@@ -197,7 +197,7 @@ preflight instead of treating a separate CLI-side OCI probe as proof.
 For a developer, the integration contract is deliberately small:
 
 1. Package the existing agent as a digest-pinned OCI image.
-2. Make its command read the retained task at `$VOUCH_TASK_PATH`.
+2. Make its command read the retained task at `$GATEMOLE_TASK_PATH`.
 3. Let it edit only `/workspace` and return a normal process exit code.
 4. Start it with `vouch run`; do not give the container the daemon socket,
    repository credentials or downstream production credentials.
@@ -209,13 +209,13 @@ For example, an agent entrypoint can begin with:
 ```sh
 #!/bin/sh
 set -eu
-test "$VOUCH_RUNTIME_ROLE" = agent
-test -r "$VOUCH_TASK_PATH"
+test "$GATEMOLE_RUNTIME_ROLE" = agent
+test -r "$GATEMOLE_TASK_PATH"
 cd /workspace
 
 # Invoke your existing agent loop here. All intended file effects stay in this
 # detached transaction worktree.
-exec /opt/my-agent --task-file "$VOUCH_TASK_PATH"
+exec /opt/my-agent --task-file "$GATEMOLE_TASK_PATH"
 ```
 
 `vouch runtime init` writes the strict, repository-owned
@@ -234,17 +234,17 @@ with a complete
 [example profile](schemas/fixtures/runtime/valid/agent_profiles.json). Vouch
 binds the selected profile, final command, pinned image and exact task intent
 into a durable task envelope. For OCI execution, `vouch run` first preflights
-the exact local Runtime ID, enforcement profile and image with `vouchd`; a
+the exact local Runtime ID, enforcement profile and image with `gatemoled`; a
 failure creates neither task authority nor a worktree. Admission v1 then binds
 that Runtime ID and the daemon's actual enforcement profile into the durable
 transaction. Daemon-owned OCI agents receive the task envelope read-only at
-`/vouch/task.json`.
+`/gatemole/task.json`.
 
 The product CLI loads `.gatemole/runtime.json` and binds every daemon call from
 the `run`, transaction, low-level `kernel` and `action` surfaces to that ID.
 Preflight and current task admission carry the expected ID in their validated
 bodies; lifecycle mutations, reads and long-running agent/verifier operations
-also carry `Vouch-Runtime-ID`. A configured daemon rejects a missing or
+also carry `Gatemole-Runtime-ID`. A configured daemon rejects a missing or
 different header before those handlers run. This is exact Runtime correlation,
 not a secret or an authentication credential.
 
@@ -306,7 +306,7 @@ Production callers should make the expected profile explicit:
 
 ```sh
 vouch --repo /srv/vouch/repository run \
-  --socket /run/vouch/vouchd.sock \
+  --socket /run/gatemole/gatemoled.sock \
   --namespace engineering \
   --require-enforcement-profile production \
   --intent "Fix the approved authentication regression" \
@@ -421,8 +421,8 @@ scripts/vouchbench.sh
 scripts/vouchkernelbench.sh --out /tmp/vouchkernelbench
 scripts/vouchtransactionbench.sh
 scripts/vouchruntimebench.sh
-image="$(scripts/vouchproductionfixture.sh --tag vouch-production-fixture:acceptance)"
-VOUCH_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
+image="$(scripts/vouchproductionfixture.sh --tag gatemole-production-fixture:acceptance)"
+GATEMOLE_PRODUCTION_IMAGE="$image" scripts/vouchproductionbench.sh
 ```
 
 Passing these gates establishes the documented invariants for that revision. It

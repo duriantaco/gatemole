@@ -1,5 +1,5 @@
 FROM scratch
 
-COPY vouch-model-broker /vouch-model-broker
+COPY gatemole-model-broker /gatemole-model-broker
 
-ENTRYPOINT ["/vouch-model-broker"]
+ENTRYPOINT ["/gatemole-model-broker"]

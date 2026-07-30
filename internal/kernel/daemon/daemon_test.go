@@ -58,7 +58,7 @@ func TestRunRejectsRuntimeMismatchBeforeSocketOrLedgerMutation(t *testing.T) {
 	// part of the ledger artifact snapshot.
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	socketDirectory := filepath.Join(repository, "socket-must-not-exist")
-	socketPath := filepath.Join(socketDirectory, "vouchd.sock")
+	socketPath := filepath.Join(socketDirectory, "gatemoled.sock")
 	if _, err := os.Lstat(socketDirectory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("socket directory exists before daemon startup: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRunRejectsLegacyVouchStateBeforeSocketOrLedgerMutation(t *testing.T) {
 		"kernel.db",
 	)
 	socketDirectory := filepath.Join(repository, "socket-must-not-exist")
-	socketPath := filepath.Join(socketDirectory, "vouchd.sock")
+	socketPath := filepath.Join(socketDirectory, "gatemoled.sock")
 	err = Run(ctx, Config{
 		DatabasePath:    databasePath,
 		SocketPath:      socketPath,
@@ -204,7 +204,7 @@ func equalDaemonSQLiteArtifactSnapshots(
 func TestRunRefusesAndPreservesExistingSocketPath(t *testing.T) {
 	dir := t.TempDir()
 	initializeDaemonRuntime(t, dir)
-	socket := filepath.Join(dir, "vouchd.sock")
+	socket := filepath.Join(dir, "gatemoled.sock")
 	if err := os.WriteFile(socket, []byte("owned by another process"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestPeerAuthenticatedUnixListenerAcceptsOnlyDaemonUID(t *testing.T) {
 func TestEnsurePrivateSocketDirectoryRejectsUnsafePaths(t *testing.T) {
 	safeDirectory := filepath.Join(t.TempDir(), "safe")
 	if err := ensurePrivateSocketDirectory(
-		filepath.Join(safeDirectory, "vouchd.sock"),
+		filepath.Join(safeDirectory, "gatemoled.sock"),
 	); err != nil {
 		t.Fatalf("private socket directory was rejected: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestEnsurePrivateSocketDirectoryRejectsUnsafePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := ensurePrivateSocketDirectory(
-		filepath.Join(writableDirectory, "vouchd.sock"),
+		filepath.Join(writableDirectory, "gatemoled.sock"),
 	); err == nil || !strings.Contains(err.Error(), "group- or world-writable") {
 		t.Fatalf("writable socket directory was accepted: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestEnsurePrivateSocketDirectoryRejectsUnsafePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := ensurePrivateSocketDirectory(
-		filepath.Join(symlinkDirectory, "vouchd.sock"),
+		filepath.Join(symlinkDirectory, "gatemoled.sock"),
 	); err == nil || !strings.Contains(err.Error(), "real directory") {
 		t.Fatalf("symlink socket directory was accepted: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestOwnedSocketCleanupPreservesReplacementPath(t *testing.T) {
 
 func shortSocketPath(t *testing.T, name string) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "vouch-daemon-")
+	dir, err := os.MkdirTemp("/tmp", "gatemole-daemon-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -598,7 +598,7 @@ func TestProductionProfileRejectsUnsafeHostExecution(t *testing.T) {
 	dir := t.TempDir()
 	err := Run(context.Background(), Config{
 		DatabasePath:             filepath.Join(dir, "kernel.db"),
-		SocketPath:               filepath.Join(dir, "vouchd.sock"),
+		SocketPath:               filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:          filepath.Join(dir, "transactions"),
 		RuntimeProfile:           "production",
 		AllowUnsafeHostExecution: true,
@@ -616,7 +616,7 @@ func TestProductionProfileRequiresApprovalTrust(t *testing.T) {
 	workloadUID, workloadGID := testProductionWorkloadIdentity()
 	err := Run(context.Background(), Config{
 		DatabasePath:    filepath.Join(dir, "kernel.db"),
-		SocketPath:      filepath.Join(dir, "vouchd.sock"),
+		SocketPath:      filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot: filepath.Join(dir, "transactions"),
 		RuntimeProfile:  "production",
 		VerifierUID:     workloadUID,
@@ -656,7 +656,7 @@ func TestProductionProfileRequiresOIDCIdentityTrust(t *testing.T) {
 	}
 	err = Run(context.Background(), Config{
 		DatabasePath:      filepath.Join(dir, "kernel.db"),
-		SocketPath:        filepath.Join(dir, "vouchd.sock"),
+		SocketPath:        filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:   filepath.Join(dir, "transactions"),
 		RuntimeProfile:    "production",
 		VerifierUID:       workloadUID,
@@ -703,7 +703,7 @@ func TestProductionProfileRequiresDaemonOwnedVerifierProfiles(t *testing.T) {
 	identityData, err := json.Marshal(identity.TrustDocument{
 		Version:                 identity.TrustDocumentVersion,
 		Issuer:                  "https://identity.example.invalid/",
-		Audiences:               []string{"vouch-production"},
+		Audiences:               []string{"gatemole-production"},
 		MaxTokenLifetimeSeconds: 3600,
 		JWKS:                    identity.JWKS{Keys: []identity.JWK{jwk}},
 	})
@@ -720,7 +720,7 @@ func TestProductionProfileRequiresDaemonOwnedVerifierProfiles(t *testing.T) {
 	}
 	err = Run(context.Background(), Config{
 		DatabasePath:      filepath.Join(dir, "kernel.db"),
-		SocketPath:        filepath.Join(dir, "vouchd.sock"),
+		SocketPath:        filepath.Join(dir, "gatemoled.sock"),
 		TransactionRoot:   filepath.Join(dir, "transactions"),
 		RuntimeProfile:    "production",
 		RuntimeEngine:     runtimeEngine,

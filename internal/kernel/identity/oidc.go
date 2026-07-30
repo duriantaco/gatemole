@@ -161,8 +161,8 @@ func NewVerifier(document TrustDocument) (*Verifier, error) {
 		&document.NamespaceClaim, &document.RolesClaim,
 	}
 	defaults := []string{
-		"vouch_principal_id", "vouch_principal_kind",
-		"vouch_namespaces", "vouch_roles",
+		"gatemole_principal_id", "gatemole_principal_kind",
+		"gatemole_namespaces", "gatemole_roles",
 	}
 	for index, claim := range claims {
 		if *claim == "" {
