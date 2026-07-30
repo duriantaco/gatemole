@@ -139,7 +139,8 @@ func TestPrepareTransactionRootRejectsRepositoryOverlapBeforeCreation(
 }
 
 func TestTransactionRootRevalidationDetectsReplacement(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "transactions")
+	parent := t.TempDir()
+	root := filepath.Join(parent, "transactions")
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -147,12 +148,12 @@ func TestTransactionRootRevalidationDetectsReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replacement := t.TempDir()
-	if err := os.Remove(root); err != nil {
+	replacement := filepath.Join(parent, "replacement")
+	if err := os.Mkdir(replacement, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(replacement, root); err != nil {
-		t.Skipf("create replacement symlink: %v", err)
+	if err := os.Rename(replacement, root); err != nil {
+		t.Skipf("atomically replace transaction root: %v", err)
 	}
 	err = revalidateTransactionDirectorySnapshots(
 		[]transactionDirectorySnapshot{{path: root, info: info}},

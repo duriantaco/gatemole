@@ -111,8 +111,12 @@ func TestDialVerifiedUnixRejectsSocketNotOwnedByClientBeforeDial(
 }
 
 func TestDialVerifiedUnixRejectsSocketReplacement(t *testing.T) {
-	socketPath, original := listenPrivateUnixSocket(t)
+	socketPath, _ := listenPrivateUnixSocket(t)
 	replacementDirectory := filepath.Dir(socketPath)
+	replacementPath := filepath.Join(
+		replacementDirectory,
+		"replacement.sock",
+	)
 	var replacement *net.UnixListener
 	dialer := &net.Dialer{Timeout: time.Second}
 
@@ -123,24 +127,26 @@ func TestDialVerifiedUnixRejectsSocketReplacement(t *testing.T) {
 			network string,
 			address string,
 		) (net.Conn, error) {
-			original.SetUnlinkOnClose(false)
-			if err := original.Close(); err != nil {
-				return nil, err
-			}
-			if err := os.Remove(address); err != nil {
-				return nil, err
-			}
 			var listenErr error
 			replacement, listenErr = net.ListenUnix(
 				"unix",
-				&net.UnixAddr{Name: address, Net: "unix"},
+				&net.UnixAddr{Name: replacementPath, Net: "unix"},
 			)
 			if listenErr != nil {
 				return nil, listenErr
 			}
 			replacement.SetUnlinkOnClose(false)
-			if chmodErr := os.Chmod(address, 0o600); chmodErr != nil {
+			if chmodErr := os.Chmod(
+				replacementPath,
+				0o600,
+			); chmodErr != nil {
 				return nil, chmodErr
+			}
+			if renameErr := os.Rename(
+				replacementPath,
+				address,
+			); renameErr != nil {
+				return nil, renameErr
 			}
 			return dialer.DialContext(ctx, network, address)
 		},
@@ -148,10 +154,8 @@ func TestDialVerifiedUnixRejectsSocketReplacement(t *testing.T) {
 	)
 	if replacement != nil {
 		_ = replacement.Close()
-		_ = os.Remove(filepath.Join(
-			replacementDirectory,
-			filepath.Base(socketPath),
-		))
+		_ = os.Remove(replacementPath)
+		_ = os.Remove(socketPath)
 	}
 	if err == nil ||
 		!strings.Contains(err.Error(), "changed while connecting") {
