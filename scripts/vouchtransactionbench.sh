@@ -39,7 +39,8 @@ start_daemon() {
   "$VOUCH_BIN" --repo "$REPO_DIR" daemon \
     --db "$DB_PATH" \
     --socket "$SOCKET_PATH" \
-    --transaction-root "$STAGE_DIR" >"$DAEMON_LOG" 2>&1 &
+    --transaction-root "$STAGE_DIR" \
+    --allow-unsafe-host-execution >"$DAEMON_LOG" 2>&1 &
   DAEMON_PID=$!
   for _ in $(seq 1 100); do
     if [[ -S "$SOCKET_PATH" ]]; then
@@ -75,6 +76,7 @@ git -C "$REPO_DIR" update-ref refs/heads/main "$BASE_COMMIT"
 
 cd "$ROOT_DIR"
 go build -o "$VOUCH_BIN" ./cmd/vouch
+"$VOUCH_BIN" --repo "$REPO_DIR" runtime init >/dev/null
 start_daemon
 
 "$VOUCH_BIN" --repo "$REPO_DIR" --json tx create \

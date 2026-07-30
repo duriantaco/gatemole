@@ -61,6 +61,8 @@ trap cleanup EXIT
 
 start_daemon() {
   "$VOUCHD" --repo "$REPO" --db "$DATABASE" --socket "$SOCKET" \
+    --transaction-root "$RUN_DIR/transactions" \
+    --allow-unsafe-host-execution \
     >> "$RUN_DIR/vouchd.stdout" 2>> "$RUN_DIR/vouchd.stderr" &
   DAEMON_PID=$!
   for _ in $(seq 1 100); do
@@ -79,62 +81,11 @@ start_daemon() {
 
 mkdir -p "$REPO/workspace"
 printf '%s\n' 'governed kernel output' > "$REPO/input.txt"
-
-python3 - "$REPO" <<'PY'
-import datetime
-import json
-import pathlib
-import sys
-
-repo = pathlib.Path(sys.argv[1])
-now = datetime.datetime.now(datetime.timezone.utc)
-deadline = (now + datetime.timedelta(hours=1)).isoformat().replace('+00:00', 'Z')
-timestamp = now.isoformat().replace('+00:00', 'Z')
-contract_digest = 'sha256:' + ('d' * 64)
-run = {
-    'version': 'vouch.agent_run.v0',
-    'id': 'run:kernelbench-001',
-    'namespace': 'kernelbench',
-    'image_digest': 'sha256:' + ('a' * 64),
-    'contract_digest': contract_digest,
-    'principal': {'id': 'run:kernelbench-001', 'kind': 'run', 'issuer': 'vouchd'},
-    'delegation_chain': [{'id': 'human:kernelbench', 'kind': 'human'}],
-    'state': 'created',
-    'deadline': deadline,
-    'budget_limits': {'max_tool_calls': 20},
-    'budget_usage': {
-        'input_tokens': 0, 'output_tokens': 0, 'model_calls': 0,
-        'tool_calls': 0, 'cost_micros': 0, 'wall_time_seconds': 0,
-    },
-    'workspace': 'workspace',
-    'capability_ids': [],
-    'outstanding_approval_ids': [],
-    'event_sequence': 1,
-    'created_at': timestamp,
-    'updated_at': timestamp,
-}
-contract = {
-    'version': 'vouch.execution_contract.v0',
-    'id': 'contract:kernelbench',
-    'digest': contract_digest,
-    'owner': {'id': 'human:kernelbench', 'kind': 'human'},
-    'goal': 'Write only inside the benchmark workspace.',
-    'non_goals': ['Never write outside the workspace.'],
-    'risk': 'high',
-    'resources': [{
-        'id': 'workspace',
-        'selector': {'kind': 'filesystem', 'pattern': 'workspace/**'},
-        'operations': ['filesystem.read', 'filesystem.write'],
-        'conditions': {'workspace_root': 'workspace', 'max_output_bytes': 1048576},
-    }],
-    'budgets': {'max_tool_calls': 20},
-    'deadline': deadline,
-}
-for name, value in [('run.json', run), ('contract.json', contract)]:
-    with (repo / name).open('w', encoding='utf-8') as handle:
-        json.dump(value, handle, indent=2, sort_keys=True)
-        handle.write('\n')
-PY
+git -C "$REPO" init --initial-branch=main >/dev/null
+git -C "$REPO" add -- input.txt
+git -C "$REPO" -c user.name='Vouch Kernel Bench' \
+  -c user.email='vouch-kernel-bench@example.invalid' \
+  commit -m fixture >/dev/null
 
 (
   cd "$ROOT"
@@ -142,11 +93,14 @@ PY
   go build -o "$VOUCHD" ./cmd/vouchd
 )
 
+"$VOUCH" --repo "$REPO" runtime init >/dev/null
 start_daemon
-"$VOUCH" --repo "$REPO" --json run create --file "$REPO/run.json" > "$RUN_DIR/create.json"
-"$VOUCH" --repo "$REPO" --json run transition --namespace kernelbench --id run:kernelbench-001 --to admitted > "$RUN_DIR/admitted.json"
+"$VOUCH" --repo "$REPO" --json tx create \
+  --id tx:kernelbench-001 \
+  --namespace kernelbench \
+  --intent 'Write only inside the benchmark workspace.' \
+  --run run:kernelbench-001 > "$RUN_DIR/admitted.json"
 "$VOUCH" --repo "$REPO" --json run transition --namespace kernelbench --id run:kernelbench-001 --to running > "$RUN_DIR/running.json"
-"$VOUCH" --repo "$REPO" --json run grant --namespace kernelbench --id run:kernelbench-001 --contract "$REPO/contract.json" > "$RUN_DIR/grants.json"
 "$VOUCH" --repo "$REPO" --json action fs-write \
   --namespace kernelbench --run run:kernelbench-001 \
   --path workspace/allowed.txt --input "$REPO/input.txt" \

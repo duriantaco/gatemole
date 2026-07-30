@@ -76,6 +76,7 @@ git -C "$REPO_DIR" update-ref refs/heads/main "$BASE_COMMIT"
 
 cd "$ROOT_DIR"
 env GOCACHE="$BENCH_DIR/go-cache" go build -o "$VOUCH_BIN" ./cmd/vouch
+"$VOUCH_BIN" --repo "$REPO_DIR" runtime init >/dev/null
 start_daemon
 
 COMMAND_SECRET="runtime-command-secret-not-for-ledger"

@@ -71,6 +71,8 @@ git -C "$repo" branch release/production-bench HEAD
 
 GOCACHE="$bench_root/go-build" go build -o "$bin_dir/vouch" ./cmd/vouch
 GOCACHE="$bench_root/go-build" go build -o "$bin_dir/vouchd" ./cmd/vouchd
+"$bin_dir/vouch" --repo "$repo" runtime init >/dev/null
+runtime_id=$(jq -r '.runtime_id' "$repo/.vouch/runtime.json")
 broker_arch=$(docker version --format '{{.Server.Arch}}')
 CGO_ENABLED=0 GOOS=linux GOARCH="$broker_arch" \
   GOCACHE="$bench_root/go-build-linux" \
@@ -204,6 +206,7 @@ test "$(jq -r '.status' "$bench_root/ready.json")" = ready
 
 legacy_status=$(curl --silent --unix-socket "$socket" \
   --header "Authorization: Bearer $operator_token" \
+  --header "Vouch-Runtime-ID: $runtime_id" \
   --header 'Content-Type: application/json' \
   --output "$bench_root/legacy-host-api.json" \
   --write-out '%{http_code}' \
