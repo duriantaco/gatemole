@@ -14,6 +14,7 @@
     "version": { "const": "gatemole.commit_plan.v0" },
     "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "attempt": { "type": "integer", "minimum": 1 },
     "intent_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "effect_set_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "staged_state_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },

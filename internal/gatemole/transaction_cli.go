@@ -30,6 +30,7 @@ type transactionClient interface {
 	ListTransactions(context.Context, string) ([]model.AgentTransaction, error)
 	TransactionEvents(context.Context, string, string, int64) ([]model.TransactionEvent, error)
 	StartTransaction(context.Context, string, string, int64, model.Principal) (transactionreducer.Projection, error)
+	RenewTransactionAuthority(context.Context, string, string, int64, model.Principal) (transactionreducer.Projection, error)
 	CreateTransactionWorktree(context.Context, string, string, int64, string, model.Principal) (kernelclient.TransactionWorktreeResult, error)
 	StartAgentExecution(context.Context, string, string, int64, string, string, string, string, string, string, model.Principal) (transactionreducer.Projection, error)
 	FinishAgentExecution(context.Context, string, string, int64, string, model.AgentExecutionStatus, *int, string, string, model.Principal) (transactionreducer.Projection, error)
@@ -190,6 +191,8 @@ func transactionCommandWithFactory(
 		return transactionVerify(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "prepare":
 		return transactionPrepare(repo, args[1:], jsonOut, stdout, stderr, newClient)
+	case "renew":
+		return transactionRenew(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "approve":
 		return transactionApprove(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "release":
@@ -480,6 +483,39 @@ func transactionPrepare(repo string, args []string, jsonOut bool, stdout, stderr
 	return 0
 }
 
+func transactionRenew(repo string, args []string, jsonOut bool, stdout, stderr io.Writer, newClient transactionClientFactory) int {
+	values, ok := parseTransactionTarget("tx renew", repo, args, stderr)
+	if !ok {
+		return 2
+	}
+	client := newClient(values.socket)
+	projection, err := client.GetTransaction(
+		context.Background(), values.namespace, values.id,
+	)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	next, err := client.RenewTransactionAuthority(
+		context.Background(),
+		values.namespace,
+		values.id,
+		projection.Transaction.EventSequence,
+		values.actor,
+	)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return renderTransactionProjection(
+		next,
+		jsonOut,
+		"Renewed authority",
+		stdout,
+		stderr,
+	)
+}
+
 func transactionGet(repo string, args []string, jsonOut bool, stdout, stderr io.Writer, newClient transactionClientFactory) int {
 	values, ok := parseTransactionTarget("tx get", repo, args, stderr)
 	if !ok {
@@ -557,7 +593,7 @@ func transactionList(repo string, args []string, jsonOut bool, stdout, stderr io
 		return renderCommandJSON(transactions, stdout, stderr)
 	}
 	for _, transaction := range transactions {
-		fmt.Fprintf(stdout, "%s\t%s\teffects=%d\tsequence=%d\n", transaction.ID, transaction.State, len(transaction.EffectIDs), transaction.EventSequence)
+		fmt.Fprintf(stdout, "%s\t%s\tattempt=%d\teffects=%d\tsequence=%d\n", transaction.ID, transaction.State, transaction.Attempt, len(transaction.EffectIDs), transaction.EventSequence)
 	}
 	return 0
 }
@@ -676,11 +712,12 @@ func renderTransactionProjection(
 	}
 	fmt.Fprintf(
 		stdout,
-		"%s %s in %s: state=%s effects=%d sequence=%d\n",
+		"%s %s in %s: state=%s attempt=%d effects=%d sequence=%d\n",
 		verb,
 		projection.Transaction.ID,
 		projection.Transaction.Namespace,
 		projection.Transaction.State,
+		projection.Transaction.Attempt,
 		len(projection.Effects),
 		projection.Transaction.EventSequence,
 	)
@@ -697,6 +734,7 @@ func transactionUsage(out io.Writer) {
 	fmt.Fprintln(out, "  tx validate --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx verify --namespace NS --id ID --name NAME --image IMAGE -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "  tx prepare --namespace NS --id ID --git-ref refs/heads/BRANCH")
+	fmt.Fprintln(out, "  tx renew --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx approve --namespace NS --id ID --key FILE --key-id ID --approver ID --class CLASS [--decision approve|reject|revise]")
 	fmt.Fprintln(out, "  tx release --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx get|effects|events|abort --namespace NS --id ID")

@@ -13,6 +13,7 @@
     "version": { "const": "gatemole.agent_transaction.v0" },
     "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "namespace": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "attempt": { "type": "integer", "minimum": 1 },
     "intent_digest": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/digest" },
     "task": { "$ref": "gatemole.agent_task.v0.schema.json" },
     "admission": {
@@ -50,7 +51,7 @@
     "state": {
       "type": "string",
       "enum": [
-        "created", "running", "staged", "validating", "validation_failed",
+        "created", "running", "completed_no_effect", "staged", "validating", "validation_failed",
         "revise_required", "blocked", "pending_approval", "ready_to_commit",
         "committing", "committed", "compensating", "rolled_back", "release_failed",
         "partially_committed", "manual_recovery_required", "aborted"

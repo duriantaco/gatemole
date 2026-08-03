@@ -246,6 +246,7 @@ func (c *Client) CreateTaskTransaction(
 		Version:                model.AgentTransactionVersion,
 		ID:                     task.TransactionID,
 		Namespace:              task.Namespace,
+		Attempt:                1,
 		IntentDigest:           task.IntentDigest,
 		Task:                   &task,
 		Sponsor:                sponsor,
@@ -346,6 +347,25 @@ func (c *Client) StartTransaction(
 ) (transactionreducer.Projection, error) {
 	var projection transactionreducer.Projection
 	err := c.transactionMutation(ctx, namespace, transactionID, "start", expectedSequence, actor, &projection)
+	return projection, err
+}
+
+func (c *Client) RenewTransactionAuthority(
+	ctx context.Context,
+	namespace, transactionID string,
+	expectedSequence int64,
+	actor model.Principal,
+) (transactionreducer.Projection, error) {
+	var projection transactionreducer.Projection
+	err := c.transactionMutation(
+		ctx,
+		namespace,
+		transactionID,
+		"renew",
+		expectedSequence,
+		actor,
+		&projection,
+	)
 	return projection, err
 }
 

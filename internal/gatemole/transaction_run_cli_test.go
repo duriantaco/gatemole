@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -402,6 +403,253 @@ func TestTransactionRunPersistsFailedAgentWithoutStaging(t *testing.T) {
 	if result.Projection.Transaction.State != model.TransactionRunning ||
 		len(result.Projection.Effects) != 0 || result.Decision != nil {
 		t.Fatalf("failed execution staged effects: %#v", result)
+	}
+	client := newClient("")
+	projection, err := client.GetTransaction(
+		context.Background(), "payments", "tx:runtime-failure",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.StageTransaction(
+		context.Background(),
+		"payments",
+		"tx:runtime-failure",
+		projection.Transaction.EventSequence,
+		model.Principal{ID: "operator:local", Kind: model.PrincipalOperator},
+	); err == nil {
+		t.Fatal("failed execution was allowed to stage partial workspace state")
+	}
+}
+
+func TestTransactionRunRetriesFailedExecutionAndBindsEffectsToRecovery(t *testing.T) {
+	repo := transactionRunRepository(t)
+	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = kernelStore.Close() })
+	manager, err := gitstage.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := kernelapi.NewServer(
+		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
+		kernelapi.WithTransactionRuntime(
+			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
+		),
+		kernelapi.WithExecutionRuntimePolicy(
+			verifierExecutionPolicy(writeFakeOCIRuntime(t)),
+		),
+	).Handler()
+	newClient := func(string) transactionClient {
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
+	}
+	marker := filepath.Join(t.TempDir(), "first-attempt-failed")
+	script := fmt.Sprintf(
+		"if [ ! -f %q ]; then : > %q; exit 7; fi; mkdir -p internal/retry; printf 'package retry\\n' > internal/retry/recovered.go",
+		marker,
+		marker,
+	)
+	arguments := []string{
+		"run",
+		"--id", "tx:runtime-retry",
+		"--namespace", "payments",
+		"--intent", "Recover a failed agent execution",
+		"--run", "run:runtime-retry",
+		"--runtime", "host",
+		"--unsafe-host",
+		"--",
+		"/bin/sh", "-c", script,
+	}
+	_, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true, arguments...,
+	)
+	if code != 7 {
+		t.Fatalf("first run code=%d, want 7; stderr=%s", code, stderr)
+	}
+	stdout, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true, arguments...,
+	)
+	if code != 0 {
+		t.Fatalf("retry code=%d stderr=%s", code, stderr)
+	}
+	var result transactionRunResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("decode retry output: %v\n%s", err, stdout)
+	}
+	if len(result.Projection.Executions) != 2 ||
+		result.Projection.Executions[0].Status != model.AgentExecutionFailed ||
+		result.Projection.Executions[1].Status != model.AgentExecutionSucceeded ||
+		result.Projection.Executions[0].Attempt != 1 ||
+		result.Projection.Executions[1].Attempt != 1 ||
+		len(result.Projection.Effects) != 1 ||
+		result.Projection.Effects[0].OriginExecutionID != result.Projection.Executions[1].ID {
+		t.Fatalf("retry receipts or effect origin are invalid: %#v", result.Projection)
+	}
+}
+
+func TestTransactionRunCompletesSuccessfulNoChangeAttempt(t *testing.T) {
+	repo := transactionRunRepository(t)
+	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = kernelStore.Close() })
+	manager, err := gitstage.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := kernelapi.NewServer(
+		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
+		kernelapi.WithTransactionRuntime(
+			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
+		),
+		kernelapi.WithExecutionRuntimePolicy(
+			verifierExecutionPolicy(writeFakeOCIRuntime(t)),
+		),
+	).Handler()
+	newClient := func(string) transactionClient {
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
+	}
+	stdout, stderr, code := invokeTransactionRunCLI(
+		repo,
+		newClient,
+		true,
+		"run",
+		"--id", "tx:runtime-no-change",
+		"--namespace", "payments",
+		"--intent", "Inspect the repository and change only if needed",
+		"--run", "run:runtime-no-change",
+		"--runtime", "host",
+		"--unsafe-host",
+		"--",
+		"/bin/sh", "-c", ":",
+	)
+	if code != 0 {
+		t.Fatalf("no-change run code=%d stderr=%s", code, stderr)
+	}
+	var result transactionRunResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("decode no-change output: %v\n%s", err, stdout)
+	}
+	if result.Projection.Transaction.State != model.TransactionCompletedNoEffect ||
+		!result.Projection.Transaction.State.Terminal() ||
+		result.Projection.Transaction.CompletedAt == nil ||
+		len(result.Projection.Effects) != 0 || result.Decision != nil ||
+		result.Execution.Status != model.AgentExecutionSucceeded {
+		t.Fatalf("unexpected no-change result: %#v", result)
+	}
+}
+
+func TestTransactionAuthorityCanBeRenewedWithoutRestaging(t *testing.T) {
+	repo := transactionRunRepository(t)
+	runGitForTransactionTest(t, repo, "branch", "release/renewed-authority", "HEAD")
+	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = kernelStore.Close() })
+	manager, err := gitstage.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := kernelapi.NewServer(
+		kernelStore,
+		bindTransactionRuntimeForTest(t, repo, kernelStore),
+		kernelapi.WithTransactionRuntime(
+			manager, repo, t.TempDir(), transactionreducer.BaselinePolicy{},
+		),
+		kernelapi.WithExecutionRuntimePolicy(
+			verifierExecutionPolicy(writeFakeOCIRuntime(t)),
+		),
+	).Handler()
+	newClient := func(string) transactionClient {
+		return runtimeBoundHandlerClientForTest(t, repo, handler)
+	}
+	_, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true,
+		"run",
+		"--id", "tx:authority-renewal",
+		"--namespace", "payments",
+		"--intent", "Change authentication and renew its release authority",
+		"--run", "run:authority-renewal",
+		"--runtime", "host",
+		"--unsafe-host",
+		"--",
+		"/bin/sh", "-c",
+		"printf 'package auth\\n\\nfunc Allowed() bool { return true }\\n' > internal/auth/middleware.go; printf 'package auth\\n\\nfunc TestAllowed() { /* renewed */ }\\n' > internal/auth/middleware_test.go",
+	)
+	if code != 0 {
+		t.Fatalf("run code=%d stderr=%s", code, stderr)
+	}
+	pinnedVerifier := "registry.example.invalid/verifier@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	_, stderr, code = invokeTransactionRunCLI(
+		repo, newClient, true,
+		"verify",
+		"--namespace", "payments",
+		"--id", "tx:authority-renewal",
+		"--name", "tests",
+		"--image", pinnedVerifier,
+		"--",
+		"/bin/sh", "-c", "test -f internal/auth/middleware.go",
+	)
+	if code != 0 {
+		t.Fatalf("verify code=%d stderr=%s", code, stderr)
+	}
+	prepareStdout, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true,
+		"prepare",
+		"--namespace", "payments",
+		"--id", "tx:authority-renewal",
+		"--git-ref", "refs/heads/release/renewed-authority",
+	)
+	if code != 0 {
+		t.Fatalf("prepare code=%d stderr=%s", code, stderr)
+	}
+	var first kernelclient.TransactionPrepareResult
+	if err := json.Unmarshal([]byte(prepareStdout), &first); err != nil {
+		t.Fatalf("decode first authority: %v", err)
+	}
+	renewedStdout, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true,
+		"renew",
+		"--namespace", "payments",
+		"--id", "tx:authority-renewal",
+	)
+	if code != 0 {
+		t.Fatalf("renew code=%d stderr=%s", code, stderr)
+	}
+	var renewed transactionreducer.Projection
+	if err := json.Unmarshal([]byte(renewedStdout), &renewed); err != nil {
+		t.Fatalf("decode renewed projection: %v\n%s", err, renewedStdout)
+	}
+	if renewed.Transaction.State != model.TransactionValidating ||
+		renewed.CommitPlan != nil || renewed.ApprovalPackage != nil ||
+		len(renewed.SupersededAuthorities) != 1 ||
+		len(renewed.Verifications) != 1 ||
+		renewed.Transaction.EffectSetDigest == "" {
+		t.Fatalf("renewal changed staged work or retained old authority: %#v", renewed)
+	}
+	secondStdout, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true,
+		"prepare",
+		"--namespace", "payments",
+		"--id", "tx:authority-renewal",
+		"--git-ref", "refs/heads/release/renewed-authority",
+	)
+	if code != 0 {
+		t.Fatalf("second prepare code=%d stderr=%s", code, stderr)
+	}
+	var second kernelclient.TransactionPrepareResult
+	if err := json.Unmarshal([]byte(secondStdout), &second); err != nil {
+		t.Fatalf("decode second authority: %v", err)
+	}
+	if second.Projection.Transaction.State != model.TransactionPendingApproval ||
+		second.Projection.Transaction.ApprovalPackageDigest == first.Projection.Transaction.ApprovalPackageDigest {
+		t.Fatalf("renewal did not mint fresh approval authority: %#v", second.Projection)
 	}
 }
 
@@ -823,6 +1071,31 @@ func TestVerificationUsesReadOnlySnapshotAndRecordsMutationAttempt(t *testing.T)
 	}
 	if !bytes.Contains(sourceContent, []byte("return false")) {
 		t.Fatalf("transaction or verifier mutated the source worktree: %q", sourceContent)
+	}
+	stdout, stderr, code := invokeTransactionRunCLI(
+		repo, newClient, true,
+		"verify",
+		"--namespace", "payments",
+		"--id", "tx:verifier-tamper",
+		"--name", "malicious-verifier",
+		"--image", pinnedVerifier,
+		"--",
+		"/bin/sh", "-c",
+		"grep -q 'return true' internal/auth/middleware.go",
+	)
+	if code != 0 {
+		t.Fatalf("verification retry code=%d stderr=%s", code, stderr)
+	}
+	var retry transactionVerifyResult
+	if err := json.Unmarshal([]byte(stdout), &retry); err != nil {
+		t.Fatalf("decode verification retry: %v\n%s", err, stdout)
+	}
+	if retry.Projection.Transaction.State != model.TransactionValidating ||
+		retry.Verification.Status != model.VerificationPassed ||
+		len(retry.Projection.Verifications) != 1 ||
+		len(retry.Projection.SupersededVerifications) != 1 ||
+		retry.Projection.SupersededVerifications[0].Status != model.VerificationFailed {
+		t.Fatalf("failed verification was not safely superseded: %#v", retry.Projection)
 	}
 	materializationRoot := filepath.Join(stagingRoot, ".gatemole-verifier-trees")
 	entries, err := os.ReadDir(materializationRoot)

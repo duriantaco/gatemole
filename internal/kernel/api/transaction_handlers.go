@@ -212,6 +212,53 @@ func (s *Server) startTransaction(w http.ResponseWriter, r *http.Request) {
 	s.mutateTransactionState(w, r, model.TransactionRunning, "")
 }
 
+func (s *Server) renewTransactionAuthority(w http.ResponseWriter, r *http.Request) {
+	var request transactionMutationRequest
+	if err := decodeBody(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	namespace := r.PathValue("namespace")
+	transactionID := r.PathValue("transactionID")
+	lock := s.runLock(namespace, "transaction:"+transactionID)
+	lock.Lock()
+	defer lock.Unlock()
+	projection, err := s.checkedTransaction(
+		r,
+		namespace,
+		transactionID,
+		request.ExpectedSequence,
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	event, err := transactionreducer.NextEvent(
+		projection,
+		transactionreducer.EventAuthorityRenewed,
+		request.Actor,
+		s.now().UTC(),
+		transactionreducer.AuthorityRenewedPayload{
+			Reason: "commit authority renewed by operator",
+		},
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	next, err := s.store.AppendTransactionEvents(
+		r.Context(),
+		namespace,
+		request.ExpectedSequence,
+		[]model.TransactionEvent{event},
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, next)
+}
+
 func (s *Server) createTransactionWorktree(w http.ResponseWriter, r *http.Request) {
 	if s.gitStage == nil {
 		writeError(w, transactionRuntimeUnavailable())
@@ -333,6 +380,7 @@ func (s *Server) startAgentExecution(w http.ResponseWriter, r *http.Request) {
 		Version:             model.AgentExecutionVersion,
 		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
 		TransactionID:       transactionID,
+		Attempt:             projection.Transaction.Attempt,
 		RunID:               request.RunID,
 		StageBindingID:      projection.Transaction.StageBindings[0].ID,
 		Program:             request.Program,
@@ -641,6 +689,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		Version:             model.AgentExecutionVersion,
 		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
 		TransactionID:       transactionID,
+		Attempt:             projection.Transaction.Attempt,
 		RunID:               executionPlan.RunID,
 		StageBindingID:      executionPlan.StageBindingID,
 		Program:             program,
@@ -974,6 +1023,15 @@ func (s *Server) stageTransaction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, transactionTransitionError("only an un-staged running transaction can freeze effects"))
 		return
 	}
+	var originExecution *model.AgentExecution
+	if projection.Transaction.Task != nil {
+		execution, ok := latestAttemptExecution(projection)
+		if !ok || execution.Status != model.AgentExecutionSucceeded {
+			writeError(w, transactionTransitionError("task effects require the latest execution in the current attempt to succeed"))
+			return
+		}
+		originExecution = &execution
+	}
 	workspace, err := s.transactionWorkspace(r, projection)
 	if err != nil {
 		writeError(w, err)
@@ -985,14 +1043,46 @@ func (s *Server) stageTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(snapshot.Effects) == 0 {
-		writeError(w, transactionTransitionError("transaction worktree has no effects to stage"))
+		if originExecution == nil {
+			writeError(w, transactionTransitionError("transaction worktree has no effects to stage"))
+			return
+		}
+		completed, buildErr := transactionreducer.NextEvent(
+			projection,
+			transactionreducer.EventTransactionStateChanged,
+			request.Actor,
+			s.now().UTC(),
+			transactionreducer.TransactionStateChangedPayload{
+				From: model.TransactionRunning,
+				To:   model.TransactionCompletedNoEffect,
+			},
+		)
+		if buildErr != nil {
+			writeError(w, buildErr)
+			return
+		}
+		next, appendErr := s.store.AppendTransactionEvents(
+			r.Context(),
+			namespace,
+			request.ExpectedSequence,
+			[]model.TransactionEvent{completed},
+		)
+		if appendErr != nil {
+			writeError(w, appendErr)
+			return
+		}
+		writeJSON(w, http.StatusOK, stageResponse{Projection: next, Snapshot: snapshot})
 		return
 	}
 	temporary := projection
 	events := make([]model.TransactionEvent, 0, len(snapshot.Effects)+1)
 	for _, effect := range snapshot.Effects {
+		effect.Attempt = temporary.Transaction.Attempt
 		if len(temporary.Transaction.AgentRunIDs) == 1 {
 			effect.RunID = temporary.Transaction.AgentRunIDs[0]
+		}
+		if originExecution != nil {
+			effect.OriginExecutionID = originExecution.ID
 		}
 		event, buildErr := transactionreducer.NextEvent(
 			temporary, transactionreducer.EventEffectAdded, request.Actor, s.now().UTC(),
@@ -1146,7 +1236,8 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		writeError(w, err)
 		return
 	}
-	if projection.Transaction.State != model.TransactionValidating {
+	if projection.Transaction.State != model.TransactionValidating &&
+		projection.Transaction.State != model.TransactionValidationFailed {
 		writeError(w, transactionTransitionError("verification requires a validating transaction"))
 		return
 	}
@@ -1161,15 +1252,6 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 			writeError(w, &model.KernelError{
 				Code: model.ErrorCapabilityDenied, Operation: "record_transaction_verification",
 				Resource: transactionID, Message: "verifier image digest is not allowed by daemon policy",
-			})
-			return
-		}
-	}
-	for _, existing := range projection.Verifications {
-		if existing.Name == request.Name {
-			writeError(w, &model.KernelError{
-				Code: model.ErrorConflict, Operation: "record_transaction_verification",
-				Resource: transactionID, Message: "verification name already exists in the transaction",
 			})
 			return
 		}
@@ -1207,11 +1289,22 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		return
 	}
 	now := s.now().UTC()
+	temporary, events, err := verificationRetryPrefix(
+		projection,
+		request.Name,
+		request.Actor,
+		now,
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	expiresAt := now.Add(time.Hour)
 	result := model.VerificationResult{
 		Version:           model.VerificationResultVersion,
-		ID:                transactionreducer.VerificationID(transactionID, request.Name, request.ExpectedSequence+1),
+		ID:                transactionreducer.VerificationID(transactionID, request.Name, temporary.Transaction.EventSequence+1),
 		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
 		Name:              request.Name,
 		Kind:              model.VerificationInvariant,
 		Status:            request.Status,
@@ -1233,8 +1326,7 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		writeError(w, err)
 		return
 	}
-	temporary := projection
-	events := make([]model.TransactionEvent, 0, len(projection.Effects)+2)
+	events = slices.Grow(events, len(projection.Effects)+2)
 	if result.Status == model.VerificationPassed {
 		for _, effect := range temporary.Effects {
 			if effect.Status != model.EffectStaged {
@@ -1369,18 +1461,10 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		writeError(w, err)
 		return
 	}
-	if projection.Transaction.State != model.TransactionValidating {
+	if projection.Transaction.State != model.TransactionValidating &&
+		projection.Transaction.State != model.TransactionValidationFailed {
 		writeError(w, transactionTransitionError("verification requires a validating transaction"))
 		return
-	}
-	for _, existing := range projection.Verifications {
-		if existing.Name == request.Name {
-			writeError(w, &model.KernelError{
-				Code: model.ErrorConflict, Operation: "run_transaction_verification",
-				Resource: transactionID, Message: "verification name already exists in the transaction",
-			})
-			return
-		}
 	}
 	workspace, err := s.transactionWorkspace(r, projection)
 	if err != nil {
@@ -1399,6 +1483,16 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 			Resource:  transactionID,
 			Message:   "transaction worktree changed before verification",
 		})
+		return
+	}
+	verificationProjection, prefixEvents, err := verificationRetryPrefix(
+		projection,
+		request.Name,
+		request.Actor,
+		s.now().UTC(),
+	)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 	releaseWorkload, err := s.acquireWorkloadSlot(
@@ -1517,8 +1611,9 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	}
 	result := model.VerificationResult{
 		Version:           model.VerificationResultVersion,
-		ID:                transactionreducer.VerificationID(transactionID, request.Name, request.ExpectedSequence+1),
+		ID:                transactionreducer.VerificationID(transactionID, request.Name, verificationProjection.Transaction.EventSequence+1),
 		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
 		Name:              request.Name,
 		Kind:              model.VerificationInvariant,
 		Status:            status,
@@ -1544,7 +1639,12 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	next, err := s.appendPlatformVerification(
-		r, namespace, projection, result,
+		r,
+		namespace,
+		projection,
+		verificationProjection,
+		prefixEvents,
+		result,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -1556,14 +1656,92 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+func verificationRetryPrefix(
+	projection transactionreducer.Projection,
+	name string,
+	actor model.Principal,
+	now time.Time,
+) (transactionreducer.Projection, []model.TransactionEvent, error) {
+	var existing *model.VerificationResult
+	for index := range projection.Verifications {
+		if projection.Verifications[index].Name == name {
+			existing = &projection.Verifications[index]
+			break
+		}
+	}
+	if projection.Transaction.State == model.TransactionValidationFailed &&
+		existing == nil {
+		return transactionreducer.Projection{}, nil, &model.KernelError{
+			Code:      model.ErrorConflict,
+			Operation: "retry_transaction_verification",
+			Resource:  projection.Transaction.ID,
+			Message:   "retry must replace the verification that failed",
+		}
+	}
+	if existing != nil &&
+		existing.Status == model.VerificationPassed &&
+		(existing.ExpiresAt == nil || existing.ExpiresAt.After(now)) {
+		return transactionreducer.Projection{}, nil, &model.KernelError{
+			Code:      model.ErrorConflict,
+			Operation: "retry_transaction_verification",
+			Resource:  existing.ID,
+			Message:   "verification name already has a current passing result",
+		}
+	}
+	temporary := projection
+	events := make([]model.TransactionEvent, 0, 2)
+	if temporary.Transaction.State == model.TransactionValidationFailed {
+		event, err := transactionreducer.NextEvent(
+			temporary,
+			transactionreducer.EventTransactionStateChanged,
+			actor,
+			now,
+			transactionreducer.TransactionStateChangedPayload{
+				From: model.TransactionValidationFailed,
+				To:   model.TransactionValidating,
+			},
+		)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		temporary, err = transactionreducer.Apply(&temporary, event)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		events = append(events, event)
+	}
+	if existing != nil {
+		event, err := transactionreducer.NextEvent(
+			temporary,
+			transactionreducer.EventVerificationSuperseded,
+			actor,
+			now,
+			transactionreducer.VerificationSupersededPayload{
+				VerificationID: existing.ID,
+				Reason:         "verification rerun requested",
+			},
+		)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		temporary, err = transactionreducer.Apply(&temporary, event)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		events = append(events, event)
+	}
+	return temporary, events, nil
+}
+
 func (s *Server) appendPlatformVerification(
 	r *http.Request,
 	namespace string,
-	projection transactionreducer.Projection,
+	base transactionreducer.Projection,
+	temporary transactionreducer.Projection,
+	events []model.TransactionEvent,
 	result model.VerificationResult,
 ) (transactionreducer.Projection, error) {
-	temporary := projection
-	events := make([]model.TransactionEvent, 0, len(projection.Effects)+2)
+	events = slices.Grow(events, len(temporary.Effects)+2)
 	if result.Status == model.VerificationPassed {
 		for _, effect := range temporary.Effects {
 			if effect.Status != model.EffectStaged {
@@ -1614,7 +1792,7 @@ func (s *Server) appendPlatformVerification(
 		events = append(events, failed)
 	}
 	return s.store.AppendTransactionEvents(
-		r.Context(), namespace, projection.Transaction.EventSequence, events,
+		r.Context(), namespace, base.Transaction.EventSequence, events,
 	)
 }
 
@@ -2327,16 +2505,40 @@ func matchesFrozenStage(
 	if err != nil || rawDigest != snapshot.EffectSetDigest {
 		return false
 	}
-	effects := append([]model.Effect(nil), snapshot.Effects...)
-	if len(projection.Transaction.AgentRunIDs) == 1 {
-		for index := range effects {
-			effects[index].RunID =
-				projection.Transaction.AgentRunIDs[0]
-		}
-	}
+	effects := bindSnapshotEffects(snapshot.Effects, projection)
 	boundDigest, err := transactionreducer.ComputeEffectSetDigest(effects)
 	return err == nil &&
 		boundDigest == projection.Transaction.EffectSetDigest
+}
+
+func bindSnapshotEffects(
+	effects []model.Effect,
+	projection transactionreducer.Projection,
+) []model.Effect {
+	bound := append([]model.Effect(nil), effects...)
+	execution, hasExecution := latestAttemptExecution(projection)
+	for index := range bound {
+		bound[index].Attempt = projection.Transaction.Attempt
+		if len(projection.Transaction.AgentRunIDs) == 1 {
+			bound[index].RunID = projection.Transaction.AgentRunIDs[0]
+		}
+		if projection.Transaction.Task != nil &&
+			hasExecution && execution.Status == model.AgentExecutionSucceeded {
+			bound[index].OriginExecutionID = execution.ID
+		}
+	}
+	return bound
+}
+
+func latestAttemptExecution(
+	projection transactionreducer.Projection,
+) (model.AgentExecution, bool) {
+	for index := len(projection.Executions) - 1; index >= 0; index-- {
+		if projection.Executions[index].Attempt == projection.Transaction.Attempt {
+			return projection.Executions[index], true
+		}
+	}
+	return model.AgentExecution{}, false
 }
 
 func transactionRuntimeUnavailable() *model.KernelError {

@@ -275,6 +275,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/verifications", s.recordTransactionVerification)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/verifications/run", s.runTransactionVerification)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/prepare", s.prepareTransaction)
+	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/renew", s.renewTransactionAuthority)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/approvals", s.resolveTransactionApproval)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/release", s.releaseTransaction)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/abort", s.abortTransaction)

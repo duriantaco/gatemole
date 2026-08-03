@@ -287,6 +287,46 @@ gatemole --repo /path/to/service tx abort \
   --namespace payments --id <transaction-id>
 ```
 
+## Attempts and recovery
+
+Current task admissions begin at attempt `1`. A terminal failed, interrupted,
+or start-failed agent execution may be followed by another execution in the
+same attempt. Only the latest successful execution can contribute staged
+effects; every task-bound effect records that execution ID. A failed process
+receipt therefore cannot be used to freeze partial workspace changes.
+
+Repeating `gatemole run` with the same transaction ID and identical admission
+input resumes from the durable transaction head. It reuses the isolated
+worktree, retries a failed execution, or continues staging and sequence
+validation after a successful execution. A successful execution whose final
+Git tree equals the base revision ends in the terminal
+`completed_no_effect` state.
+
+Starting a transaction again from `staged`, `validation_failed`, or
+`revise_required` begins the next numbered attempt. Active effects,
+verification results, and release authority are removed from the releasable
+projection, but remain queryable under `superseded_attempts`; execution
+receipts and the append-only event history are never rewritten.
+
+A failed, indeterminate, or expired verifier can be run again with the same
+name. The old result moves to `superseded_verifications`, the frozen effect and
+staged-state digests stay unchanged, and only the replacement result is
+eligible for authority preparation.
+
+If an approval package or its evidence expires before release, revoke it and
+return the same frozen stage to validation:
+
+```sh
+gatemole --repo /path/to/service tx renew \
+  --namespace payments --id <transaction-id>
+```
+
+Renewal preserves current verification results, supersedes expired ones, and
+archives the old commit plan and approval package. Rerun any expired verifier,
+then call `tx prepare` again to mint fresh authority. These retries apply only
+before external release; unknown or non-idempotent connector outcomes still
+require reconciliation and are never blindly retried.
+
 Sequence validation and every verifier re-inspect the frozen state. Mutation
 after staging returns `TRANSACTION_CONFLICT` and leaves authority unchanged.
 

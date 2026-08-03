@@ -675,6 +675,7 @@ func TestConfiguredRuntimeKeepsLegacyAdmissionReadOnlyAcrossMutationPaths(
 			},
 		},
 		{name: "prepare", suffix: "/prepare", body: mutation},
+		{name: "authority renewal", suffix: "/renew", body: mutation},
 		{
 			name:   "approval",
 			suffix: "/approvals",

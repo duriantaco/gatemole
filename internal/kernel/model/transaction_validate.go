@@ -12,6 +12,9 @@ func (transaction AgentTransaction) Validate() error {
 	if err := validateVersion(resource, transaction.Version, AgentTransactionVersion); err != nil {
 		return err
 	}
+	if transaction.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
+	}
 	for _, item := range []struct {
 		field string
 		value string
@@ -188,6 +191,9 @@ func (execution AgentExecution) Validate() error {
 	if err := validateVersion(resource, execution.Version, AgentExecutionVersion); err != nil {
 		return err
 	}
+	if execution.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
+	}
 	for _, item := range []struct {
 		field string
 		value string
@@ -325,6 +331,9 @@ func (effect Effect) Validate() error {
 	if err := validateVersion(resource, effect.Version, EffectVersion); err != nil {
 		return err
 	}
+	if effect.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
+	}
 	for _, item := range []struct {
 		field string
 		value string
@@ -343,6 +352,7 @@ func (effect Effect) Validate() error {
 		value string
 	}{
 		{"run_id", effect.RunID},
+		{"origin_execution_id", effect.OriginExecutionID},
 		{"origin_action_id", effect.OriginActionID},
 		{"idempotency_key", effect.IdempotencyKey},
 	} {
@@ -466,6 +476,9 @@ func (result VerificationResult) Validate() error {
 	if err := validateVersion(resource, result.Version, VerificationResultVersion); err != nil {
 		return err
 	}
+	if result.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
+	}
 	for _, item := range []struct {
 		field string
 		value string
@@ -527,6 +540,9 @@ func (approval ApprovalPackage) Validate() error {
 	const resource = "ApprovalPackage"
 	if err := validateVersion(resource, approval.Version, ApprovalPackageVersion); err != nil {
 		return err
+	}
+	if approval.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
 	}
 	for _, item := range []struct {
 		field string
@@ -651,6 +667,9 @@ func (plan CommitPlan) Validate() error {
 	const resource = "CommitPlan"
 	if err := validateVersion(resource, plan.Version, CommitPlanVersion); err != nil {
 		return err
+	}
+	if plan.Attempt < 0 {
+		return invalid(resource, "attempt", "attempt cannot be negative")
 	}
 	for _, item := range []struct {
 		field string
@@ -850,7 +869,7 @@ func validateEffectReceipt(resource, field string, receipt EffectReceipt) error 
 
 func validTransactionState(state TransactionState) bool {
 	switch state {
-	case TransactionCreated, TransactionRunning, TransactionStaged,
+	case TransactionCreated, TransactionRunning, TransactionCompletedNoEffect, TransactionStaged,
 		TransactionValidating, TransactionValidationFailed,
 		TransactionReviseRequired, TransactionBlocked,
 		TransactionPendingApproval, TransactionReadyToCommit,

@@ -21,6 +21,7 @@
     "version": { "const": "gatemole.agent_execution.v0" },
     "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "attempt": { "type": "integer", "minimum": 1 },
     "run_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "stage_binding_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "program": { "type": "string", "minLength": 1, "maxLength": 4096 },
