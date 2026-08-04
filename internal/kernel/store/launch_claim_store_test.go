@@ -226,6 +226,7 @@ func prepareLaunchClaim(
 			transaction.Transaction.EventSequence+1,
 		),
 		TransactionID:       transaction.Transaction.ID,
+		Attempt:             transaction.Transaction.Attempt,
 		RunID:               admitted.Run.Run.ID,
 		StageBindingID:      binding.ID,
 		Program:             "agent",

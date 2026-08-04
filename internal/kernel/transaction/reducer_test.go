@@ -177,8 +177,103 @@ func TestMutationPathInvalidatesFrozenVerificationAndApproval(t *testing.T) {
 	if tx.StagedStateDigest != "" || tx.EffectSetDigest != "" ||
 		tx.CommitPlanDigest != "" || tx.ApprovalPackageDigest != "" ||
 		len(tx.VerificationResultIDs) != 0 || h.projection.CommitPlan != nil ||
-		h.projection.ApprovalPackage != nil {
+		h.projection.ApprovalPackage != nil || len(h.projection.Effects) != 0 {
 		t.Fatalf("returning to running did not invalidate frozen authority: %#v", h.projection)
+	}
+	if tx.Attempt != 2 || len(h.projection.SupersededAttempts) != 1 ||
+		len(h.projection.SupersededAttempts[0].Effects) != 1 ||
+		h.projection.SupersededAttempts[0].Attempt != 1 {
+		t.Fatalf("revision did not preserve the superseded attempt: %#v", h.projection)
+	}
+	h.addEffect(effectFixture(h.now, 1, nil))
+	h.stage()
+	if h.projection.Effects[0].Attempt != 2 ||
+		h.projection.Transaction.State != model.TransactionStaged {
+		t.Fatalf("new attempt could not stage an independent effect set: %#v", h.projection)
+	}
+	if err := h.projection.Validate(); err != nil {
+		t.Fatalf("validate revised projection: %v", err)
+	}
+}
+
+func TestExecutionRetryRequiresLatestSuccessBeforeNoEffectCompletion(t *testing.T) {
+	h := newHarness(t)
+	h.state(model.TransactionRunning, "", nil)
+	h.emit(EventStageBindingCreated, StageBindingCreatedPayload{Binding: model.StageBinding{
+		ID: "stage:tx-demo", Kind: "git_worktree",
+		Resource: model.ResourceSelector{Kind: "git_repository", Pattern: "repository"},
+		Location: "/tmp/gatemole-tx-demo", BaseRevision: strings.Repeat("a", 40),
+		CreatedAt: h.now.Add(time.Second),
+	}})
+	first := h.startExecution("execution:tx-demo:1")
+	nonzero := 7
+	h.emit(EventAgentExecutionFinished, AgentExecutionFinishedPayload{
+		ExecutionID: first.ID, Status: model.AgentExecutionFailed, ExitCode: &nonzero,
+		StdoutDigest: digest("a"), StderrDigest: digest("b"),
+	})
+	assertCode(
+		t,
+		h.stateError(model.TransactionCompletedNoEffect, "", nil),
+		model.ErrorTransitionInvalid,
+	)
+	second := h.startExecution("execution:tx-demo:2")
+	zero := 0
+	h.emit(EventAgentExecutionFinished, AgentExecutionFinishedPayload{
+		ExecutionID: second.ID, Status: model.AgentExecutionSucceeded, ExitCode: &zero,
+		StdoutDigest: digest("c"), StderrDigest: digest("d"),
+	})
+	h.state(model.TransactionCompletedNoEffect, "", nil)
+	if !h.projection.Transaction.State.Terminal() ||
+		h.projection.Transaction.CompletedAt == nil || len(h.projection.Executions) != 2 {
+		t.Fatalf("no-effect completion did not preserve retry receipts: %#v", h.projection)
+	}
+}
+
+func TestFailedVerificationCanBeSupersededWithoutChangingFrozenEffects(t *testing.T) {
+	h := newHarness(t)
+	h.state(model.TransactionRunning, "", nil)
+	h.addEffect(effectFixture(h.now, 1, nil))
+	h.stage()
+	h.state(model.TransactionValidating, "", nil)
+	h.verify(model.VerificationFailed)
+	failedID := h.projection.Verifications[0].ID
+	h.state(model.TransactionValidationFailed, "tests failed", nil)
+	h.state(model.TransactionValidating, "", nil)
+	h.emit(EventVerificationSuperseded, VerificationSupersededPayload{
+		VerificationID: failedID,
+		Reason:         "rerun failed verifier",
+	})
+	result := h.verificationFixture(
+		"verification:tx-demo:tests-retry",
+		model.VerificationPassed,
+	)
+	h.emit(EventVerificationRecorded, VerificationRecordedPayload{Result: result})
+	if len(h.projection.Verifications) != 1 ||
+		h.projection.Verifications[0].ID != result.ID ||
+		len(h.projection.SupersededVerifications) != 1 ||
+		h.projection.SupersededVerifications[0].ID != failedID ||
+		h.projection.Transaction.EffectSetDigest == "" {
+		t.Fatalf("verification retry did not preserve immutable history: %#v", h.projection)
+	}
+}
+
+func TestAuthorityRenewalRevokesPackageAndExpiresEvidence(t *testing.T) {
+	h := validatedHarness(t, 1)
+	h.freezeApproval([]string{"security-reviewer"})
+	h.state(model.TransactionPendingApproval, "", []string{"approval:security:1"})
+	h.now = h.now.Add(2 * time.Hour)
+	h.emit(EventAuthorityRenewed, AuthorityRenewedPayload{
+		Reason: "authority expired before approval",
+	})
+	if h.projection.Transaction.State != model.TransactionValidating ||
+		h.projection.CommitPlan != nil || h.projection.ApprovalPackage != nil ||
+		len(h.projection.SupersededAuthorities) != 1 ||
+		len(h.projection.Verifications) != 0 ||
+		len(h.projection.SupersededVerifications) != 1 {
+		t.Fatalf("authority renewal did not revoke stale authority: %#v", h.projection)
+	}
+	if err := h.projection.Validate(); err != nil {
+		t.Fatalf("validate renewed projection: %v", err)
 	}
 }
 
@@ -273,6 +368,7 @@ func TestAgentExecutionReceiptReplaysAndMustFinishBeforeStage(t *testing.T) {
 		Version:             model.AgentExecutionVersion,
 		ID:                  "execution:demo",
 		TransactionID:       h.projection.Transaction.ID,
+		Attempt:             h.projection.Transaction.Attempt,
 		RunID:               "run:demo",
 		StageBindingID:      "stage:git-demo",
 		Program:             "agent",
@@ -334,6 +430,7 @@ func newHarness(t *testing.T) *harness {
 		Version:                model.AgentTransactionVersion,
 		ID:                     "tx:demo",
 		Namespace:              "team-payments",
+		Attempt:                1,
 		IntentDigest:           digest("1"),
 		Sponsor:                model.Principal{ID: "human:alice", Kind: model.PrincipalHuman},
 		AgentRunIDs:            []string{"run:demo"},
@@ -449,7 +546,30 @@ func (h *harness) stateError(to model.TransactionState, reason string, approvals
 
 func (h *harness) addEffect(effect model.Effect) {
 	h.t.Helper()
+	effect.Attempt = h.projection.Transaction.Attempt
 	h.emit(EventEffectAdded, EffectAddedPayload{Effect: effect})
+}
+
+func (h *harness) startExecution(id string) model.AgentExecution {
+	h.t.Helper()
+	execution := model.AgentExecution{
+		Version:             model.AgentExecutionVersion,
+		ID:                  id,
+		TransactionID:       h.projection.Transaction.ID,
+		Attempt:             h.projection.Transaction.Attempt,
+		RunID:               "run:demo",
+		StageBindingID:      "stage:tx-demo",
+		Program:             "agent",
+		CommandDigest:       digest("1"),
+		RuntimeClass:        "host",
+		RuntimeConfigDigest: digest("2"),
+		Status:              model.AgentExecutionRunning,
+		StartedAt:           h.now.Add(time.Second),
+	}
+	h.emit(EventAgentExecutionStarted, AgentExecutionStartedPayload{
+		Execution: execution,
+	})
+	return execution
 }
 
 func (h *harness) stage() {
@@ -481,10 +601,24 @@ func (h *harness) effectState(id string, to model.EffectStatus, commitReceipt, c
 
 func (h *harness) verify(status model.VerificationStatus) {
 	h.t.Helper()
-	h.emit(EventVerificationRecorded, VerificationRecordedPayload{Result: model.VerificationResult{
+	h.emit(EventVerificationRecorded, VerificationRecordedPayload{Result: h.verificationFixture(
+		"verification:tx-demo:tests",
+		status,
+	)})
+}
+
+func (h *harness) verificationFixture(
+	id string,
+	status model.VerificationStatus,
+) model.VerificationResult {
+	h.t.Helper()
+	evaluatedAt := h.now.Add(time.Second)
+	expiresAt := evaluatedAt.Add(time.Hour)
+	return model.VerificationResult{
 		Version:           model.VerificationResultVersion,
-		ID:                "verification:tx-demo:tests",
+		ID:                id,
 		TransactionID:     h.projection.Transaction.ID,
+		Attempt:           h.projection.Transaction.Attempt,
 		Name:              "authentication-behavior",
 		Kind:              model.VerificationInvariant,
 		Status:            status,
@@ -498,8 +632,9 @@ func (h *harness) verify(status model.VerificationStatus) {
 			URI: "evidence://tx-demo/tests", Digest: digest("8"), MediaType: "application/json",
 		}},
 		Summary:     "verification completed",
-		EvaluatedAt: h.now.Add(time.Second),
-	}})
+		EvaluatedAt: evaluatedAt,
+		ExpiresAt:   &expiresAt,
+	}
 }
 
 func (h *harness) freezePlan() {
@@ -528,6 +663,7 @@ func (h *harness) freezePlan() {
 		Version:                 model.CommitPlanVersion,
 		ID:                      "commit-plan:tx-demo",
 		TransactionID:           h.projection.Transaction.ID,
+		Attempt:                 h.projection.Transaction.Attempt,
 		IntentDigest:            h.projection.Transaction.IntentDigest,
 		EffectSetDigest:         h.projection.Transaction.EffectSetDigest,
 		StagedStateDigest:       h.projection.Transaction.StagedStateDigest,
@@ -567,6 +703,7 @@ func (h *harness) freezeApproval(classes []string) {
 		Version:                 model.ApprovalPackageVersion,
 		ID:                      "approval-package:tx-demo",
 		TransactionID:           h.projection.Transaction.ID,
+		Attempt:                 h.projection.Transaction.Attempt,
 		IntentDigest:            h.projection.Transaction.IntentDigest,
 		EffectSetDigest:         h.projection.Transaction.EffectSetDigest,
 		StagedStateDigest:       h.projection.Transaction.StagedStateDigest,
@@ -624,6 +761,7 @@ func effectFixture(now time.Time, sequence int, dependencies []string) model.Eff
 		Version:         model.EffectVersion,
 		ID:              "effect:tx-demo:" + string(rune('0'+sequence)),
 		TransactionID:   "tx:demo",
+		Attempt:         1,
 		Sequence:        int64(sequence),
 		RunID:           "run:demo",
 		OriginActionID:  "action:tx-demo:" + string(rune('0'+sequence)),

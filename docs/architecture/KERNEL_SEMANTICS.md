@@ -139,6 +139,13 @@ snapshot while `agent_execution.started` is appended. The authority deadline
 also bounds model-broker startup. A stale or expired plan therefore starts no
 broker or agent container.
 
+A transaction may retain multiple immutable execution receipts. Another launch
+is allowed only while the transaction is running and no execution is active.
+Failed, interrupted, and start-failed receipts may be retried; effects are
+eligible to freeze only after the latest execution in the active transaction
+attempt succeeds. Revision starts a new numbered attempt and archives the old
+mutable work rather than rewriting it.
+
 The claim does not yet advance and settle both lifecycle ledgers. That paired
 run/transaction mutation and durable usage charging are the next OS-3 step.
 

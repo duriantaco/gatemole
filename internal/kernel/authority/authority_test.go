@@ -267,6 +267,39 @@ func TestCompileRejectsBrokenLiveBindingsAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestCompileAllowsRetryAfterTerminalExecutionReceipt(t *testing.T) {
+	input := validInput(
+		t,
+		workspaceResource("filesystem.read", "filesystem.write"),
+		model.BudgetLimits{},
+	)
+	exitCode := 7
+	completedAt := input.Now.Add(-time.Second)
+	input.Executions = []model.AgentExecution{{
+		Version:             model.AgentExecutionVersion,
+		ID:                  "execution:prior",
+		TransactionID:       input.Transaction.ID,
+		Attempt:             input.Transaction.Attempt,
+		RunID:               input.Run.ID,
+		StageBindingID:      input.Transaction.StageBindings[0].ID,
+		Program:             "agent",
+		CommandDigest:       input.Task.AgentProfile.CommandDigest,
+		RuntimeClass:        "oci",
+		RuntimeConfigDigest: testDigest("c"),
+		ImageDigest:         input.Task.AgentProfile.ImageDigest,
+		TaskDigest:          input.Task.Digest,
+		Status:              model.AgentExecutionFailed,
+		ExitCode:            &exitCode,
+		StdoutDigest:        testDigest("d"),
+		StderrDigest:        testDigest("e"),
+		StartedAt:           input.Now.Add(-2 * time.Second),
+		CompletedAt:         &completedAt,
+	}}
+	if _, err := authority.Compile(input); err != nil {
+		t.Fatalf("terminal execution prevented retry: %v", err)
+	}
+}
+
 func TestCompileRejectsInactiveGrantsAndTimeoutWidening(t *testing.T) {
 	tests := []struct {
 		name   string

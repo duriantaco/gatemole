@@ -207,8 +207,8 @@ func validateBindings(input CompileInput) error {
 	}
 	if transaction.State != model.TransactionRunning ||
 		len(transaction.StageBindings) != 1 ||
-		len(input.Executions) != 0 {
-		return deny(model.ErrorTransitionInvalid, transaction.ID, "transaction must be running with one stage and no prior execution", nil)
+		hasActiveExecution(input.Executions) {
+		return deny(model.ErrorTransitionInvalid, transaction.ID, "transaction must be running with one stage and no active execution", nil)
 	}
 	if binding == nil || transaction.Task == nil ||
 		task.Namespace != run.Namespace || task.Namespace != transaction.Namespace ||
@@ -447,6 +447,21 @@ func exactOperations(actual []string, expected ...string) bool {
 		}
 	}
 	return true
+}
+
+func hasActiveExecution(executions []model.AgentExecution) bool {
+	for _, execution := range executions {
+		switch execution.Status {
+		case model.AgentExecutionSucceeded,
+			model.AgentExecutionFailed,
+			model.AgentExecutionInterrupted,
+			model.AgentExecutionStartFailed:
+			continue
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 func sameTime(left, right *time.Time) bool {

@@ -102,8 +102,9 @@ func PrepareAuthority(
 	}
 	plan := model.CommitPlan{
 		Version:                 model.CommitPlanVersion,
-		ID:                      authorityID("commit-plan", projection.Transaction.ID, now),
+		ID:                      authorityID("commit-plan", projection.Transaction.ID, projection.Transaction.Attempt, now),
 		TransactionID:           projection.Transaction.ID,
+		Attempt:                 projection.Transaction.Attempt,
 		IntentDigest:            projection.Transaction.IntentDigest,
 		EffectSetDigest:         projection.Transaction.EffectSetDigest,
 		StagedStateDigest:       projection.Transaction.StagedStateDigest,
@@ -142,12 +143,13 @@ func PrepareAuthority(
 	if decision.Outcome == SequenceRequireApproval {
 		classes = []string{"security-reviewer"}
 		target = model.TransactionPendingApproval
-		outstanding = []string{authorityID("approval", projection.Transaction.ID, now)}
+		outstanding = []string{authorityID("approval", projection.Transaction.ID, projection.Transaction.Attempt, now)}
 	}
 	approval := model.ApprovalPackage{
 		Version:                 model.ApprovalPackageVersion,
-		ID:                      authorityID("approval-package", projection.Transaction.ID, now),
+		ID:                      authorityID("approval-package", projection.Transaction.ID, projection.Transaction.Attempt, now),
 		TransactionID:           projection.Transaction.ID,
+		Attempt:                 projection.Transaction.Attempt,
 		IntentDigest:            projection.Transaction.IntentDigest,
 		EffectSetDigest:         projection.Transaction.EffectSetDigest,
 		StagedStateDigest:       projection.Transaction.StagedStateDigest,
@@ -179,7 +181,13 @@ func PrepareAuthority(
 	}, nil
 }
 
-func authorityID(prefix, transactionID string, now time.Time) string {
-	sum := sha256.Sum256([]byte(prefix + "\x00" + transactionID + "\x00" + now.UTC().Format(time.RFC3339Nano)))
+func authorityID(prefix, transactionID string, attempt int64, now time.Time) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf(
+		"%s\x00%s\x00%d\x00%s",
+		prefix,
+		transactionID,
+		attempt,
+		now.UTC().Format(time.RFC3339Nano),
+	)))
 	return prefix + ":" + hex.EncodeToString(sum[:16])
 }

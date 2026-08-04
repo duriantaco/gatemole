@@ -21,6 +21,7 @@ type TransactionState string
 const (
 	TransactionCreated                TransactionState = "created"
 	TransactionRunning                TransactionState = "running"
+	TransactionCompletedNoEffect      TransactionState = "completed_no_effect"
 	TransactionStaged                 TransactionState = "staged"
 	TransactionValidating             TransactionState = "validating"
 	TransactionValidationFailed       TransactionState = "validation_failed"
@@ -40,7 +41,7 @@ const (
 
 func (s TransactionState) Terminal() bool {
 	switch s {
-	case TransactionBlocked, TransactionCommitted, TransactionRolledBack,
+	case TransactionCompletedNoEffect, TransactionBlocked, TransactionCommitted, TransactionRolledBack,
 		TransactionReleaseFailed,
 		TransactionPartiallyCommitted, TransactionManualRecoveryRequired,
 		TransactionAborted:
@@ -123,7 +124,13 @@ const (
 )
 
 func (s AgentExecutionStatus) Terminal() bool {
-	return s != AgentExecutionRunning
+	switch s {
+	case AgentExecutionSucceeded, AgentExecutionFailed,
+		AgentExecutionInterrupted, AgentExecutionStartFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 // AgentExecution is a privacy-preserving receipt for one supervised process.
@@ -133,6 +140,7 @@ type AgentExecution struct {
 	Version             string                `json:"version"`
 	ID                  string                `json:"id"`
 	TransactionID       string                `json:"transaction_id"`
+	Attempt             int64                 `json:"attempt,omitempty"`
 	RunID               string                `json:"run_id"`
 	StageBindingID      string                `json:"stage_binding_id"`
 	Program             string                `json:"program"`
@@ -178,6 +186,7 @@ type AgentTransaction struct {
 	Version                string                       `json:"version"`
 	ID                     string                       `json:"id"`
 	Namespace              string                       `json:"namespace"`
+	Attempt                int64                        `json:"attempt,omitempty"`
 	IntentDigest           string                       `json:"intent_digest"`
 	Task                   *AgentTask                   `json:"task,omitempty"`
 	Admission              *TransactionAdmissionBinding `json:"admission,omitempty"`
@@ -236,8 +245,10 @@ type Effect struct {
 	Version             string              `json:"version"`
 	ID                  string              `json:"id"`
 	TransactionID       string              `json:"transaction_id"`
+	Attempt             int64               `json:"attempt,omitempty"`
 	Sequence            int64               `json:"sequence"`
 	RunID               string              `json:"run_id,omitempty"`
+	OriginExecutionID   string              `json:"origin_execution_id,omitempty"`
 	OriginActionID      string              `json:"origin_action_id,omitempty"`
 	System              string              `json:"system"`
 	Resource            ResourceSelector    `json:"resource"`
@@ -263,6 +274,7 @@ type VerificationResult struct {
 	Version           string                   `json:"version"`
 	ID                string                   `json:"id"`
 	TransactionID     string                   `json:"transaction_id"`
+	Attempt           int64                    `json:"attempt,omitempty"`
 	Name              string                   `json:"name"`
 	Kind              VerificationKind         `json:"kind"`
 	Status            VerificationStatus       `json:"status"`
@@ -289,6 +301,7 @@ type ApprovalPackage struct {
 	Version                 string        `json:"version"`
 	ID                      string        `json:"id"`
 	TransactionID           string        `json:"transaction_id"`
+	Attempt                 int64         `json:"attempt,omitempty"`
 	IntentDigest            string        `json:"intent_digest"`
 	EffectSetDigest         string        `json:"effect_set_digest"`
 	StagedStateDigest       string        `json:"staged_state_digest"`
@@ -352,6 +365,7 @@ type CommitPlan struct {
 	Version                 string             `json:"version"`
 	ID                      string             `json:"id"`
 	TransactionID           string             `json:"transaction_id"`
+	Attempt                 int64              `json:"attempt,omitempty"`
 	IntentDigest            string             `json:"intent_digest"`
 	EffectSetDigest         string             `json:"effect_set_digest"`
 	StagedStateDigest       string             `json:"staged_state_digest"`
