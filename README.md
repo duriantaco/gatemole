@@ -29,6 +29,151 @@ One kernel serves two product experiences:
 These are not separate engines. Developer adoption exercises the same kernel
 semantics that future enterprise deployments require.
 
+## What would a team use Gatemole for?
+
+Use Gatemole when a software agent needs permission to change a repository,
+but should not also receive permission to approve or publish its own work.
+Gatemole is the control layer around an existing agent; it is not the agent
+that diagnoses or writes the fix.
+
+Consider a real payments incident, `PAY-1842`: valid customers are being logged
+out because the API rejects their refresh tokens. The on-call engineer wants a
+coding agent to inspect the service, fix the authentication code, add a
+regression test and use a model while it works.
+
+### The pain: the worker is also inside the control boundary
+
+A common direct-agent setup looks roughly like this (the command varies by
+agent):
+
+```sh
+cd /srv/repos/payments-api
+export MODEL_PROVIDER_API_KEY="$REAL_PROVIDER_KEY"
+export GIT_RELEASE_TOKEN="$PAYMENTS_GIT_TOKEN"
+payments-coder --task-file tickets/PAY-1842.md
+```
+
+The agent may produce a perfectly good fix. The operational problem is that
+the team has also placed the live checkout, inherited credentials, network and
+the account's Git authority inside the same process boundary as the worker.
+Its transcript is useful context, but it is not an independent authority log.
+If the process edits an unrelated file, runs the wrong test, crashes halfway or
+pushes a branch, the surrounding workflow has to discover and recover from
+that after the fact.
+
+Some agent products already provide their own sandbox, permission prompts or
+review UI. Gatemole does not claim those features are absent everywhere. Its
+specific offer is an agent-independent enforcement boundary owned by a
+separate local daemon:
+
+| Control | Direct agent invocation | Same agent through Gatemole |
+| --- | --- | --- |
+| Task | Prompt and runner state | Content-bound, durable admission tied to one run and transaction |
+| Workspace | Live checkout or the agent product's sandbox | Daemon-created private Git worktree; source checkout is not mounted |
+| Model access | Provider credential and network policy of the agent process | Short-lived broker token; provider credential remains in `gatemoled`; no model network unless admitted |
+| What changed | Agent transcript and a Git diff inspected afterward | Daemon-authored normalized effects plus hash-chained execution and transaction receipts |
+| Testing | Often requested and run by the same worker | Separately pinned verifier runs against the exact frozen tree |
+| Approval | External convention or product-specific review | Signed decision bound to the immutable approval package |
+| Release | Whatever Git authority the process or account has | Distinct release identity and compare-and-swap to an allowed local ref |
+| Crash/retry | Runner-specific; partial state may need manual interpretation | Same admission resumes the transaction; earlier execution receipts remain immutable |
+
+`payments-coder` in both columns is the team's real agent or adapter—not a
+Gatemole-provided fake agent. The point of the comparison is to keep the worker
+constant and move authority out of it.
+
+With Gatemole, the team instead uses this workflow:
+
+1. The operator admits the exact ticket to a named, digest-pinned agent.
+   `gatemoled` gives the agent a private Git worktree and, if authorized, a
+   transaction-scoped model-broker token. It does not give the agent the source
+   checkout, provider credential, daemon socket or release credential.
+2. Gatemole freezes and inventories the resulting Git effects. The operator
+   can see that the agent changed, for example, the refresh-token implementation
+   and its test—not merely read the agent's description of what it changed.
+3. A separately configured verifier runs the authentication tests against the
+   exact frozen tree.
+4. A security reviewer signs the immutable approval package. The coding agent
+   cannot approve itself, and a later change invalidates that approval.
+5. A different release identity publishes the approved commit to a pre-existing
+   allowed local Git ref with compare-and-swap protection.
+
+After the Runtime has been configured with the `payments-coder` agent, model
+broker, verifier, OIDC identities, approval trust and allowed release ref, the
+day-to-day operator flow is:
+
+```sh
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_OPERATOR_TOKEN"
+
+gatemole --repo /srv/repos/payments-api run \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments \
+  --id tx:pay-1842 \
+  --run run:pay-1842 \
+  --require-enforcement-profile production \
+  --intent-file tickets/PAY-1842.md \
+  --agent payments-coder \
+  --model-provider openai
+
+gatemole --repo /srv/repos/payments-api review tx:pay-1842 \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments
+```
+
+The operator then asks an independently pinned verifier to test the frozen
+candidate and prepares the exact local ref update:
+
+```sh
+VERIFIER_IMAGE="$(cat /etc/gatemole/images/go-verifier.ref)"
+
+gatemole --repo /srv/repos/payments-api tx verify \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments \
+  --id tx:pay-1842 \
+  --name auth-tests \
+  --image "$VERIFIER_IMAGE" \
+  -- /usr/local/bin/run-auth-tests
+
+gatemole --repo /srv/repos/payments-api tx prepare \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments \
+  --id tx:pay-1842 \
+  --git-ref refs/heads/agent-release/pay-1842
+```
+
+The reviewer and releaser use their own short-lived identities:
+
+```sh
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_REVIEWER_TOKEN"
+
+gatemole --repo /srv/repos/payments-api approve tx:pay-1842 \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments \
+  --key /secure/payments-reviewer.key \
+  --key-id key:payments-reviewer \
+  --approver human:alice \
+  --issuer https://login.acme.example/ \
+  --class security-reviewer
+
+export GATEMOLE_IDENTITY_TOKEN="$PAYMENTS_RELEASER_TOKEN"
+
+gatemole --repo /srv/repos/payments-api apply tx:pay-1842 \
+  --socket /run/gatemole/gatemoled.sock \
+  --namespace payments \
+  --actor operator:payments-release \
+  --actor-kind operator
+```
+
+If the agent or daemon fails, repeating the identical `gatemole run` resumes
+the same admitted transaction and retains the earlier execution receipts. It
+does not silently turn a failed attempt into releasable work.
+
+This is the useful boundary implemented today: governed agent work in a local
+Git repository. Release updates only the configured local ref; Gatemole does
+not yet push or merge a pull request, deploy the service, mutate a database or
+control Kubernetes. Those remote effects require the planned connector and
+Control Plane layers. The complete setup assumptions and operator walkthrough
+are in [Runtime examples](docs/EXAMPLES.md#real-life-use-case-govern-an-ai-hotfix).
+
 ## Architecture: where the OS, Runtime and kernel sit
 
 **Gatemole Agent OS** names the complete target system; it is not another process
@@ -72,11 +217,11 @@ The operating-system analogy is precise:
 
 | Name | Meaning | Status |
 | --- | --- | --- |
-| **Gatemole Developer Runtime** | The local product experience around one Runtime: package an agent, execute it in an isolated Git transaction, inspect exact effects and control release. | Low-level integration, Runtime profile initialization and diagnostics implemented; packaged adapters, `watch`, live cancellation and review UX planned |
+| **Gatemole Developer Runtime** | The local product experience around one Runtime: package an agent, execute it in an isolated Git transaction, inspect exact effects and control release. | Low-level integration, Runtime profile initialization, diagnostics and exact review/apply/reject shell implemented; packaged adapters, `watch` and live cancellation planned |
 | **Gatemole Agent OS** | The enterprise product experience and complete target architecture: Control Plane, Runtime fleet, transaction protocol and connector model. It is an umbrella, not a process. | Product direction |
 | **Gatemole Control Plane** | Organization-wide fleet, policy, approval, audit and incident management. It manages Runtimes but does not execute agent actions. | Planned |
 | **Gatemole Runtime** | The deployable enforcement boundary installed in a customer environment. It contains `gatemoled`, agent sandboxes, local durable state and connector drivers. | Runtime identity, a narrow single-node local-Git profile and exact profile-bound admission are implemented |
-| **`gatemoled` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Runtime preflight, atomic task admission, live OCI authority revalidation and head-pinned launch claim implemented; paired lifecycle and action enforcement are still converging |
+| **`gatemoled` kernel** | The trusted daemon that owns admission, authoritative lifecycle state, budgets, policy decisions, the transaction journal, approvals and commit coordination. | Runtime preflight, atomic task admission, live OCI authority revalidation, paired execution settlement/recovery and supported budget charging implemented; supervision and action enforcement are still converging |
 | **Agent sandbox** | The isolated, untrusted environment in which an agent loop executes. It receives no downstream production credentials. | OCI implementation available |
 | **Agent adapter** | Connects an existing agent framework or command to the kernel. It may request work and actions but cannot authorize itself or create receipts. | Command/profile and lower-level integration exist; supported broker API planned |
 | **Connector driver** | Performs typed operations against one downstream system after kernel authorization and reconciles external state. `gatemoled` records authoritative receipts and coordinates recovery. | Generic interface and remote drivers planned. Local Git currently uses a dedicated transaction path, not that future interface |
@@ -91,10 +236,16 @@ exact Runtime ID and daemon enforcement profile with the content-bound
 contract, real run, initial grants and transaction. Before OCI launch,
 `gatemoled` reloads that live authority and fail-closed derives the permitted
 image, command, full-workspace access, model-broker access and deadline. It
-then atomically verifies the admitted run and transaction heads while
-recording execution start, before starting any broker or agent workload.
-Execution still advances only the transaction ledger; paired run lifecycle and
-durable budget charging are the next Runtime milestone.
+then atomically verifies the admitted run and transaction heads while recording
+execution start in both ledgers, before starting any broker or agent workload.
+Settlement atomically closes the same execution in both ledgers, clears the
+run's active-execution binding and durably charges elapsed wall time plus
+verified model-call and token usage against the remaining hard limits. The raw
+transaction receipt retains the execution timestamps and counters if a charge
+saturates. Daemon restart performs the same paired settlement for an
+interrupted workload and marks unfinished model calls unknown before charging
+them. Live cancellation, tool/cost accounting and the mediated connector action
+path remain later Runtime milestones.
 
 The target remote-effect path is:
 
@@ -131,13 +282,17 @@ The current runtime requires Git, an OCI engine such as Docker, a running
 This is a low-level developer integration, not yet a self-serve desktop agent
 environment. `gatemole runtime init` creates a strict repository-owned profile
 and a local Runtime identity. `gatemole doctor` diagnoses Git, OCI, profile,
-local-image and daemon readiness. Packaged adapters, daemon supervision,
-`watch`, live cancellation and a friendly diff/apply flow remain roadmap work.
+local-image and daemon readiness. `gatemole review` shows the daemon-bound
+status, exact effects, evidence IDs and frozen patch; `diff`, `apply` and
+`reject` expose the corresponding task-oriented operations. Packaged adapters,
+daemon supervision, `watch` and live cancellation remain roadmap work.
 
 Build the CLI from source:
 
 ```sh
 go install ./cmd/gatemole
+gatemole version
+gatemole --help
 ```
 
 In a Git repository with a `HEAD` commit, register an agent image that is
@@ -270,21 +425,27 @@ expired grant, a changed image or command, a narrower unsupported workspace
 grant, or an ungranted model provider fails before any broker or agent
 container starts.
 
-For concrete scenarios rather than placeholders, see
-[Runtime examples](docs/EXAMPLES.md). It includes a runnable deterministic
-authentication-hotfix fixture, illustrative model-assisted and networkless
-deployment patterns, and an explicit description of which enterprise
-connector examples are not implemented.
+For the complete PAY-1842 operator workflow and the assumptions behind it, see
+[Runtime examples](docs/EXAMPLES.md#real-life-use-case-govern-an-ai-hotfix).
+That guide separately labels its runnable deterministic fixtures as acceptance
+proofs rather than presenting them as the normal user experience.
 
 `gatemole run` then creates the isolated worktree, runs the agent, freezes its Git
 effects, and performs deterministic sequence validation. Inspect the result
 with:
 
 ```sh
+gatemole --repo /path/to/service review <transaction-id> \
+  --namespace local
+
+# Print only the exact frozen patch (safe to pipe to another tool):
+gatemole --repo /path/to/service diff <transaction-id> \
+  --namespace local
+
+# Advanced lifecycle/debugging surface:
 gatemole --repo /path/to/service status <transaction-id> \
   --namespace local
 
-# Advanced compatibility surface:
 gatemole --repo /path/to/service tx effects \
   --namespace local --id <transaction-id>
 
@@ -292,11 +453,43 @@ gatemole --repo /path/to/service tx events \
   --namespace local --id <transaction-id>
 ```
 
+The daemon re-inspects the staged tree before returning a diff. The client
+checks its patch digest and transaction/attempt/event binding; a worktree
+change after staging fails closed instead of showing a mutable approximation.
+After verification, preparation and any required signed approval, `gatemole
+apply <transaction-id>` invokes the same release operation as `gatemole
+release`. `gatemole reject <transaction-id>` aborts and discards an unreleased
+worktree; it is not live workload cancellation.
+
+### Optional local proof: crash and resume the PAY-1842 agent
+
+This is an executable acceptance fixture, not the operator interface described
+above. Run it from a Gatemole source checkout to exercise the failure/recovery
+invariant without supplying a real agent, repository or production trust
+configuration. It requires Git, Go, Docker and `jq`; Docker may fetch
+`golang:1.26-alpine` the first time:
+
+```sh
+scripts/gatemolepairedexecutiondemo.sh
+```
+
+The fixture builds a disposable payments API and deterministic agent. Its first
+attempt saves the candidate fix in the private transaction worktree and exits
+with code 42; after a daemon restart, the second attempt resumes that patch and
+runs `go test ./internal/auth` successfully.
+
+The final JSON report includes both immutable execution receipts, all four
+paired `run.execution_started`/`run.execution_finished` events, cumulative wall
+time across both attempts, a `waiting_for_event` run with no active execution,
+and proof that the developer's source checkout was never modified. See
+[Runtime examples](docs/EXAMPLES.md#2-self-contained-recovery-proof-pay-1842-agent-crash)
+for the expected output and equivalent inspection commands.
+
 Production verification and preparation use the advanced `tx verify` and
-`tx prepare` operations. Reviewers and releasers use the top-level
-`gatemole approve` and `gatemole release` commands under the hardened daemon
-configuration. See [Production Runtime Operations](docs/PRODUCTION.md) for the
-complete deployment contract; do not infer production safety from the
+`tx prepare` operations. Reviewers and releasers use the top-level `gatemole
+review`, `gatemole approve` and `gatemole apply` commands under the hardened
+daemon configuration. See [Production Runtime Operations](docs/PRODUCTION.md)
+for the complete deployment contract; do not infer production safety from the
 development example above.
 
 Production callers should make the expected profile explicit:
@@ -390,12 +583,14 @@ code correct and are not a generic AI code reviewer.
 
 ## Documentation
 
+- [Real-life Runtime examples](docs/EXAMPLES.md)
 - [Agent transactions](docs/TRANSACTIONS.md)
 - [Production runtime operations](docs/PRODUCTION.md)
 - [Kernel internals](docs/KERNEL.md)
 - [Runtime and product roadmap](ROADMAP.md)
 - [Product validation and competitive assessment](docs/PRODUCT_VALIDATION.md)
 - [Transaction-control decision](docs/architecture/ADR-002-agent-transaction-control.md)
+- [Durable-supervisor decision](docs/architecture/ADR-003-durable-execution-supervisor.md)
 - [Threat model](docs/architecture/TRANSACTION_THREAT_MODEL.md)
 - [Gatemole Contracts](docs/COMPILER.md)
 - [Benchmarks and acceptance](docs/BENCHMARKS.md)

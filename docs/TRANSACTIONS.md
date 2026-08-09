@@ -24,13 +24,18 @@ human intent + selected agent profile
   -> compare-and-swap update of an allowed local Git ref
 ```
 
-This is the transaction-ledger path, not yet one fully paired execution
-lifecycle. Admission creates the associated `AgentRun`, and launch revalidates
-its live authority and atomically pins both ledger heads. The OCI workload
-currently advances and settles only the transaction ledger; the run lifecycle
-and durable budget usage are not yet advanced with it. A metadata cancellation
-before launch can prevent launch, but Gatemole does not yet provide a supervisor
-that interrupts an already-running production workload.
+Admission creates the associated `AgentRun`, and launch revalidates its live
+authority before atomically starting the same execution in the run and
+transaction ledgers. Settlement atomically finishes both sides: success leaves
+the run `waiting_for_event`, while failed, interrupted and start-failed work
+leaves it `waiting_for_agent` for an explicit retry. Elapsed wall time and
+verified model-call/token usage are charged cumulatively to the run, including
+restart recovery, with each charge bounded by the remaining hard limit. The
+transaction receipt retains the raw timestamps and counters when a charge
+saturates. A metadata cancellation before launch can prevent launch, but
+Gatemole does not yet provide a supervisor that interrupts an
+already-running production workload. Tool/cost accounting and mediated remote
+actions also remain outside this local-Git profile.
 
 Gatemole can create and publish the prepared commit to an allowed local Git ref.
 It does not push to a remote, merge a pull request, deploy software, or execute
@@ -86,9 +91,17 @@ selected pull-never image. A failed preflight creates neither admission
 authority nor a worktree. After a successful preflight, `gatemole run` creates and
 starts the transaction, creates its isolated worktree, runs the agent, freezes
 the exact Git effects, and performs sequence validation. It prints the
-generated transaction ID. Inspect it with:
+generated transaction ID. Inspect its readable status, evidence identifiers and
+exact frozen patch with:
 
 ```sh
+gatemole --repo /path/to/service review <transaction-id> \
+  --namespace payments
+
+gatemole --repo /path/to/service diff <transaction-id> \
+  --namespace payments
+
+# Advanced lifecycle/debugging views:
 gatemole --repo /path/to/service status <transaction-id> \
   --namespace payments
 
@@ -98,6 +111,59 @@ gatemole --repo /path/to/service tx effects \
 gatemole --repo /path/to/service tx events \
   --namespace payments --id <transaction-id>
 ```
+
+The diff route re-inspects the private worktree, reconstructs the immutable Git
+tree and refuses output unless both the staged-state and normalized effect-set
+digests still match the authoritative transaction. The response binds the
+namespace, transaction, attempt, event sequence, base revision, tree revision
+and patch digest. The CLI validates that metadata and the raw patch body before
+printing it. `gatemole --json diff ...` exposes the body as `patch_base64` with
+the same metadata.
+
+The [PAY-1842 operator example](EXAMPLES.md#real-life-use-case-govern-an-ai-hotfix)
+shows why a team would put its real coding agent behind this lifecycle. The
+checked-in script below is the separate, deterministic acceptance proof for a
+failed attempt, daemon restart, resumed patch and passing Go regression test:
+
+```sh
+scripts/gatemolepairedexecutiondemo.sh
+```
+
+It uses stable IDs `tx:pay-1842` and `run:pay-1842`. On a long-lived Runtime,
+the equivalent run-side inspection is:
+
+```sh
+gatemole --repo /path/to/payments-api --json kernel run get \
+  --socket /path/to/gatemoled.sock \
+  --namespace payments --id run:pay-1842 \
+  | jq '.run | {
+      state,
+      active_execution_id: (.active_execution_id // null),
+      budget_usage
+    }'
+
+gatemole --repo /path/to/payments-api --json kernel run events \
+  --socket /path/to/gatemoled.sock \
+  --namespace payments --id run:pay-1842 \
+  | jq '[.[]
+      | select(.type | startswith("run.execution_"))
+      | {sequence, type, execution_id: .payload.execution_id,
+         status: .payload.status, usage: .payload.usage}]'
+
+gatemole --repo /path/to/payments-api --json tx get \
+  --socket /path/to/gatemoled.sock \
+  --namespace payments --id tx:pay-1842 \
+  | jq '[.executions[] | {id, status, started_at, completed_at}]'
+```
+
+The proof produces four run events: start/failed for the crashed attempt, then
+start/succeeded for the retry. The final projection is `waiting_for_event` with
+no `active_execution_id`; both transaction receipts remain immutable and
+`budget_usage.wall_time_seconds` is their cumulative charge. On daemon-crash
+recovery, a running attempt instead settles as `interrupted` and the run becomes
+`waiting_for_agent`. Model calls left in flight at restart are finalized as
+`unknown` before their conservative token charge is applied. The complete
+scenario and representative output are in [Runtime examples](EXAMPLES.md#2-self-contained-recovery-proof-pay-1842-agent-crash).
 
 `gatemole runtime init` writes `.gatemole/agent-profiles.json` using the
 [public profile schema](../schemas/gatemole.agent_profiles.v0.schema.json). The
@@ -252,9 +318,13 @@ gatemole --repo /path/to/service approve <transaction-id> \
   --approver human:alice \
   --class security-reviewer
 
-gatemole --repo /path/to/service release <transaction-id> \
+gatemole --repo /path/to/service apply <transaction-id> \
   --namespace payments
 ```
+
+`apply` invokes the same release operation as `release`; it still requires the
+prepared commit plan, exact signed approval package and distinct release
+authority.
 
 These commands require the hardened daemon identity, verifier, approval and
 release configuration described in
@@ -278,14 +348,55 @@ The raw `POST /v0/namespaces/{namespace}/transactions` creation route exists
 only for embedded, unbound compatibility servers and `gatemoled` rejects it.
 Existing-transaction operations such as `start|worktree|stage|validate` remain
 available for connector development, recovery and debugging. They do not
-replace the primary task-oriented path. Abort
-discards an unreleased isolated worktree after execution; it is not a live
+replace the primary task-oriented path. The task-oriented `reject` command is
+an alias over `tx abort`: it discards an unreleased isolated worktree after
+execution; it is not a live
 workload-cancellation command:
 
 ```sh
-gatemole --repo /path/to/service tx abort \
+gatemole --repo /path/to/service reject <transaction-id> \
+  --namespace payments
+```
+
+## Attempts and recovery
+
+Current task admissions begin at attempt `1`. A terminal failed, interrupted,
+or start-failed agent execution may be followed by another execution in the
+same attempt. Only the latest successful execution can contribute staged
+effects; every task-bound effect records that execution ID. A failed process
+receipt therefore cannot be used to freeze partial workspace changes.
+
+Repeating `gatemole run` with the same transaction ID and identical admission
+input resumes from the durable transaction head. It reuses the isolated
+worktree, retries a failed execution, or continues staging and sequence
+validation after a successful execution. A successful execution whose final
+Git tree equals the base revision ends in the terminal
+`completed_no_effect` state.
+
+Starting a transaction again from `staged`, `validation_failed`, or
+`revise_required` begins the next numbered attempt. Active effects,
+verification results, and release authority are removed from the releasable
+projection, but remain queryable under `superseded_attempts`; execution
+receipts and the append-only event history are never rewritten.
+
+A failed, indeterminate, or expired verifier can be run again with the same
+name. The old result moves to `superseded_verifications`, the frozen effect and
+staged-state digests stay unchanged, and only the replacement result is
+eligible for authority preparation.
+
+If an approval package or its evidence expires before release, revoke it and
+return the same frozen stage to validation:
+
+```sh
+gatemole --repo /path/to/service tx renew \
   --namespace payments --id <transaction-id>
 ```
+
+Renewal preserves current verification results, supersedes expired ones, and
+archives the old commit plan and approval package. Rerun any expired verifier,
+then call `tx prepare` again to mint fresh authority. These retries apply only
+before external release; unknown or non-idempotent connector outcomes still
+require reconciliation and are never blindly retried.
 
 Sequence validation and every verifier re-inspect the frozen state. Mutation
 after staging returns `TRANSACTION_CONFLICT` and leaves authority unchanged.

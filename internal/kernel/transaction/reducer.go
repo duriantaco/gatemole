@@ -16,22 +16,64 @@ const (
 	EventEffectStateChanged      = "effect.state_changed"
 	EventTransactionStaged       = "transaction.staged"
 	EventVerificationRecorded    = "verification.recorded"
+	EventVerificationSuperseded  = "verification.superseded"
 	EventCommitPlanFrozen        = "commit_plan.frozen"
 	EventApprovalPackageFrozen   = "approval_package.frozen"
+	EventAuthorityRenewed        = "authority.renewed"
 	EventApprovalResolved        = "approval.resolved"
 	EventAgentExecutionStarted   = "agent_execution.started"
 	EventAgentExecutionFinished  = "agent_execution.finished"
 )
 
 type Projection struct {
-	Transaction     model.AgentTransaction     `json:"transaction"`
-	Executions      []model.AgentExecution     `json:"executions"`
-	Effects         []model.Effect             `json:"effects"`
-	Verifications   []model.VerificationResult `json:"verifications"`
-	CommitPlan      *model.CommitPlan          `json:"commit_plan,omitempty"`
-	ApprovalPackage *model.ApprovalPackage     `json:"approval_package,omitempty"`
-	ApprovalDigests []string                   `json:"approval_digests"`
-	LastEventDigest string                     `json:"last_event_digest"`
+	Transaction             model.AgentTransaction     `json:"transaction"`
+	Executions              []model.AgentExecution     `json:"executions"`
+	Effects                 []model.Effect             `json:"effects"`
+	Verifications           []model.VerificationResult `json:"verifications"`
+	SupersededVerifications []model.VerificationResult `json:"superseded_verifications,omitempty"`
+	CommitPlan              *model.CommitPlan          `json:"commit_plan,omitempty"`
+	ApprovalPackage         *model.ApprovalPackage     `json:"approval_package,omitempty"`
+	ApprovalDigests         []string                   `json:"approval_digests"`
+	SupersededAuthorities   []AuthoritySnapshot        `json:"superseded_authorities,omitempty"`
+	SupersededAttempts      []AttemptSnapshot          `json:"superseded_attempts,omitempty"`
+	LastEventDigest         string                     `json:"last_event_digest"`
+}
+
+// AttemptSnapshot keeps superseded mutable work queryable without making it
+// eligible for validation or release. The event stream remains authoritative.
+type AttemptSnapshot struct {
+	Attempt                 int64                      `json:"attempt"`
+	State                   model.TransactionState     `json:"state"`
+	Reason                  string                     `json:"reason"`
+	SupersededAt            time.Time                  `json:"superseded_at"`
+	ExecutionIDs            []string                   `json:"execution_ids"`
+	EffectIDs               []string                   `json:"effect_ids"`
+	Effects                 []model.Effect             `json:"effects"`
+	StagedStateDigest       string                     `json:"staged_state_digest,omitempty"`
+	EffectSetDigest         string                     `json:"effect_set_digest,omitempty"`
+	VerificationResultIDs   []string                   `json:"verification_result_ids"`
+	Verifications           []model.VerificationResult `json:"verifications"`
+	SupersededVerifications []model.VerificationResult `json:"superseded_verifications,omitempty"`
+	CommitPlan              *model.CommitPlan          `json:"commit_plan,omitempty"`
+	CommitPlanDigest        string                     `json:"commit_plan_digest,omitempty"`
+	ApprovalPackage         *model.ApprovalPackage     `json:"approval_package,omitempty"`
+	ApprovalPackageDigest   string                     `json:"approval_package_digest,omitempty"`
+	OutstandingApprovalIDs  []string                   `json:"outstanding_approval_ids"`
+	ApprovalDigests         []string                   `json:"approval_digests"`
+	SupersededAuthorities   []AuthoritySnapshot        `json:"superseded_authorities,omitempty"`
+}
+
+// AuthoritySnapshot records an authority package that was explicitly revoked
+// and renewed while the staged effect set stayed unchanged.
+type AuthoritySnapshot struct {
+	Attempt                int64                  `json:"attempt"`
+	State                  model.TransactionState `json:"state"`
+	Reason                 string                 `json:"reason"`
+	SupersededAt           time.Time              `json:"superseded_at"`
+	OutstandingApprovalIDs []string               `json:"outstanding_approval_ids"`
+	CommitPlan             *model.CommitPlan      `json:"commit_plan,omitempty"`
+	ApprovalPackage        *model.ApprovalPackage `json:"approval_package,omitempty"`
+	ApprovalDigests        []string               `json:"approval_digests"`
 }
 
 type TransactionCreatedPayload struct {
@@ -70,12 +112,21 @@ type VerificationRecordedPayload struct {
 	Result model.VerificationResult `json:"result"`
 }
 
+type VerificationSupersededPayload struct {
+	VerificationID string `json:"verification_id"`
+	Reason         string `json:"reason"`
+}
+
 type CommitPlanFrozenPayload struct {
 	Plan model.CommitPlan `json:"plan"`
 }
 
 type ApprovalPackageFrozenPayload struct {
 	Package model.ApprovalPackage `json:"package"`
+}
+
+type AuthorityRenewedPayload struct {
+	Reason string `json:"reason"`
 }
 
 type ApprovalResolvedPayload struct {
@@ -111,6 +162,9 @@ func (projection Projection) Validate() error {
 		if execution.TransactionID != projection.Transaction.ID {
 			return transactionError(model.ErrorEventChain, "execution projection transaction does not match")
 		}
+		if execution.Attempt > projection.Transaction.Attempt {
+			return transactionError(model.ErrorEventChain, "execution belongs to a future transaction attempt")
+		}
 		if _, exists := executionIDs[execution.ID]; exists {
 			return transactionError(model.ErrorEventChain, "execution projection contains duplicate IDs")
 		}
@@ -135,8 +189,25 @@ func (projection Projection) Validate() error {
 		if err := effect.Validate(); err != nil {
 			return err
 		}
-		if effect.TransactionID != projection.Transaction.ID || effect.ID != projection.Transaction.EffectIDs[i] || effect.Sequence != int64(i+1) {
+		if effect.TransactionID != projection.Transaction.ID ||
+			effect.Attempt != projection.Transaction.Attempt ||
+			effect.ID != projection.Transaction.EffectIDs[i] ||
+			effect.Sequence != int64(i+1) {
 			return transactionError(model.ErrorEventChain, "effect projection identity or order is invalid")
+		}
+		if effect.OriginExecutionID != "" {
+			executionIndex := executionIndex(projection.Executions, effect.OriginExecutionID)
+			if executionIndex < 0 {
+				return transactionError(model.ErrorEventChain, "effect origin execution does not exist")
+			}
+			execution := projection.Executions[executionIndex]
+			if execution.Attempt != effect.Attempt ||
+				execution.Status != model.AgentExecutionSucceeded ||
+				(effect.RunID != "" && execution.RunID != effect.RunID) {
+				return transactionError(model.ErrorEventChain, "effect origin execution is not a successful execution in its attempt")
+			}
+		} else if projection.Transaction.Task != nil && projection.Transaction.Attempt > 0 {
+			return transactionError(model.ErrorEventChain, "task-bound effect is missing its origin execution")
 		}
 	}
 	if projection.Transaction.EffectSetDigest != "" {
@@ -157,16 +228,42 @@ func (projection Projection) Validate() error {
 	if len(projection.Transaction.VerificationResultIDs) != len(projection.Verifications) {
 		return transactionError(model.ErrorEventChain, "verification projection length does not match transaction result IDs")
 	}
+	verificationIDs := make(map[string]struct{}, len(projection.Verifications)+len(projection.SupersededVerifications))
+	verificationNames := make(map[string]struct{}, len(projection.Verifications))
 	for i, result := range projection.Verifications {
 		if err := result.Validate(); err != nil {
 			return err
 		}
 		if result.TransactionID != projection.Transaction.ID ||
+			result.Attempt != projection.Transaction.Attempt ||
 			result.ID != projection.Transaction.VerificationResultIDs[i] ||
 			result.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 			result.StagedStateDigest != projection.Transaction.StagedStateDigest {
 			return transactionError(model.ErrorEventChain, "verification projection identity or order is invalid")
 		}
+		if _, exists := verificationIDs[result.ID]; exists {
+			return transactionError(model.ErrorEventChain, "verification projection contains duplicate IDs")
+		}
+		verificationIDs[result.ID] = struct{}{}
+		if _, exists := verificationNames[result.Name]; exists {
+			return transactionError(model.ErrorEventChain, "verification projection contains duplicate names")
+		}
+		verificationNames[result.Name] = struct{}{}
+	}
+	for _, result := range projection.SupersededVerifications {
+		if err := result.Validate(); err != nil {
+			return err
+		}
+		if result.TransactionID != projection.Transaction.ID ||
+			result.Attempt != projection.Transaction.Attempt ||
+			result.EffectSetDigest != projection.Transaction.EffectSetDigest ||
+			result.StagedStateDigest != projection.Transaction.StagedStateDigest {
+			return transactionError(model.ErrorEventChain, "superseded verification belongs to another transaction attempt")
+		}
+		if _, exists := verificationIDs[result.ID]; exists {
+			return transactionError(model.ErrorEventChain, "verification history contains duplicate IDs")
+		}
+		verificationIDs[result.ID] = struct{}{}
 	}
 	if projection.CommitPlan != nil {
 		if err := projection.CommitPlan.Validate(); err != nil {
@@ -180,6 +277,7 @@ func (projection Projection) Validate() error {
 			)
 		}
 		if projection.CommitPlan.TransactionID != projection.Transaction.ID ||
+			projection.CommitPlan.Attempt != projection.Transaction.Attempt ||
 			projection.CommitPlan.IntentDigest != projection.Transaction.IntentDigest ||
 			projection.CommitPlan.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 			projection.CommitPlan.StagedStateDigest != projection.Transaction.StagedStateDigest ||
@@ -214,6 +312,7 @@ func (projection Projection) Validate() error {
 		}
 		if projection.CommitPlan == nil ||
 			projection.ApprovalPackage.TransactionID != projection.Transaction.ID ||
+			projection.ApprovalPackage.Attempt != projection.Transaction.Attempt ||
 			projection.ApprovalPackage.IntentDigest != projection.Transaction.IntentDigest ||
 			projection.ApprovalPackage.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 			projection.ApprovalPackage.StagedStateDigest != projection.Transaction.StagedStateDigest ||
@@ -230,6 +329,9 @@ func (projection Projection) Validate() error {
 	} else if projection.Transaction.ApprovalPackageDigest != "" {
 		return transactionError(model.ErrorEventChain, "transaction references a missing approval package")
 	}
+	if err := validateProjectionHistory(projection); err != nil {
+		return err
+	}
 	if !isDigest(projection.LastEventDigest) {
 		return transactionError(model.ErrorEventChain, "transaction projection has an invalid last event digest")
 	}
@@ -238,7 +340,7 @@ func (projection Projection) Validate() error {
 
 var transactionTransitions = map[model.TransactionState]map[model.TransactionState]struct{}{
 	model.TransactionCreated: states(model.TransactionRunning, model.TransactionBlocked, model.TransactionAborted),
-	model.TransactionRunning: states(model.TransactionStaged, model.TransactionBlocked, model.TransactionAborted),
+	model.TransactionRunning: states(model.TransactionCompletedNoEffect, model.TransactionStaged, model.TransactionBlocked, model.TransactionAborted),
 	model.TransactionStaged:  states(model.TransactionRunning, model.TransactionValidating, model.TransactionBlocked, model.TransactionAborted),
 	model.TransactionValidating: states(
 		model.TransactionValidationFailed,
@@ -248,7 +350,7 @@ var transactionTransitions = map[model.TransactionState]map[model.TransactionSta
 		model.TransactionReadyToCommit,
 		model.TransactionAborted,
 	),
-	model.TransactionValidationFailed: states(model.TransactionRunning, model.TransactionAborted),
+	model.TransactionValidationFailed: states(model.TransactionRunning, model.TransactionValidating, model.TransactionAborted),
 	model.TransactionReviseRequired:   states(model.TransactionRunning, model.TransactionAborted),
 	model.TransactionPendingApproval:  states(model.TransactionReadyToCommit, model.TransactionReviseRequired, model.TransactionBlocked, model.TransactionAborted),
 	model.TransactionReadyToCommit:    states(model.TransactionCommitting, model.TransactionReviseRequired, model.TransactionBlocked, model.TransactionAborted),
@@ -265,6 +367,7 @@ var transactionTransitions = map[model.TransactionState]map[model.TransactionSta
 		model.TransactionManualRecoveryRequired,
 	),
 	model.TransactionBlocked:                states(),
+	model.TransactionCompletedNoEffect:      states(),
 	model.TransactionCommitted:              states(),
 	model.TransactionRolledBack:             states(),
 	model.TransactionReleaseFailed:          states(),
@@ -370,12 +473,20 @@ func Apply(current *Projection, event model.TransactionEvent) (Projection, error
 		if err := applyVerification(&next, event); err != nil {
 			return Projection{}, err
 		}
+	case EventVerificationSuperseded:
+		if err := applyVerificationSuperseded(&next, event); err != nil {
+			return Projection{}, err
+		}
 	case EventCommitPlanFrozen:
 		if err := applyCommitPlan(&next, event); err != nil {
 			return Projection{}, err
 		}
 	case EventApprovalPackageFrozen:
 		if err := applyApprovalPackage(&next, event); err != nil {
+			return Projection{}, err
+		}
+	case EventAuthorityRenewed:
+		if err := applyAuthorityRenewed(&next, event); err != nil {
 			return Projection{}, err
 		}
 	case EventApprovalResolved:
@@ -434,7 +545,9 @@ func applyCreation(event model.TransactionEvent) (Projection, error) {
 	if err := transaction.Validate(); err != nil {
 		return Projection{}, err
 	}
-	if transaction.ID != event.TransactionID || transaction.State != model.TransactionCreated {
+	if transaction.ID != event.TransactionID ||
+		transaction.State != model.TransactionCreated ||
+		(transaction.Attempt != 0 && transaction.Attempt != 1) {
 		return Projection{}, transitionError("transaction.created payload identity or state is invalid")
 	}
 	if transaction.EventSequence != 1 || !transaction.CreatedAt.Equal(event.OccurredAt) || !transaction.UpdatedAt.Equal(event.OccurredAt) {
@@ -466,6 +579,7 @@ func applyAgentExecutionStarted(projection *Projection, event model.TransactionE
 		return err
 	}
 	if execution.TransactionID != projection.Transaction.ID ||
+		execution.Attempt != projection.Transaction.Attempt ||
 		execution.Status != model.AgentExecutionRunning ||
 		!execution.StartedAt.Equal(event.OccurredAt) {
 		return transitionError("agent execution start payload does not match the transaction event")
@@ -560,12 +674,17 @@ func applyStateChange(projection *Projection, event model.TransactionEvent) erro
 	if err := validateStatePreconditions(*projection, payload); err != nil {
 		return err
 	}
+	if payload.To == model.TransactionRunning && payload.From != model.TransactionCreated {
+		if err := beginNextAttempt(projection, event.OccurredAt); err != nil {
+			return err
+		}
+	}
 	projection.Transaction.State = payload.To
 	projection.Transaction.StateReason = payload.Reason
 	if payload.To == model.TransactionPendingApproval {
 		projection.Transaction.OutstandingApprovalIDs = append([]string(nil), payload.OutstandingApprovalIDs...)
 	}
-	if payload.To == model.TransactionRunning {
+	if payload.To == model.TransactionRunning && payload.From == model.TransactionCreated {
 		invalidateFrozenState(projection)
 	}
 	applyCompletionTime(&projection.Transaction, event.OccurredAt)
@@ -584,7 +703,9 @@ func applyEffectAdded(projection *Projection, event model.TransactionEvent) erro
 	if err := effect.Validate(); err != nil {
 		return err
 	}
-	if effect.TransactionID != projection.Transaction.ID || effect.Sequence != int64(len(projection.Effects)+1) {
+	if effect.TransactionID != projection.Transaction.ID ||
+		effect.Attempt != projection.Transaction.Attempt ||
+		effect.Sequence != int64(len(projection.Effects)+1) {
 		return transactionError(model.ErrorEffectSequence, "effect transaction or sequence is invalid")
 	}
 	known := make(map[string]struct{}, len(projection.Effects))
@@ -676,6 +797,7 @@ func applyVerification(projection *Projection, event model.TransactionEvent) err
 		return err
 	}
 	if result.TransactionID != projection.Transaction.ID ||
+		result.Attempt != projection.Transaction.Attempt ||
 		result.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 		result.StagedStateDigest != projection.Transaction.StagedStateDigest {
 		return transactionError(model.ErrorTransactionConflict, "verification does not bind to the frozen transaction state")
@@ -684,9 +806,49 @@ func applyVerification(projection *Projection, event model.TransactionEvent) err
 		if existing.ID == result.ID {
 			return transactionError(model.ErrorConflict, "verification result ID already exists")
 		}
+		if existing.Name == result.Name {
+			return transactionError(model.ErrorConflict, "verification result name already exists")
+		}
+	}
+	for _, existing := range projection.SupersededVerifications {
+		if existing.ID == result.ID {
+			return transactionError(model.ErrorConflict, "verification result ID already exists in history")
+		}
 	}
 	projection.Verifications = append(projection.Verifications, result)
 	projection.Transaction.VerificationResultIDs = append(projection.Transaction.VerificationResultIDs, result.ID)
+	return nil
+}
+
+func applyVerificationSuperseded(projection *Projection, event model.TransactionEvent) error {
+	if projection.Transaction.State != model.TransactionValidating {
+		return transitionError("verification can only be superseded while validating")
+	}
+	payload, err := decodePayload[VerificationSupersededPayload](event)
+	if err != nil {
+		return err
+	}
+	if payload.Reason == "" {
+		return transactionError(model.ErrorSchemaInvalid, "verification supersession requires a reason")
+	}
+	index := verificationIndex(projection.Verifications, payload.VerificationID)
+	if index < 0 {
+		return transactionError(model.ErrorNotFound, "verification result does not exist")
+	}
+	result := projection.Verifications[index]
+	if result.Status == model.VerificationPassed &&
+		(result.ExpiresAt == nil || result.ExpiresAt.After(event.OccurredAt)) {
+		return transitionError("a current passing verification cannot be superseded")
+	}
+	projection.SupersededVerifications = append(
+		projection.SupersededVerifications,
+		result,
+	)
+	projection.Verifications = removeVerification(projection.Verifications, index)
+	projection.Transaction.VerificationResultIDs = removeString(
+		projection.Transaction.VerificationResultIDs,
+		index,
+	)
 	return nil
 }
 
@@ -710,6 +872,7 @@ func applyCommitPlan(projection *Projection, event model.TransactionEvent) error
 		return transactionError(model.ErrorTransactionConflict, "commit plan digest does not match its content")
 	}
 	if plan.TransactionID != projection.Transaction.ID ||
+		plan.Attempt != projection.Transaction.Attempt ||
 		plan.IntentDigest != projection.Transaction.IntentDigest ||
 		plan.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 		plan.StagedStateDigest != projection.Transaction.StagedStateDigest {
@@ -749,6 +912,7 @@ func applyApprovalPackage(projection *Projection, event model.TransactionEvent) 
 		return transactionError(model.ErrorTransactionConflict, "approval package digest does not match its content")
 	}
 	if approval.TransactionID != projection.Transaction.ID ||
+		approval.Attempt != projection.Transaction.Attempt ||
 		approval.IntentDigest != projection.Transaction.IntentDigest ||
 		approval.EffectSetDigest != projection.Transaction.EffectSetDigest ||
 		approval.StagedStateDigest != projection.Transaction.StagedStateDigest ||
@@ -759,6 +923,61 @@ func applyApprovalPackage(projection *Projection, event model.TransactionEvent) 
 	copy := approval
 	projection.ApprovalPackage = &copy
 	projection.Transaction.ApprovalPackageDigest = approval.Digest
+	return nil
+}
+
+func applyAuthorityRenewed(projection *Projection, event model.TransactionEvent) error {
+	if projection.Transaction.State != model.TransactionPendingApproval &&
+		projection.Transaction.State != model.TransactionReadyToCommit {
+		return transitionError("authority renewal requires pending or ready commit authority")
+	}
+	payload, err := decodePayload[AuthorityRenewedPayload](event)
+	if err != nil {
+		return err
+	}
+	if payload.Reason == "" {
+		return transactionError(model.ErrorSchemaInvalid, "authority renewal requires a reason")
+	}
+	if projection.CommitPlan == nil || projection.ApprovalPackage == nil {
+		return transitionError("authority renewal requires a frozen commit and approval package")
+	}
+	projection.SupersededAuthorities = append(
+		projection.SupersededAuthorities,
+		AuthoritySnapshot{
+			Attempt:                projection.Transaction.Attempt,
+			State:                  projection.Transaction.State,
+			Reason:                 payload.Reason,
+			SupersededAt:           event.OccurredAt,
+			OutstandingApprovalIDs: append([]string(nil), projection.Transaction.OutstandingApprovalIDs...),
+			CommitPlan:             cloneCommitPlan(projection.CommitPlan),
+			ApprovalPackage:        cloneApprovalPackage(projection.ApprovalPackage),
+			ApprovalDigests:        append([]string(nil), projection.ApprovalDigests...),
+		},
+	)
+	current := projection.Verifications[:0]
+	currentIDs := projection.Transaction.VerificationResultIDs[:0]
+	for index, result := range projection.Verifications {
+		if result.ExpiresAt != nil && !result.ExpiresAt.After(event.OccurredAt) {
+			projection.SupersededVerifications = append(
+				projection.SupersededVerifications,
+				result,
+			)
+			continue
+		}
+		current = append(current, result)
+		currentIDs = append(currentIDs, projection.Transaction.VerificationResultIDs[index])
+	}
+	projection.Verifications = current
+	projection.Transaction.VerificationResultIDs = currentIDs
+	projection.Transaction.State = model.TransactionValidating
+	projection.Transaction.StateReason = ""
+	projection.Transaction.OutstandingApprovalIDs = nil
+	projection.Transaction.ApprovalPackageDigest = ""
+	projection.Transaction.CommitPlanDigest = ""
+	projection.CommitPlan = nil
+	projection.ApprovalPackage = nil
+	projection.ApprovalDigests = nil
+	applyCompletionTime(&projection.Transaction, event.OccurredAt)
 	return nil
 }
 
@@ -819,6 +1038,17 @@ func applyApprovalResolution(projection *Projection, event model.TransactionEven
 
 func validateStatePreconditions(projection Projection, payload TransactionStateChangedPayload) error {
 	switch payload.To {
+	case model.TransactionCompletedNoEffect:
+		if len(projection.Effects) != 0 || activeExecutionIndex(projection.Executions) >= 0 {
+			return transitionError("no-effect completion requires no staged effects or active execution")
+		}
+		execution, ok := latestExecutionForAttempt(
+			projection.Executions,
+			projection.Transaction.Attempt,
+		)
+		if !ok || execution.Status != model.AgentExecutionSucceeded {
+			return transitionError("no-effect completion requires a successful execution in the current attempt")
+		}
 	case model.TransactionValidating:
 		if projection.Transaction.EffectSetDigest == "" || projection.Transaction.StagedStateDigest == "" {
 			return transitionError("validation requires frozen staged state and effects")
@@ -939,17 +1169,242 @@ func requireAllEffectsStatus(effects []model.Effect, status model.EffectStatus) 
 	return nil
 }
 
+func validateProjectionHistory(projection Projection) error {
+	for _, authority := range projection.SupersededAuthorities {
+		if err := validateAuthoritySnapshot(
+			authority,
+			projection.Transaction.ID,
+			projection.Transaction.Attempt,
+		); err != nil {
+			return err
+		}
+	}
+	if len(projection.SupersededAttempts) == 0 {
+		if projection.Transaction.Attempt > 1 {
+			return transactionError(model.ErrorEventChain, "active attempt is missing its superseded history")
+		}
+		return nil
+	}
+	firstAttempt := projection.SupersededAttempts[0].Attempt
+	if firstAttempt != 0 && firstAttempt != 1 {
+		return transactionError(model.ErrorEventChain, "superseded attempt history must begin at zero or one")
+	}
+	previousAttempt := firstAttempt - 1
+	for _, attempt := range projection.SupersededAttempts {
+		if attempt.Attempt != previousAttempt+1 ||
+			attempt.Attempt >= projection.Transaction.Attempt {
+			return transactionError(model.ErrorEventChain, "superseded attempts are not ordered before the active attempt")
+		}
+		previousAttempt = attempt.Attempt
+		if attempt.SupersededAt.IsZero() || attempt.Reason == "" ||
+			(attempt.State != model.TransactionStaged &&
+				attempt.State != model.TransactionValidationFailed &&
+				attempt.State != model.TransactionReviseRequired) {
+			return transactionError(model.ErrorEventChain, "superseded attempt metadata is incomplete")
+		}
+		seenExecutions := make(map[string]struct{}, len(attempt.ExecutionIDs))
+		for _, executionID := range attempt.ExecutionIDs {
+			if _, exists := seenExecutions[executionID]; exists {
+				return transactionError(model.ErrorEventChain, "superseded attempt contains duplicate execution IDs")
+			}
+			seenExecutions[executionID] = struct{}{}
+			index := executionIndex(projection.Executions, executionID)
+			if index < 0 || projection.Executions[index].Attempt != attempt.Attempt {
+				return transactionError(model.ErrorEventChain, "superseded attempt execution binding is invalid")
+			}
+		}
+		if len(attempt.EffectIDs) != len(attempt.Effects) ||
+			!isDigest(attempt.StagedStateDigest) ||
+			!isDigest(attempt.EffectSetDigest) {
+			return transactionError(model.ErrorEventChain, "superseded attempt frozen effect metadata is invalid")
+		}
+		for index, effect := range attempt.Effects {
+			if err := effect.Validate(); err != nil {
+				return err
+			}
+			if effect.TransactionID != projection.Transaction.ID ||
+				effect.Attempt != attempt.Attempt ||
+				effect.ID != attempt.EffectIDs[index] ||
+				effect.Sequence != int64(index+1) {
+				return transactionError(model.ErrorEventChain, "superseded attempt effect binding is invalid")
+			}
+		}
+		computedEffects, err := ComputeEffectSetDigest(attempt.Effects)
+		if err != nil || computedEffects != attempt.EffectSetDigest {
+			return transactionError(model.ErrorEventChain, "superseded attempt effect digest is invalid")
+		}
+		if len(attempt.VerificationResultIDs) != len(attempt.Verifications) {
+			return transactionError(model.ErrorEventChain, "superseded attempt verification IDs are incomplete")
+		}
+		for index, result := range attempt.Verifications {
+			if err := result.Validate(); err != nil {
+				return err
+			}
+			if result.TransactionID != projection.Transaction.ID ||
+				result.Attempt != attempt.Attempt ||
+				result.ID != attempt.VerificationResultIDs[index] ||
+				result.EffectSetDigest != attempt.EffectSetDigest ||
+				result.StagedStateDigest != attempt.StagedStateDigest {
+				return transactionError(model.ErrorEventChain, "superseded attempt verification binding is invalid")
+			}
+		}
+		for _, result := range attempt.SupersededVerifications {
+			if err := result.Validate(); err != nil {
+				return err
+			}
+			if result.TransactionID != projection.Transaction.ID ||
+				result.Attempt != attempt.Attempt ||
+				result.EffectSetDigest != attempt.EffectSetDigest ||
+				result.StagedStateDigest != attempt.StagedStateDigest {
+				return transactionError(model.ErrorEventChain, "superseded attempt verification history binding is invalid")
+			}
+		}
+		if attempt.CommitPlan != nil {
+			if err := attempt.CommitPlan.Validate(); err != nil {
+				return err
+			}
+			computed, err := ComputeCommitPlanDigest(*attempt.CommitPlan)
+			if err != nil || computed != attempt.CommitPlan.Digest {
+				return transactionError(model.ErrorEventChain, "superseded attempt commit plan digest is invalid")
+			}
+			if attempt.CommitPlan.TransactionID != projection.Transaction.ID ||
+				attempt.CommitPlan.Attempt != attempt.Attempt ||
+				attempt.CommitPlan.Digest != attempt.CommitPlanDigest ||
+				attempt.CommitPlan.EffectSetDigest != attempt.EffectSetDigest ||
+				attempt.CommitPlan.StagedStateDigest != attempt.StagedStateDigest {
+				return transactionError(model.ErrorEventChain, "superseded attempt commit plan binding is invalid")
+			}
+		} else if attempt.CommitPlanDigest != "" {
+			return transactionError(model.ErrorEventChain, "superseded attempt references a missing commit plan")
+		}
+		if attempt.ApprovalPackage != nil {
+			if err := attempt.ApprovalPackage.Validate(); err != nil {
+				return err
+			}
+			computed, err := ComputeApprovalPackageDigest(*attempt.ApprovalPackage)
+			if err != nil || computed != attempt.ApprovalPackage.Digest {
+				return transactionError(model.ErrorEventChain, "superseded attempt approval package digest is invalid")
+			}
+			if attempt.ApprovalPackage.TransactionID != projection.Transaction.ID ||
+				attempt.ApprovalPackage.Attempt != attempt.Attempt ||
+				attempt.ApprovalPackage.Digest != attempt.ApprovalPackageDigest ||
+				attempt.ApprovalPackage.EffectSetDigest != attempt.EffectSetDigest ||
+				attempt.ApprovalPackage.StagedStateDigest != attempt.StagedStateDigest ||
+				attempt.ApprovalPackage.CommitPlanDigest != attempt.CommitPlanDigest {
+				return transactionError(model.ErrorEventChain, "superseded attempt approval package binding is invalid")
+			}
+		} else if attempt.ApprovalPackageDigest != "" {
+			return transactionError(model.ErrorEventChain, "superseded attempt references a missing approval package")
+		}
+		for _, authority := range attempt.SupersededAuthorities {
+			if err := validateAuthoritySnapshot(
+				authority,
+				projection.Transaction.ID,
+				attempt.Attempt,
+			); err != nil {
+				return err
+			}
+		}
+	}
+	if previousAttempt+1 != projection.Transaction.Attempt {
+		return transactionError(model.ErrorEventChain, "superseded attempt history is not contiguous with the active attempt")
+	}
+	return nil
+}
+
+func validateAuthoritySnapshot(
+	authority AuthoritySnapshot,
+	transactionID string,
+	attempt int64,
+) error {
+	if authority.Attempt != attempt ||
+		(authority.State != model.TransactionPendingApproval &&
+			authority.State != model.TransactionReadyToCommit) ||
+		authority.Reason == "" || authority.SupersededAt.IsZero() ||
+		authority.CommitPlan == nil || authority.ApprovalPackage == nil {
+		return transactionError(model.ErrorEventChain, "superseded authority metadata is invalid")
+	}
+	if err := authority.CommitPlan.Validate(); err != nil {
+		return err
+	}
+	if err := authority.ApprovalPackage.Validate(); err != nil {
+		return err
+	}
+	planDigest, planErr := ComputeCommitPlanDigest(*authority.CommitPlan)
+	approvalDigest, approvalErr := ComputeApprovalPackageDigest(*authority.ApprovalPackage)
+	if planErr != nil || approvalErr != nil ||
+		planDigest != authority.CommitPlan.Digest ||
+		approvalDigest != authority.ApprovalPackage.Digest {
+		return transactionError(model.ErrorEventChain, "superseded authority digest is invalid")
+	}
+	if authority.CommitPlan.TransactionID != transactionID ||
+		authority.CommitPlan.Attempt != attempt ||
+		authority.ApprovalPackage.TransactionID != transactionID ||
+		authority.ApprovalPackage.Attempt != attempt ||
+		authority.ApprovalPackage.CommitPlanDigest != authority.CommitPlan.Digest {
+		return transactionError(model.ErrorEventChain, "superseded authority binding is invalid")
+	}
+	return nil
+}
+
 func invalidateFrozenState(projection *Projection) {
+	projection.Transaction.EffectIDs = nil
 	projection.Transaction.StagedStateDigest = ""
 	projection.Transaction.EffectSetDigest = ""
 	projection.Transaction.VerificationResultIDs = nil
 	projection.Transaction.OutstandingApprovalIDs = nil
 	projection.Transaction.ApprovalPackageDigest = ""
 	projection.Transaction.CommitPlanDigest = ""
+	projection.Effects = nil
 	projection.Verifications = nil
+	projection.SupersededVerifications = nil
 	projection.CommitPlan = nil
 	projection.ApprovalPackage = nil
 	projection.ApprovalDigests = nil
+	projection.SupersededAuthorities = nil
+}
+
+func beginNextAttempt(projection *Projection, supersededAt time.Time) error {
+	if activeExecutionIndex(projection.Executions) >= 0 {
+		return transitionError("a new attempt cannot begin while an agent execution is active")
+	}
+	reason := projection.Transaction.StateReason
+	if reason == "" {
+		reason = "transaction work revised"
+	}
+	executionIDs := make([]string, 0)
+	for _, execution := range projection.Executions {
+		if execution.Attempt == projection.Transaction.Attempt {
+			executionIDs = append(executionIDs, execution.ID)
+		}
+	}
+	projection.SupersededAttempts = append(
+		projection.SupersededAttempts,
+		AttemptSnapshot{
+			Attempt:                 projection.Transaction.Attempt,
+			State:                   projection.Transaction.State,
+			Reason:                  reason,
+			SupersededAt:            supersededAt,
+			ExecutionIDs:            executionIDs,
+			EffectIDs:               append([]string(nil), projection.Transaction.EffectIDs...),
+			Effects:                 append([]model.Effect(nil), projection.Effects...),
+			StagedStateDigest:       projection.Transaction.StagedStateDigest,
+			EffectSetDigest:         projection.Transaction.EffectSetDigest,
+			VerificationResultIDs:   append([]string(nil), projection.Transaction.VerificationResultIDs...),
+			Verifications:           append([]model.VerificationResult(nil), projection.Verifications...),
+			SupersededVerifications: append([]model.VerificationResult(nil), projection.SupersededVerifications...),
+			CommitPlan:              cloneCommitPlan(projection.CommitPlan),
+			CommitPlanDigest:        projection.Transaction.CommitPlanDigest,
+			ApprovalPackage:         cloneApprovalPackage(projection.ApprovalPackage),
+			ApprovalPackageDigest:   projection.Transaction.ApprovalPackageDigest,
+			OutstandingApprovalIDs:  append([]string(nil), projection.Transaction.OutstandingApprovalIDs...),
+			ApprovalDigests:         append([]string(nil), projection.ApprovalDigests...),
+			SupersededAuthorities:   append([]AuthoritySnapshot(nil), projection.SupersededAuthorities...),
+		},
+	)
+	projection.Transaction.Attempt++
+	invalidateFrozenState(projection)
+	return nil
 }
 
 func applyCompletionTime(transaction *model.AgentTransaction, occurredAt time.Time) {
@@ -975,16 +1430,38 @@ func cloneProjection(source Projection) Projection {
 	result.Executions = append([]model.AgentExecution(nil), source.Executions...)
 	result.Effects = append([]model.Effect(nil), source.Effects...)
 	result.Verifications = append([]model.VerificationResult(nil), source.Verifications...)
+	result.SupersededVerifications = append(
+		[]model.VerificationResult(nil),
+		source.SupersededVerifications...,
+	)
 	result.ApprovalDigests = append([]string(nil), source.ApprovalDigests...)
-	if source.CommitPlan != nil {
-		copy := *source.CommitPlan
-		result.CommitPlan = &copy
-	}
-	if source.ApprovalPackage != nil {
-		copy := *source.ApprovalPackage
-		result.ApprovalPackage = &copy
-	}
+	result.CommitPlan = cloneCommitPlan(source.CommitPlan)
+	result.ApprovalPackage = cloneApprovalPackage(source.ApprovalPackage)
+	result.SupersededAuthorities = append(
+		[]AuthoritySnapshot(nil),
+		source.SupersededAuthorities...,
+	)
+	result.SupersededAttempts = append(
+		[]AttemptSnapshot(nil),
+		source.SupersededAttempts...,
+	)
 	return result
+}
+
+func cloneCommitPlan(source *model.CommitPlan) *model.CommitPlan {
+	if source == nil {
+		return nil
+	}
+	copy := *source
+	return &copy
+}
+
+func cloneApprovalPackage(source *model.ApprovalPackage) *model.ApprovalPackage {
+	if source == nil {
+		return nil
+	}
+	copy := *source
+	return &copy
 }
 
 func activeExecutionIndex(executions []model.AgentExecution) int {
@@ -1003,6 +1480,38 @@ func executionIndex(executions []model.AgentExecution, executionID string) int {
 		}
 	}
 	return -1
+}
+
+func latestExecutionForAttempt(
+	executions []model.AgentExecution,
+	attempt int64,
+) (model.AgentExecution, bool) {
+	for index := len(executions) - 1; index >= 0; index-- {
+		if executions[index].Attempt == attempt {
+			return executions[index], true
+		}
+	}
+	return model.AgentExecution{}, false
+}
+
+func verificationIndex(
+	verifications []model.VerificationResult,
+	verificationID string,
+) int {
+	for index, verification := range verifications {
+		if verification.ID == verificationID {
+			return index
+		}
+	}
+	return -1
+}
+
+func removeVerification(
+	verifications []model.VerificationResult,
+	index int,
+) []model.VerificationResult {
+	result := append([]model.VerificationResult(nil), verifications[:index]...)
+	return append(result, verifications[index+1:]...)
 }
 
 func stageBindingIndex(bindings []model.StageBinding, bindingID string) int {

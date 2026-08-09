@@ -261,6 +261,7 @@ func Run(ctx context.Context, config Config) error {
 		ctx,
 		kernelStore,
 		engineExecutionCleanup(executionPolicy.EnginePath),
+		recoverModelExecutionFrom(transactionRoot),
 		time.Now,
 	)
 	if err != nil {

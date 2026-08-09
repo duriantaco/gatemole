@@ -16,8 +16,10 @@ func ComputeEffectSetDigest(effects []model.Effect) (string, error) {
 	type immutableEffect struct {
 		ID                 string                    `json:"id"`
 		TransactionID      string                    `json:"transaction_id"`
+		Attempt            int64                     `json:"attempt,omitempty"`
 		Sequence           int64                     `json:"sequence"`
 		RunID              string                    `json:"run_id,omitempty"`
+		OriginExecutionID  string                    `json:"origin_execution_id,omitempty"`
 		OriginActionID     string                    `json:"origin_action_id,omitempty"`
 		System             string                    `json:"system"`
 		Resource           model.ResourceSelector    `json:"resource"`
@@ -41,8 +43,10 @@ func ComputeEffectSetDigest(effects []model.Effect) (string, error) {
 		value := immutableEffect{
 			ID:                 effect.ID,
 			TransactionID:      effect.TransactionID,
+			Attempt:            effect.Attempt,
 			Sequence:           effect.Sequence,
 			RunID:              effect.RunID,
+			OriginExecutionID:  effect.OriginExecutionID,
 			OriginActionID:     effect.OriginActionID,
 			System:             effect.System,
 			Resource:           effect.Resource,

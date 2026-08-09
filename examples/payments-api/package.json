@@ -1,0 +1,8 @@
+{
+  "name": "gatemole-payments-api-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

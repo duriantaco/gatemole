@@ -37,6 +37,7 @@
     "budget_usage": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/budget_usage" },
     "workspace": { "type": "string", "minLength": 1 },
     "runtime": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/runtime_binding" },
+    "active_execution_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "capability_ids": {
       "type": "array",
       "uniqueItems": true,

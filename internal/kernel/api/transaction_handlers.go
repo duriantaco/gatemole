@@ -22,6 +22,7 @@ import (
 	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 	"github.com/duriantaco/gatemole/internal/kernel/verification"
@@ -188,6 +189,80 @@ func (s *Server) getTransaction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projection)
 }
 
+// getTransactionDiff returns the exact frozen Git patch as a bounded raw body.
+// Binding metadata travels in a base64url-encoded JSON header so the patch is
+// not corrupted by JSON string or base64 transformations.
+func (s *Server) getTransactionDiff(w http.ResponseWriter, r *http.Request) {
+	if s.gitStage == nil {
+		writeError(w, transactionRuntimeUnavailable())
+		return
+	}
+	namespace := r.PathValue("namespace")
+	transactionID := r.PathValue("transactionID")
+	lock := s.runLock(namespace, "transaction:"+transactionID)
+	lock.Lock()
+	defer lock.Unlock()
+	projection, err := s.store.GetTransaction(r.Context(), namespace, transactionID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(projection.Effects) == 0 ||
+		projection.Transaction.StagedStateDigest == "" ||
+		projection.Transaction.EffectSetDigest == "" {
+		writeError(w, transactionTransitionError("transaction has no frozen Git effects to review"))
+		return
+	}
+	workspace, err := s.transactionWorkspace(r, projection)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	snapshot, err := s.gitStage.Inspect(r.Context(), workspace, s.now().UTC())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !matchesFrozenStage(snapshot, projection) {
+		writeError(w, &model.KernelError{
+			Code:      model.ErrorTransactionConflict,
+			Operation: "review_transaction_diff",
+			Resource:  transactionID,
+			Message:   "transaction worktree changed after effects were frozen",
+		})
+		return
+	}
+	patch, err := s.gitStage.CapturePatch(r.Context(), snapshot)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	metadata := gitstage.DiffMetadata{
+		Version:           gitstage.DiffMetadataVersion,
+		Namespace:         namespace,
+		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
+		EventSequence:     projection.Transaction.EventSequence,
+		StagedStateDigest: projection.Transaction.StagedStateDigest,
+		EffectSetDigest:   projection.Transaction.EffectSetDigest,
+		PatchDigest:       snapshot.PatchDigest,
+		BaseRevision:      snapshot.Workspace.BaseRevision,
+		TreeRevision:      snapshot.TreeRevision,
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set(
+		gitstage.DiffMetadataHeader,
+		base64.RawURLEncoding.EncodeToString(encoded),
+	)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(patch)
+}
+
 func (s *Server) listTransactionEvents(w http.ResponseWriter, r *http.Request) {
 	after := int64(0)
 	if raw := r.URL.Query().Get("after"); raw != "" {
@@ -210,6 +285,53 @@ func (s *Server) listTransactionEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) startTransaction(w http.ResponseWriter, r *http.Request) {
 	s.mutateTransactionState(w, r, model.TransactionRunning, "")
+}
+
+func (s *Server) renewTransactionAuthority(w http.ResponseWriter, r *http.Request) {
+	var request transactionMutationRequest
+	if err := decodeBody(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	namespace := r.PathValue("namespace")
+	transactionID := r.PathValue("transactionID")
+	lock := s.runLock(namespace, "transaction:"+transactionID)
+	lock.Lock()
+	defer lock.Unlock()
+	projection, err := s.checkedTransaction(
+		r,
+		namespace,
+		transactionID,
+		request.ExpectedSequence,
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	event, err := transactionreducer.NextEvent(
+		projection,
+		transactionreducer.EventAuthorityRenewed,
+		request.Actor,
+		s.now().UTC(),
+		transactionreducer.AuthorityRenewedPayload{
+			Reason: "commit authority renewed by operator",
+		},
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	next, err := s.store.AppendTransactionEvents(
+		r.Context(),
+		namespace,
+		request.ExpectedSequence,
+		[]model.TransactionEvent{event},
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, next)
 }
 
 func (s *Server) createTransactionWorktree(w http.ResponseWriter, r *http.Request) {
@@ -333,6 +455,7 @@ func (s *Server) startAgentExecution(w http.ResponseWriter, r *http.Request) {
 		Version:             model.AgentExecutionVersion,
 		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
 		TransactionID:       transactionID,
+		Attempt:             projection.Transaction.Attempt,
 		RunID:               request.RunID,
 		StageBindingID:      projection.Transaction.StageBindings[0].ID,
 		Program:             request.Program,
@@ -353,8 +476,8 @@ func (s *Server) startAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	next, err := s.store.AppendTransactionEvents(
-		r.Context(), namespace, request.ExpectedSequence, []model.TransactionEvent{event},
+	next, err := s.appendExternalExecutionEvent(
+		r.Context(), namespace, projection, event,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -403,8 +526,8 @@ func (s *Server) finishAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	next, err := s.store.AppendTransactionEvents(
-		r.Context(), namespace, request.ExpectedSequence, []model.TransactionEvent{event},
+	next, err := s.appendExternalExecutionEvent(
+		r.Context(), namespace, projection, event,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -550,6 +673,10 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	var brokerSession *sandbox.ModelBrokerSession
 	var brokerExecution *model.ModelBrokerExecution
 	var brokerConfig *sandbox.ModelBrokerConfig
+	executionID := transactionreducer.ExecutionID(
+		transactionID,
+		request.ExpectedSequence+1,
+	)
 	if executionPlan.ModelBroker != nil {
 		brokerPolicy := s.executionPolicy.ModelBroker
 		if brokerPolicy == nil {
@@ -570,14 +697,20 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		receiptDirectory := filepath.Join(
+		receiptDirectory := sandbox.ModelBrokerExecutionEvidenceDirectory(
 			s.transactionStaging,
-			".gatemole-model-evidence",
-			sandbox.ModelBrokerContainerName(
-				transactionID,
-				executionPlan.RunID,
-			),
+			transactionID,
+			executionPlan.RunID,
+			executionID,
 		)
+		if err := os.MkdirAll(receiptDirectory, 0o700); err != nil {
+			writeError(w, &model.KernelError{
+				Code: model.ErrorDriverUnavailable, Operation: "prepare_model_receipts",
+				Resource: executionID, Message: "create execution-scoped model receipt directory",
+				Cause: err,
+			})
+			return
+		}
 		brokerConfig = &sandbox.ModelBrokerConfig{
 			EnginePath:          s.executionPolicy.EnginePath,
 			Image:               brokerPolicy.Image,
@@ -639,8 +772,9 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	now := s.now().UTC()
 	execution := model.AgentExecution{
 		Version:             model.AgentExecutionVersion,
-		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
+		ID:                  executionID,
 		TransactionID:       transactionID,
+		Attempt:             projection.Transaction.Attempt,
 		RunID:               executionPlan.RunID,
 		StageBindingID:      executionPlan.StageBindingID,
 		Program:             program,
@@ -662,18 +796,23 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	projection, err = s.store.AppendTransactionEventsIfRunCurrent(
+	pairedExecution, err := s.store.AppendPairedExecutionEvent(
 		authorityContext,
 		namespace,
-		request.ExpectedSequence,
-		liveAuthority.RunSequence,
-		liveAuthority.RunLastEventDigest,
-		[]model.TransactionEvent{started},
+		store.ExecutionHeads{
+			TransactionSequence: request.ExpectedSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         liveAuthority.RunSequence,
+			RunDigest:           liveAuthority.RunLastEventDigest,
+		},
+		started,
 	)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	projection = pairedExecution.Transaction
+	runProjection := pairedExecution.Run
 	var outcome verification.Outcome
 	var runErr error
 	runOperation := "run_agent_execution"
@@ -747,18 +886,33 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		brokerExecution = &model.ModelBrokerExecution{
-			Provider:            s.executionPolicy.ModelBroker.Policy.Provider,
-			ImageDigest:         brokerSession.ImageDigest,
-			PolicyDigest:        brokerSession.PolicyDigest,
-			ReceiptLedgerDigest: summary.Digest,
-			Calls:               summary.Calls,
-			CompletedCalls:      summary.Completed,
-			FailedCalls:         summary.Failed,
-			UnknownCalls:        summary.Unknown,
-			InputTokens:         summary.InputTokens,
-			OutputTokens:        summary.OutputTokens,
+		brokerExecution = settledModelBrokerExecution(
+			model.ModelBrokerExecution{
+				Provider: brokerExecution.Provider, ImageDigest: brokerSession.ImageDigest,
+				PolicyDigest: brokerSession.PolicyDigest,
+			},
+			summary,
+		)
+	} else if brokerConfig != nil {
+		// A broker that could not start still needs a terminal, digest-bound
+		// empty ledger. Otherwise the start-failed process cannot settle and
+		// would remain active until a daemon restart.
+		summary, summaryErr := kernelmodelbroker.FinalizeLedger(
+			filepath.Join(brokerConfig.ReceiptDirectory, "model-calls.jsonl"),
+			transactionID,
+			executionPlan.RunID,
+			brokerExecution.Provider,
+		)
+		if summaryErr != nil {
+			writeError(w, &model.KernelError{
+				Code: model.ErrorEventChain, Operation: "finalize_model_receipts",
+				Resource: transactionID,
+				Message:  "failed broker start has no verifiable receipt ledger; execution remains active",
+				Cause:    summaryErr,
+			})
+			return
 		}
+		brokerExecution = settledModelBrokerExecution(*brokerExecution, summary)
 	}
 	if verification.IsCleanupError(runErr) {
 		writeError(w, &model.KernelError{
@@ -801,14 +955,22 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	finishContext, stopFinish := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stopFinish()
-	projection, finishErr = s.store.AppendTransactionEvents(
-		finishContext, namespace, projection.Transaction.EventSequence,
-		[]model.TransactionEvent{finished},
+	pairedExecution, finishErr = s.store.AppendPairedExecutionEvent(
+		finishContext,
+		namespace,
+		store.ExecutionHeads{
+			TransactionSequence: projection.Transaction.EventSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         runProjection.Run.EventSequence,
+			RunDigest:           runProjection.LastEventDigest,
+		},
+		finished,
 	)
 	if finishErr != nil {
 		writeError(w, finishErr)
 		return
 	}
+	projection = pairedExecution.Transaction
 	execution = projection.Executions[len(projection.Executions)-1]
 	if runErr != nil {
 		var kernelErr *model.KernelError
@@ -848,6 +1010,55 @@ func taskAuthorizesExecution(
 		Resource:  task.TransactionID,
 		Message:   "persisted task does not authorize the requested run or agent profile",
 	}
+}
+
+func settledModelBrokerExecution(
+	binding model.ModelBrokerExecution,
+	summary kernelmodelbroker.LedgerSummary,
+) *model.ModelBrokerExecution {
+	return &model.ModelBrokerExecution{
+		Provider: binding.Provider, ImageDigest: binding.ImageDigest,
+		PolicyDigest: binding.PolicyDigest, ReceiptLedgerDigest: summary.Digest,
+		Calls: summary.Calls, CompletedCalls: summary.Completed,
+		FailedCalls: summary.Failed, UnknownCalls: summary.Unknown,
+		InputTokens: summary.InputTokens, OutputTokens: summary.OutputTokens,
+	}
+}
+
+func (s *Server) appendExternalExecutionEvent(
+	ctx context.Context,
+	namespace string,
+	projection transactionreducer.Projection,
+	event model.TransactionEvent,
+) (transactionreducer.Projection, error) {
+	binding := projection.Transaction.Admission
+	if binding == nil {
+		return s.store.AppendTransactionEvents(
+			ctx,
+			namespace,
+			projection.Transaction.EventSequence,
+			[]model.TransactionEvent{event},
+		)
+	}
+	run, err := s.store.GetRun(ctx, namespace, binding.RunID)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	paired, err := s.store.AppendPairedExecutionEvent(
+		ctx,
+		namespace,
+		store.ExecutionHeads{
+			TransactionSequence: projection.Transaction.EventSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         run.Run.EventSequence,
+			RunDigest:           run.LastEventDigest,
+		},
+		event,
+	)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	return paired.Transaction, nil
 }
 
 func materializeAgentTask(
@@ -974,6 +1185,15 @@ func (s *Server) stageTransaction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, transactionTransitionError("only an un-staged running transaction can freeze effects"))
 		return
 	}
+	var originExecution *model.AgentExecution
+	if projection.Transaction.Task != nil {
+		execution, ok := latestAttemptExecution(projection)
+		if !ok || execution.Status != model.AgentExecutionSucceeded {
+			writeError(w, transactionTransitionError("task effects require the latest execution in the current attempt to succeed"))
+			return
+		}
+		originExecution = &execution
+	}
 	workspace, err := s.transactionWorkspace(r, projection)
 	if err != nil {
 		writeError(w, err)
@@ -985,14 +1205,46 @@ func (s *Server) stageTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(snapshot.Effects) == 0 {
-		writeError(w, transactionTransitionError("transaction worktree has no effects to stage"))
+		if originExecution == nil {
+			writeError(w, transactionTransitionError("transaction worktree has no effects to stage"))
+			return
+		}
+		completed, buildErr := transactionreducer.NextEvent(
+			projection,
+			transactionreducer.EventTransactionStateChanged,
+			request.Actor,
+			s.now().UTC(),
+			transactionreducer.TransactionStateChangedPayload{
+				From: model.TransactionRunning,
+				To:   model.TransactionCompletedNoEffect,
+			},
+		)
+		if buildErr != nil {
+			writeError(w, buildErr)
+			return
+		}
+		next, appendErr := s.store.AppendTransactionEvents(
+			r.Context(),
+			namespace,
+			request.ExpectedSequence,
+			[]model.TransactionEvent{completed},
+		)
+		if appendErr != nil {
+			writeError(w, appendErr)
+			return
+		}
+		writeJSON(w, http.StatusOK, stageResponse{Projection: next, Snapshot: snapshot})
 		return
 	}
 	temporary := projection
 	events := make([]model.TransactionEvent, 0, len(snapshot.Effects)+1)
 	for _, effect := range snapshot.Effects {
+		effect.Attempt = temporary.Transaction.Attempt
 		if len(temporary.Transaction.AgentRunIDs) == 1 {
 			effect.RunID = temporary.Transaction.AgentRunIDs[0]
+		}
+		if originExecution != nil {
+			effect.OriginExecutionID = originExecution.ID
 		}
 		event, buildErr := transactionreducer.NextEvent(
 			temporary, transactionreducer.EventEffectAdded, request.Actor, s.now().UTC(),
@@ -1146,7 +1398,8 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		writeError(w, err)
 		return
 	}
-	if projection.Transaction.State != model.TransactionValidating {
+	if projection.Transaction.State != model.TransactionValidating &&
+		projection.Transaction.State != model.TransactionValidationFailed {
 		writeError(w, transactionTransitionError("verification requires a validating transaction"))
 		return
 	}
@@ -1161,15 +1414,6 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 			writeError(w, &model.KernelError{
 				Code: model.ErrorCapabilityDenied, Operation: "record_transaction_verification",
 				Resource: transactionID, Message: "verifier image digest is not allowed by daemon policy",
-			})
-			return
-		}
-	}
-	for _, existing := range projection.Verifications {
-		if existing.Name == request.Name {
-			writeError(w, &model.KernelError{
-				Code: model.ErrorConflict, Operation: "record_transaction_verification",
-				Resource: transactionID, Message: "verification name already exists in the transaction",
 			})
 			return
 		}
@@ -1207,11 +1451,22 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		return
 	}
 	now := s.now().UTC()
+	temporary, events, err := verificationRetryPrefix(
+		projection,
+		request.Name,
+		request.Actor,
+		now,
+	)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	expiresAt := now.Add(time.Hour)
 	result := model.VerificationResult{
 		Version:           model.VerificationResultVersion,
-		ID:                transactionreducer.VerificationID(transactionID, request.Name, request.ExpectedSequence+1),
+		ID:                transactionreducer.VerificationID(transactionID, request.Name, temporary.Transaction.EventSequence+1),
 		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
 		Name:              request.Name,
 		Kind:              model.VerificationInvariant,
 		Status:            request.Status,
@@ -1233,8 +1488,7 @@ func (s *Server) recordTransactionVerification(w http.ResponseWriter, r *http.Re
 		writeError(w, err)
 		return
 	}
-	temporary := projection
-	events := make([]model.TransactionEvent, 0, len(projection.Effects)+2)
+	events = slices.Grow(events, len(projection.Effects)+2)
 	if result.Status == model.VerificationPassed {
 		for _, effect := range temporary.Effects {
 			if effect.Status != model.EffectStaged {
@@ -1369,18 +1623,10 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		writeError(w, err)
 		return
 	}
-	if projection.Transaction.State != model.TransactionValidating {
+	if projection.Transaction.State != model.TransactionValidating &&
+		projection.Transaction.State != model.TransactionValidationFailed {
 		writeError(w, transactionTransitionError("verification requires a validating transaction"))
 		return
-	}
-	for _, existing := range projection.Verifications {
-		if existing.Name == request.Name {
-			writeError(w, &model.KernelError{
-				Code: model.ErrorConflict, Operation: "run_transaction_verification",
-				Resource: transactionID, Message: "verification name already exists in the transaction",
-			})
-			return
-		}
 	}
 	workspace, err := s.transactionWorkspace(r, projection)
 	if err != nil {
@@ -1399,6 +1645,16 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 			Resource:  transactionID,
 			Message:   "transaction worktree changed before verification",
 		})
+		return
+	}
+	verificationProjection, prefixEvents, err := verificationRetryPrefix(
+		projection,
+		request.Name,
+		request.Actor,
+		s.now().UTC(),
+	)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
 	releaseWorkload, err := s.acquireWorkloadSlot(
@@ -1517,8 +1773,9 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	}
 	result := model.VerificationResult{
 		Version:           model.VerificationResultVersion,
-		ID:                transactionreducer.VerificationID(transactionID, request.Name, request.ExpectedSequence+1),
+		ID:                transactionreducer.VerificationID(transactionID, request.Name, verificationProjection.Transaction.EventSequence+1),
 		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
 		Name:              request.Name,
 		Kind:              model.VerificationInvariant,
 		Status:            status,
@@ -1544,7 +1801,12 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	next, err := s.appendPlatformVerification(
-		r, namespace, projection, result,
+		r,
+		namespace,
+		projection,
+		verificationProjection,
+		prefixEvents,
+		result,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -1556,14 +1818,92 @@ func (s *Server) runTransactionVerification(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+func verificationRetryPrefix(
+	projection transactionreducer.Projection,
+	name string,
+	actor model.Principal,
+	now time.Time,
+) (transactionreducer.Projection, []model.TransactionEvent, error) {
+	var existing *model.VerificationResult
+	for index := range projection.Verifications {
+		if projection.Verifications[index].Name == name {
+			existing = &projection.Verifications[index]
+			break
+		}
+	}
+	if projection.Transaction.State == model.TransactionValidationFailed &&
+		existing == nil {
+		return transactionreducer.Projection{}, nil, &model.KernelError{
+			Code:      model.ErrorConflict,
+			Operation: "retry_transaction_verification",
+			Resource:  projection.Transaction.ID,
+			Message:   "retry must replace the verification that failed",
+		}
+	}
+	if existing != nil &&
+		existing.Status == model.VerificationPassed &&
+		(existing.ExpiresAt == nil || existing.ExpiresAt.After(now)) {
+		return transactionreducer.Projection{}, nil, &model.KernelError{
+			Code:      model.ErrorConflict,
+			Operation: "retry_transaction_verification",
+			Resource:  existing.ID,
+			Message:   "verification name already has a current passing result",
+		}
+	}
+	temporary := projection
+	events := make([]model.TransactionEvent, 0, 2)
+	if temporary.Transaction.State == model.TransactionValidationFailed {
+		event, err := transactionreducer.NextEvent(
+			temporary,
+			transactionreducer.EventTransactionStateChanged,
+			actor,
+			now,
+			transactionreducer.TransactionStateChangedPayload{
+				From: model.TransactionValidationFailed,
+				To:   model.TransactionValidating,
+			},
+		)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		temporary, err = transactionreducer.Apply(&temporary, event)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		events = append(events, event)
+	}
+	if existing != nil {
+		event, err := transactionreducer.NextEvent(
+			temporary,
+			transactionreducer.EventVerificationSuperseded,
+			actor,
+			now,
+			transactionreducer.VerificationSupersededPayload{
+				VerificationID: existing.ID,
+				Reason:         "verification rerun requested",
+			},
+		)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		temporary, err = transactionreducer.Apply(&temporary, event)
+		if err != nil {
+			return transactionreducer.Projection{}, nil, err
+		}
+		events = append(events, event)
+	}
+	return temporary, events, nil
+}
+
 func (s *Server) appendPlatformVerification(
 	r *http.Request,
 	namespace string,
-	projection transactionreducer.Projection,
+	base transactionreducer.Projection,
+	temporary transactionreducer.Projection,
+	events []model.TransactionEvent,
 	result model.VerificationResult,
 ) (transactionreducer.Projection, error) {
-	temporary := projection
-	events := make([]model.TransactionEvent, 0, len(projection.Effects)+2)
+	events = slices.Grow(events, len(temporary.Effects)+2)
 	if result.Status == model.VerificationPassed {
 		for _, effect := range temporary.Effects {
 			if effect.Status != model.EffectStaged {
@@ -1614,7 +1954,7 @@ func (s *Server) appendPlatformVerification(
 		events = append(events, failed)
 	}
 	return s.store.AppendTransactionEvents(
-		r.Context(), namespace, projection.Transaction.EventSequence, events,
+		r.Context(), namespace, base.Transaction.EventSequence, events,
 	)
 }
 
@@ -2327,16 +2667,40 @@ func matchesFrozenStage(
 	if err != nil || rawDigest != snapshot.EffectSetDigest {
 		return false
 	}
-	effects := append([]model.Effect(nil), snapshot.Effects...)
-	if len(projection.Transaction.AgentRunIDs) == 1 {
-		for index := range effects {
-			effects[index].RunID =
-				projection.Transaction.AgentRunIDs[0]
-		}
-	}
+	effects := bindSnapshotEffects(snapshot.Effects, projection)
 	boundDigest, err := transactionreducer.ComputeEffectSetDigest(effects)
 	return err == nil &&
 		boundDigest == projection.Transaction.EffectSetDigest
+}
+
+func bindSnapshotEffects(
+	effects []model.Effect,
+	projection transactionreducer.Projection,
+) []model.Effect {
+	bound := append([]model.Effect(nil), effects...)
+	execution, hasExecution := latestAttemptExecution(projection)
+	for index := range bound {
+		bound[index].Attempt = projection.Transaction.Attempt
+		if len(projection.Transaction.AgentRunIDs) == 1 {
+			bound[index].RunID = projection.Transaction.AgentRunIDs[0]
+		}
+		if projection.Transaction.Task != nil &&
+			hasExecution && execution.Status == model.AgentExecutionSucceeded {
+			bound[index].OriginExecutionID = execution.ID
+		}
+	}
+	return bound
+}
+
+func latestAttemptExecution(
+	projection transactionreducer.Projection,
+) (model.AgentExecution, bool) {
+	for index := len(projection.Executions) - 1; index >= 0; index-- {
+		if projection.Executions[index].Attempt == projection.Transaction.Attempt {
+			return projection.Executions[index], true
+		}
+	}
+	return model.AgentExecution{}, false
 }
 
 func transactionRuntimeUnavailable() *model.KernelError {

@@ -57,9 +57,10 @@ func transactionVerify(
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if projection.Transaction.State != model.TransactionValidating ||
+	if (projection.Transaction.State != model.TransactionValidating &&
+		projection.Transaction.State != model.TransactionValidationFailed) ||
 		len(projection.Transaction.StageBindings) != 1 {
-		fmt.Fprintln(stderr, "tx verify requires a validating transaction with exactly one staged workspace")
+		fmt.Fprintln(stderr, "tx verify requires a validating or verification-failed transaction with exactly one staged workspace")
 		return 1
 	}
 	processContext, cancel := context.WithTimeout(

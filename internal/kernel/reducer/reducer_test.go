@@ -235,6 +235,129 @@ func TestNonStateEventsAdvanceCursorWithoutChangingState(t *testing.T) {
 	}
 }
 
+func TestRunExecutionLifecycleBindsActiveWorkAndChargesUsage(t *testing.T) {
+	t.Parallel()
+	projection, err := Apply(nil, readCreationEvent(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err = Apply(&projection, stateEvent(t, projection, model.RunAdmitted, "", 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := executionEvent(t, projection, EventRunExecutionStarted, model.RunExecutionStartedPayload{
+		TransactionID: "tx:demo-001",
+		ExecutionID:   "execution:demo-001",
+		Attempt:       1,
+	}, 3)
+	projection, err = Apply(&projection, started)
+	if err != nil {
+		t.Fatalf("start execution: %v", err)
+	}
+	if projection.Run.State != model.RunRunning ||
+		projection.Run.ActiveExecutionID != "execution:demo-001" {
+		t.Fatalf("execution was not bound to running run: %#v", projection.Run)
+	}
+
+	manualWait := stateEvent(t, projection, model.RunWaitingForAgent, "", 4)
+	assertKernelCode(t, applyError(projection, manualWait), model.ErrorTransitionInvalid)
+	wrongFinish := executionEvent(t, projection, EventRunExecutionFinished, model.RunExecutionFinishedPayload{
+		TransactionID: "tx:demo-001",
+		ExecutionID:   "execution:other",
+		Attempt:       1,
+		Status:        model.AgentExecutionFailed,
+	}, 4)
+	assertKernelCode(t, applyError(projection, wrongFinish), model.ErrorTransitionInvalid)
+
+	finished := executionEvent(t, projection, EventRunExecutionFinished, model.RunExecutionFinishedPayload{
+		TransactionID: "tx:demo-001",
+		ExecutionID:   "execution:demo-001",
+		Attempt:       1,
+		Status:        model.AgentExecutionSucceeded,
+		Usage: model.BudgetUsage{
+			InputTokens: 11, OutputTokens: 7, ModelCalls: 2,
+			WallTimeSeconds: 3,
+		},
+	}, 4)
+	projection, err = Apply(&projection, finished)
+	if err != nil {
+		t.Fatalf("finish execution: %v", err)
+	}
+	if projection.Run.State != model.RunWaitingForEvent ||
+		projection.Run.ActiveExecutionID != "" ||
+		projection.Run.BudgetUsage.InputTokens != 11 ||
+		projection.Run.BudgetUsage.OutputTokens != 7 ||
+		projection.Run.BudgetUsage.ModelCalls != 2 ||
+		projection.Run.BudgetUsage.WallTimeSeconds != 3 {
+		t.Fatalf("execution settlement was not projected: %#v", projection.Run)
+	}
+
+	second := executionEvent(t, projection, EventRunExecutionStarted, model.RunExecutionStartedPayload{
+		TransactionID: "tx:demo-001",
+		ExecutionID:   "execution:demo-002",
+		Attempt:       2,
+	}, 5)
+	projection, err = Apply(&projection, second)
+	if err != nil {
+		t.Fatalf("restart execution: %v", err)
+	}
+	failed := executionEvent(t, projection, EventRunExecutionFinished, model.RunExecutionFinishedPayload{
+		TransactionID: "tx:demo-001",
+		ExecutionID:   "execution:demo-002",
+		Attempt:       2,
+		Status:        model.AgentExecutionInterrupted,
+		Usage:         model.BudgetUsage{WallTimeSeconds: 1},
+	}, 6)
+	projection, err = Apply(&projection, failed)
+	if err != nil {
+		t.Fatalf("settle interrupted execution: %v", err)
+	}
+	if projection.Run.State != model.RunWaitingForAgent ||
+		projection.Run.BudgetUsage.WallTimeSeconds != 4 {
+		t.Fatalf("retryable settlement was not projected: %#v", projection.Run)
+	}
+}
+
+func TestRunExecutionSettlementFailsClosedOnInvalidUsage(t *testing.T) {
+	t.Parallel()
+	projection, err := Apply(nil, readCreationEvent(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err = Apply(&projection, stateEvent(t, projection, model.RunAdmitted, "", 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err = Apply(&projection, executionEvent(
+		t,
+		projection,
+		EventRunExecutionStarted,
+		model.RunExecutionStartedPayload{
+			TransactionID: "tx:demo-001",
+			ExecutionID:   "execution:demo-001",
+			Attempt:       1,
+		},
+		3,
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, usage := range []model.BudgetUsage{
+		{ModelCalls: -1},
+		{ModelCalls: 101},
+	} {
+		event := executionEvent(t, projection, EventRunExecutionFinished, model.RunExecutionFinishedPayload{
+			TransactionID: "tx:demo-001",
+			ExecutionID:   "execution:demo-001",
+			Attempt:       1,
+			Status:        model.AgentExecutionFailed,
+			Usage:         usage,
+		}, 4)
+		assertKernelCode(t, applyError(projection, event), model.ErrorBudgetExceeded)
+	}
+}
+
 type transitionFixture struct {
 	Initial     model.RunState `json:"initial"`
 	Transitions []struct {
@@ -286,6 +409,28 @@ func stateEvent(t *testing.T, projection Projection, to model.RunState, reason s
 		RunID:          projection.Run.ID,
 		Sequence:       int64(sequence),
 		Type:           EventRunStateChanged,
+		Actor:          model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService},
+		OccurredAt:     projection.Run.UpdatedAt.Add(time.Second),
+		Payload:        mustJSON(t, payload),
+		PreviousDigest: projection.LastEventDigest,
+		Digest:         digest(fmt.Sprintf("%x", sequence%16)),
+	}
+}
+
+func executionEvent(
+	t *testing.T,
+	projection Projection,
+	eventType string,
+	payload any,
+	sequence int,
+) model.RunEvent {
+	t.Helper()
+	return model.RunEvent{
+		Version:        model.RunEventVersion,
+		ID:             fmt.Sprintf("event:demo-001:%d", sequence),
+		RunID:          projection.Run.ID,
+		Sequence:       int64(sequence),
+		Type:           eventType,
 		Actor:          model.Principal{ID: "service:gatemoled", Kind: model.PrincipalService},
 		OccurredAt:     projection.Run.UpdatedAt.Add(time.Second),
 		Payload:        mustJSON(t, payload),

@@ -80,6 +80,26 @@ type Snapshot struct {
 	InspectedAt       time.Time      `json:"inspected_at"`
 }
 
+const (
+	DiffMetadataVersion = "gatemole.git_transaction_diff.v1"
+	DiffMetadataHeader  = "Gatemole-Transaction-Diff"
+)
+
+// DiffMetadata binds a rendered patch to the exact transaction projection and
+// immutable Git tree from which the daemon produced it.
+type DiffMetadata struct {
+	Version           string `json:"version"`
+	Namespace         string `json:"namespace"`
+	TransactionID     string `json:"transaction_id"`
+	Attempt           int64  `json:"attempt"`
+	EventSequence     int64  `json:"event_sequence"`
+	StagedStateDigest string `json:"staged_state_digest"`
+	EffectSetDigest   string `json:"effect_set_digest"`
+	PatchDigest       string `json:"patch_digest"`
+	BaseRevision      string `json:"base_revision"`
+	TreeRevision      string `json:"tree_revision"`
+}
+
 type PreparedCommit struct {
 	TargetRef        string `json:"target_ref"`
 	ExpectedRevision string `json:"expected_revision"`
@@ -752,6 +772,45 @@ func (manager *Manager) Inspect(ctx context.Context, workspace Workspace, now ti
 		PatchDigest:       patchDigest,
 		InspectedAt:       now.UTC(),
 	}, nil
+}
+
+// CapturePatch renders the exact base-to-tree patch already bound by a
+// snapshot. The tree is immutable in Git's object database; recomputing and
+// checking the digest prevents the review surface from drifting from the
+// snapshot that policy and approval consumed.
+func (manager *Manager) CapturePatch(ctx context.Context, snapshot Snapshot) ([]byte, error) {
+	if err := manager.validateWorkspace(ctx, snapshot.Workspace); err != nil {
+		return nil, err
+	}
+	if !validObjectID(snapshot.TreeRevision) || snapshot.PatchDigest == "" {
+		return nil, errors.New("Git snapshot is missing an immutable tree or patch digest")
+	}
+	patch, exceeded, err := manager.runLimited(
+		ctx,
+		snapshot.Workspace.Path,
+		manager.limits.MaxCapturedDiffBytes,
+		"diff", "--no-ext-diff", "--no-textconv", "--binary", "--full-index", "--no-renames",
+		snapshot.Workspace.BaseRevision, snapshot.TreeRevision, "--",
+	)
+	if exceeded {
+		return nil, resourceLimitError(
+			snapshot.Workspace.TransactionID,
+			"captured_diff_bytes",
+			"Git diff exceeds the configured captured byte limit",
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read frozen Git diff: %w", err)
+	}
+	if digestBytes(patch) != snapshot.PatchDigest {
+		return nil, &model.KernelError{
+			Code:      model.ErrorTransactionConflict,
+			Operation: "capture_git_diff",
+			Resource:  snapshot.Workspace.TransactionID,
+			Message:   "rendered Git diff does not match the frozen patch digest",
+		}
+	}
+	return patch, nil
 }
 
 // Verify re-inspects the worktree and fails if anything changed after the

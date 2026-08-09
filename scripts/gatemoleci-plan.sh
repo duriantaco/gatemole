@@ -123,7 +123,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       kernelbench=true
       production=true
       ;;
-    internal/gatemole/transaction_cli.go)
+    internal/gatemole/transaction_cli.go|internal/gatemole/transaction_review_cli*.go)
       transactionbench=true
       production=true
       ;;
@@ -160,7 +160,8 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       runtimebench=true
       production=true
       ;;
-    build/*|scripts/gatemoleproductionbench.sh|scripts/gatemoleproductionfixture.sh)
+    build/*|scripts/gatemoleproductionbench.sh|scripts/gatemoleproductionfixture.sh|\
+    scripts/gatemolepairedexecutiondemo.sh)
       production=true
       ;;
     .gitignore|.editorconfig|CODEOWNERS|.github/CODEOWNERS)

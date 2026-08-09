@@ -13,6 +13,7 @@
     "version": { "const": "gatemole.verification_result.v0" },
     "id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "transaction_id": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
+    "attempt": { "type": "integer", "minimum": 1 },
     "name": { "$ref": "gatemole.kernel.common.v0.schema.json#/$defs/identifier" },
     "kind": { "type": "string", "enum": ["precondition", "invariant", "postcondition"] },
     "status": { "type": "string", "enum": ["passed", "failed", "indeterminate"] },

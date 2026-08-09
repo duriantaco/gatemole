@@ -55,10 +55,21 @@ assert_output "$transaction_plan" "kernelbench=false"
 assert_output "$transaction_plan" "transactionbench=true"
 assert_output "$transaction_plan" "runtimebench=false"
 
+review_plan="$(run_plan review-shell internal/gatemole/transaction_review_cli.go)"
+assert_output "$review_plan" "gatemolebench=false"
+assert_output "$review_plan" "transactionbench=true"
+assert_output "$review_plan" "runtimebench=false"
+assert_output "$review_plan" "production=true"
+
 schema_plan="$(run_plan schema schemas/gatemole.agent_task.v0.schema.json)"
 assert_output "$schema_plan" "docs=true"
 assert_output "$schema_plan" "gatemolebench=true"
 assert_output "$schema_plan" "production=true"
+
+paired_demo_plan="$(run_plan paired-demo scripts/gatemolepairedexecutiondemo.sh)"
+assert_output "$paired_demo_plan" "production=true"
+assert_output "$paired_demo_plan" "gatemolebench=false"
+assert_output "$paired_demo_plan" "kernelbench=false"
 
 critical_paths=(
   internal/kernel/sandbox/oci.go

@@ -14,33 +14,55 @@ import (
 	"github.com/duriantaco/gatemole/internal/kernel/daemon"
 )
 
-func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Writer) int {
+type daemonFlagValues struct {
+	databasePath             string
+	socketPath               string
+	transactionRoot          string
+	runtimeProfile           string
+	allowedImages            string
+	approvalTrust            string
+	allowedGitRefs           string
+	runtimeEngine            string
+	verifierUID              int
+	verifierGID              int
+	modelBrokerImage         string
+	modelBrokerPolicy        string
+	modelTokenEnv            string
+	identityTrust            string
+	verifierProfiles         string
+	allowUnsafeHostExecution bool
+}
+
+func newDaemonFlagSet(repo string, output io.Writer) (*flag.FlagSet, *daemonFlagValues) {
 	flags := flag.NewFlagSet("daemon", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	databasePath := flags.String("db", filepath.Join(repo, ".gatemole", "kernel.db"), "SQLite kernel database path")
-	socketPath := flags.String("socket", defaultKernelSocket(repo), "Unix socket path")
-	transactionRoot := flags.String("transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
-	runtimeProfile := flags.String("runtime-profile", "development", "execution policy: development or production")
-	allowedImages := flags.String("allowed-images", "", "comma-separated digest-pinned OCI images allowed in production")
-	approvalTrust := flags.String("approval-trust", "", "JSON file containing trusted approval public keys")
-	allowedGitRefs := flags.String("allowed-git-refs", "", "comma-separated Git branch ref patterns allowed for release")
-	runtimeEngine := flags.String("runtime-engine", "docker", "daemon-owned OCI engine executable")
-	verifierUID := flags.Int("verifier-uid", os.Getuid(), "non-root UID for daemon-run agent, verifier, and broker workloads")
-	verifierGID := flags.Int("verifier-gid", os.Getgid(), "non-root GID for daemon-run agent, verifier, and broker workloads")
-	modelBrokerImage := flags.String("model-broker-image", "", "digest-pinned Gatemole model broker OCI image")
-	modelBrokerPolicy := flags.String("model-broker-policy", "", "model broker policy JSON")
-	modelTokenEnv := flags.String("model-provider-token-env", "OPENAI_API_KEY", "daemon environment containing the provider bearer credential")
-	identityTrust := flags.String("identity-trust", "", "OIDC issuer/JWKS trust document")
-	verifierProfiles := flags.String(
-		"verifier-profiles",
-		"",
-		"strict daemon-owned verifier profile JSON",
-	)
-	allowUnsafeHostExecution := flags.Bool(
+	flags.SetOutput(output)
+	values := &daemonFlagValues{}
+	flags.StringVar(&values.databasePath, "db", filepath.Join(repo, ".gatemole", "kernel.db"), "SQLite kernel database path")
+	flags.StringVar(&values.socketPath, "socket", defaultKernelSocket(repo), "Unix socket path")
+	flags.StringVar(&values.transactionRoot, "transaction-root", "", "isolated transaction worktree root (defaults to a repository-scoped per-user directory)")
+	flags.StringVar(&values.runtimeProfile, "runtime-profile", "development", "execution policy: development or production")
+	flags.StringVar(&values.allowedImages, "allowed-images", "", "comma-separated digest-pinned OCI images allowed in production")
+	flags.StringVar(&values.approvalTrust, "approval-trust", "", "JSON file containing trusted approval public keys")
+	flags.StringVar(&values.allowedGitRefs, "allowed-git-refs", "", "comma-separated Git branch ref patterns allowed for release")
+	flags.StringVar(&values.runtimeEngine, "runtime-engine", "docker", "daemon-owned OCI engine executable")
+	flags.IntVar(&values.verifierUID, "verifier-uid", os.Getuid(), "non-root UID for daemon-run agent, verifier, and broker workloads")
+	flags.IntVar(&values.verifierGID, "verifier-gid", os.Getgid(), "non-root GID for daemon-run agent, verifier, and broker workloads")
+	flags.StringVar(&values.modelBrokerImage, "model-broker-image", "", "digest-pinned Gatemole model broker OCI image")
+	flags.StringVar(&values.modelBrokerPolicy, "model-broker-policy", "", "model broker policy JSON")
+	flags.StringVar(&values.modelTokenEnv, "model-provider-token-env", "OPENAI_API_KEY", "daemon environment containing the provider bearer credential")
+	flags.StringVar(&values.identityTrust, "identity-trust", "", "OIDC issuer/JWKS trust document")
+	flags.StringVar(&values.verifierProfiles, "verifier-profiles", "", "strict daemon-owned verifier profile JSON")
+	flags.BoolVar(
+		&values.allowUnsafeHostExecution,
 		"allow-unsafe-host-execution",
 		false,
 		"development only: allow the CLI to supervise an unenforced host process",
 	)
+	return flags, values
+}
+
+func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Writer) int {
+	flags, values := newDaemonFlagSet(repo, stderr)
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -48,55 +70,55 @@ func daemonCommand(repo string, args []string, stdout io.Writer, stderr io.Write
 		fmt.Fprintf(stderr, "daemon: unexpected argument %q\n", flags.Arg(0))
 		return 2
 	}
-	if !filepath.IsAbs(*databasePath) {
-		*databasePath = filepath.Join(repo, *databasePath)
+	if !filepath.IsAbs(values.databasePath) {
+		values.databasePath = filepath.Join(repo, values.databasePath)
 	}
-	if !filepath.IsAbs(*socketPath) {
-		*socketPath = filepath.Join(repo, *socketPath)
+	if !filepath.IsAbs(values.socketPath) {
+		values.socketPath = filepath.Join(repo, values.socketPath)
 	}
 	var err error
-	*transactionRoot, err = daemonTransactionRoot(
+	values.transactionRoot, err = daemonTransactionRoot(
 		repo,
-		*transactionRoot,
+		values.transactionRoot,
 		daemonFlagWasSet(flags, "transaction-root"),
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if *approvalTrust != "" && !filepath.IsAbs(*approvalTrust) {
-		*approvalTrust = filepath.Join(repo, *approvalTrust)
+	if values.approvalTrust != "" && !filepath.IsAbs(values.approvalTrust) {
+		values.approvalTrust = filepath.Join(repo, values.approvalTrust)
 	}
-	if *modelBrokerPolicy != "" && !filepath.IsAbs(*modelBrokerPolicy) {
-		*modelBrokerPolicy = filepath.Join(repo, *modelBrokerPolicy)
+	if values.modelBrokerPolicy != "" && !filepath.IsAbs(values.modelBrokerPolicy) {
+		values.modelBrokerPolicy = filepath.Join(repo, values.modelBrokerPolicy)
 	}
-	if *identityTrust != "" && !filepath.IsAbs(*identityTrust) {
-		*identityTrust = filepath.Join(repo, *identityTrust)
+	if values.identityTrust != "" && !filepath.IsAbs(values.identityTrust) {
+		values.identityTrust = filepath.Join(repo, values.identityTrust)
 	}
-	if *verifierProfiles != "" && !filepath.IsAbs(*verifierProfiles) {
-		*verifierProfiles = filepath.Join(repo, *verifierProfiles)
+	if values.verifierProfiles != "" && !filepath.IsAbs(values.verifierProfiles) {
+		values.verifierProfiles = filepath.Join(repo, values.verifierProfiles)
 	}
-	*runtimeEngine = repositoryExecutablePath(repo, *runtimeEngine)
+	values.runtimeEngine = repositoryExecutablePath(repo, values.runtimeEngine)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := daemon.Run(ctx, daemon.Config{
-		DatabasePath:             *databasePath,
-		SocketPath:               *socketPath,
+		DatabasePath:             values.databasePath,
+		SocketPath:               values.socketPath,
 		RepositoryRoot:           repo,
-		TransactionRoot:          *transactionRoot,
-		RuntimeProfile:           *runtimeProfile,
-		AllowedImages:            splitCommaValues(*allowedImages),
-		ApprovalTrustFile:        *approvalTrust,
-		AllowedGitRefs:           splitCommaValues(*allowedGitRefs),
-		RuntimeEngine:            *runtimeEngine,
-		VerifierUID:              *verifierUID,
-		VerifierGID:              *verifierGID,
-		ModelBrokerImage:         *modelBrokerImage,
-		ModelBrokerPolicy:        *modelBrokerPolicy,
-		ModelTokenEnv:            *modelTokenEnv,
-		IdentityTrustFile:        *identityTrust,
-		VerifierProfilesFile:     *verifierProfiles,
-		AllowUnsafeHostExecution: *allowUnsafeHostExecution,
+		TransactionRoot:          values.transactionRoot,
+		RuntimeProfile:           values.runtimeProfile,
+		AllowedImages:            splitCommaValues(values.allowedImages),
+		ApprovalTrustFile:        values.approvalTrust,
+		AllowedGitRefs:           splitCommaValues(values.allowedGitRefs),
+		RuntimeEngine:            values.runtimeEngine,
+		VerifierUID:              values.verifierUID,
+		VerifierGID:              values.verifierGID,
+		ModelBrokerImage:         values.modelBrokerImage,
+		ModelBrokerPolicy:        values.modelBrokerPolicy,
+		ModelTokenEnv:            values.modelTokenEnv,
+		IdentityTrustFile:        values.identityTrust,
+		VerifierProfilesFile:     values.verifierProfiles,
+		AllowUnsafeHostExecution: values.allowUnsafeHostExecution,
 		Stdout:                   stdout,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)

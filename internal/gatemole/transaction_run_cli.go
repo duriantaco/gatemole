@@ -366,100 +366,170 @@ func transactionRunNamed(
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	projection := admitted.Transaction
-	projection, err = client.StartTransaction(
-		context.Background(), *namespace, *id,
-		projection.Transaction.EventSequence, actor,
+	projection, err := client.GetTransaction(
+		context.Background(),
+		*namespace,
+		admitted.Transaction.Transaction.ID,
 	)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	worktree, err := client.CreateTransactionWorktree(
-		context.Background(), *namespace, *id,
-		projection.Transaction.EventSequence, *revision, actor,
-	)
+	workspacePath := ""
+	if len(projection.Transaction.StageBindings) == 1 {
+		workspacePath = projection.Transaction.StageBindings[0].Location
+	}
+	var execution model.AgentExecution
+	if current, ok := latestTransactionAttemptExecution(projection); ok {
+		execution = current
+	}
+	if projection.Transaction.State == model.TransactionStaged {
+		validated, validateErr := client.ValidateTransaction(
+			context.Background(),
+			*namespace,
+			*id,
+			projection.Transaction.EventSequence,
+			actor,
+		)
+		if validateErr != nil {
+			fmt.Fprintln(stderr, validateErr)
+			return 1
+		}
+		return renderTransactionRunResult(transactionRunResult{
+			Projection: validated.Projection,
+			Workspace:  workspacePath,
+			Execution:  execution,
+			Decision:   &validated.Decision,
+		}, jsonOut, stdout, stderr)
+	}
+	switch projection.Transaction.State {
+	case model.TransactionCreated:
+		projection, err = client.StartTransaction(
+			context.Background(), *namespace, *id,
+			projection.Transaction.EventSequence, actor,
+		)
+	case model.TransactionValidationFailed, model.TransactionReviseRequired:
+		projection, err = client.StartTransaction(
+			context.Background(), *namespace, *id,
+			projection.Transaction.EventSequence, actor,
+		)
+	case model.TransactionRunning:
+		// Resume below from the latest durable execution receipt.
+	default:
+		code := renderTransactionRunResult(transactionRunResult{
+			Projection: projection,
+			Workspace:  workspacePath,
+			Execution:  execution,
+		}, jsonOut, stdout, stderr)
+		if code != 0 || transactionRunStateIsHealthy(projection.Transaction.State) {
+			return code
+		}
+		return 1
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	if len(projection.Transaction.StageBindings) == 0 {
+		worktree, worktreeErr := client.CreateTransactionWorktree(
+			context.Background(), *namespace, *id,
+			projection.Transaction.EventSequence, *revision, actor,
+		)
+		if worktreeErr != nil {
+			fmt.Fprintln(stderr, worktreeErr)
+			return 1
+		}
+		projection = worktree.Projection
+		workspacePath = worktree.Workspace.Path
+	} else if len(projection.Transaction.StageBindings) == 1 {
+		workspacePath = projection.Transaction.StageBindings[0].Location
+	} else {
+		fmt.Fprintln(stderr, "transaction has more than one stage boundary")
 		return 1
 	}
 	if !jsonOut {
-		fmt.Fprintf(stderr, "Gatemole transaction: %s\nWorkspace: %s\n", *id, worktree.Workspace.Path)
+		fmt.Fprintf(stderr, "Gatemole transaction: %s\nWorkspace: %s\n", *id, workspacePath)
 	}
-	var execution model.AgentExecution
-	if *runtimeClass == "oci" {
-		signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		processContext, cancel := context.WithTimeout(signalContext, *timeout+30*time.Second)
-		defer cancel()
-		executed, executeErr := client.RunTransactionAgent(
-			processContext,
-			*namespace, *id,
-			worktree.Projection.Transaction.EventSequence,
-			*image, command, 0, actor,
-		)
-		if executeErr != nil {
-			fmt.Fprintln(stderr, executeErr)
-			return 1
+	execution, hasExecution := latestTransactionAttemptExecution(projection)
+	if hasExecution && execution.Status == model.AgentExecutionRunning {
+		fmt.Fprintln(stderr, "transaction has an active execution; wait for daemon recovery before continuing")
+		return 1
+	}
+	if !hasExecution || execution.Status != model.AgentExecutionSucceeded {
+		if *runtimeClass == "oci" {
+			signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			processContext, cancel := context.WithTimeout(signalContext, *timeout+30*time.Second)
+			defer cancel()
+			executed, executeErr := client.RunTransactionAgent(
+				processContext,
+				*namespace, *id,
+				projection.Transaction.EventSequence,
+				*image, command, 0, actor,
+			)
+			if executeErr != nil {
+				fmt.Fprintln(stderr, executeErr)
+				return 1
+			}
+			projection = executed.Projection
+			execution = executed.Execution
+			if !jsonOut {
+				fmt.Fprintf(stderr, "Agent evidence: %s\n", executed.EvidenceDirectory)
+			}
+		} else {
+			commandDigest, digestErr := digestCommand(command)
+			if digestErr != nil {
+				fmt.Fprintln(stderr, digestErr)
+				return 1
+			}
+			invocation, invocationErr := buildSupervisedInvocation(
+				"host", "", "", workspacePath, *id, *runID,
+				command, commandDigest, 0, 0, 0, 0, 0, 0,
+			)
+			if invocationErr != nil {
+				fmt.Fprintln(stderr, invocationErr)
+				return 1
+			}
+			projection, err = client.StartAgentExecution(
+				context.Background(), *namespace, *id,
+				projection.Transaction.EventSequence,
+				*runID, filepath.Base(command[0]), commandDigest,
+				invocation.RuntimeClass, invocation.RuntimeDigest, invocation.ImageDigest,
+				actor,
+			)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			execution = projection.Executions[len(projection.Executions)-1]
+			childStdout := stdout
+			if jsonOut {
+				childStdout = stderr
+			}
+			processContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			processContext, cancel := context.WithTimeout(processContext, *timeout)
+			defer cancel()
+			processResult := superviseTransactionProcess(
+				processContext, invocation,
+				os.Stdin, childStdout, stderr,
+			)
+			projection, err = client.FinishAgentExecution(
+				context.Background(), *namespace, *id,
+				projection.Transaction.EventSequence,
+				execution.ID, processResult.Status, processResult.ExitCode,
+				processResult.StdoutDigest, processResult.StderrDigest, actor,
+			)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			execution = projection.Executions[len(projection.Executions)-1]
 		}
-		projection = executed.Projection
-		execution = executed.Execution
-		if !jsonOut {
-			fmt.Fprintf(stderr, "Agent evidence: %s\n", executed.EvidenceDirectory)
-		}
-	} else {
-		commandDigest, digestErr := digestCommand(command)
-		if digestErr != nil {
-			fmt.Fprintln(stderr, digestErr)
-			return 1
-		}
-		invocation, invocationErr := buildSupervisedInvocation(
-			"host", "", "", worktree.Workspace.Path, *id, *runID,
-			command, commandDigest, 0, 0, 0, 0, 0, 0,
-		)
-		if invocationErr != nil {
-			fmt.Fprintln(stderr, invocationErr)
-			return 1
-		}
-		projection, err = client.StartAgentExecution(
-			context.Background(), *namespace, *id,
-			worktree.Projection.Transaction.EventSequence,
-			*runID, filepath.Base(command[0]), commandDigest,
-			invocation.RuntimeClass, invocation.RuntimeDigest, invocation.ImageDigest,
-			actor,
-		)
-		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		execution = projection.Executions[len(projection.Executions)-1]
-		childStdout := stdout
-		if jsonOut {
-			childStdout = stderr
-		}
-		processContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		processContext, cancel := context.WithTimeout(processContext, *timeout)
-		defer cancel()
-		processResult := superviseTransactionProcess(
-			processContext, invocation,
-			os.Stdin, childStdout, stderr,
-		)
-		projection, err = client.FinishAgentExecution(
-			context.Background(), *namespace, *id,
-			projection.Transaction.EventSequence,
-			execution.ID, processResult.Status, processResult.ExitCode,
-			processResult.StdoutDigest, processResult.StderrDigest, actor,
-		)
-		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		execution = projection.Executions[len(projection.Executions)-1]
 	}
 	result := transactionRunResult{
 		Projection: projection,
-		Workspace:  worktree.Workspace.Path,
+		Workspace:  workspacePath,
 		Execution:  execution,
 	}
 	if execution.Status != model.AgentExecutionSucceeded {
@@ -476,6 +546,10 @@ func transactionRunNamed(
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
+	}
+	if staged.Projection.Transaction.State == model.TransactionCompletedNoEffect {
+		result.Projection = staged.Projection
+		return renderTransactionRunResult(result, jsonOut, stdout, stderr)
 	}
 	validated, err := client.ValidateTransaction(
 		context.Background(), *namespace, *id,
@@ -703,6 +777,31 @@ func supervisedProcessExitCode(execution model.AgentExecution) int {
 	return 1
 }
 
+func latestTransactionAttemptExecution(
+	projection transactionreducer.Projection,
+) (model.AgentExecution, bool) {
+	for index := len(projection.Executions) - 1; index >= 0; index-- {
+		if projection.Executions[index].Attempt == projection.Transaction.Attempt {
+			return projection.Executions[index], true
+		}
+	}
+	return model.AgentExecution{}, false
+}
+
+func transactionRunStateIsHealthy(state model.TransactionState) bool {
+	switch state {
+	case model.TransactionValidating,
+		model.TransactionPendingApproval,
+		model.TransactionReadyToCommit,
+		model.TransactionCommitting,
+		model.TransactionCommitted,
+		model.TransactionCompletedNoEffect:
+		return true
+	default:
+		return false
+	}
+}
+
 func renderTransactionRunResult(
 	result transactionRunResult,
 	jsonOut bool,
@@ -713,9 +812,10 @@ func renderTransactionRunResult(
 	}
 	fmt.Fprintf(
 		stdout,
-		"Agent execution: %s\nTransaction state: %s\nEffects: %d\n",
+		"Agent execution: %s\nTransaction state: %s\nAttempt: %d\nEffects: %d\n",
 		result.Execution.Status,
 		result.Projection.Transaction.State,
+		result.Projection.Transaction.Attempt,
 		len(result.Projection.Effects),
 	)
 	if result.Decision != nil {

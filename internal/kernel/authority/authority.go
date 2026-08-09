@@ -200,15 +200,16 @@ func validateBindings(input CompileInput) error {
 	if task.AgentProfile.RuntimeClass != "oci" {
 		return deny(model.ErrorCapabilityDenied, task.ID, "only OCI execution is authoritative", nil)
 	}
-	if run.State != model.RunAdmitted || run.Runtime != nil ||
+	if !executionLaunchableRunState(run.State) ||
+		run.ActiveExecutionID != "" || run.Runtime != nil ||
 		run.ParentRunID != "" ||
 		run.CheckpointID != "" || len(run.OutstandingApprovalIDs) != 0 {
-		return deny(model.ErrorTransitionInvalid, run.ID, "run is not launchable from admitted state", nil)
+		return deny(model.ErrorTransitionInvalid, run.ID, "run is not launchable for a supervised execution", nil)
 	}
 	if transaction.State != model.TransactionRunning ||
 		len(transaction.StageBindings) != 1 ||
-		len(input.Executions) != 0 {
-		return deny(model.ErrorTransitionInvalid, transaction.ID, "transaction must be running with one stage and no prior execution", nil)
+		hasActiveExecution(input.Executions) {
+		return deny(model.ErrorTransitionInvalid, transaction.ID, "transaction must be running with one stage and no active execution", nil)
 	}
 	if binding == nil || transaction.Task == nil ||
 		task.Namespace != run.Namespace || task.Namespace != transaction.Namespace ||
@@ -240,6 +241,15 @@ func validateBindings(input CompileInput) error {
 		return deny(model.ErrorCapabilityDenied, contract.ID, "contract contains unsupported execution controls", nil)
 	}
 	return nil
+}
+
+func executionLaunchableRunState(state model.RunState) bool {
+	switch state {
+	case model.RunAdmitted, model.RunWaitingForAgent, model.RunWaitingForEvent:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateCeilings(ceilings DaemonCeilings) error {
@@ -447,6 +457,21 @@ func exactOperations(actual []string, expected ...string) bool {
 		}
 	}
 	return true
+}
+
+func hasActiveExecution(executions []model.AgentExecution) bool {
+	for _, execution := range executions {
+		switch execution.Status {
+		case model.AgentExecutionSucceeded,
+			model.AgentExecutionFailed,
+			model.AgentExecutionInterrupted,
+			model.AgentExecutionStartFailed:
+			continue
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 func sameTime(left, right *time.Time) bool {

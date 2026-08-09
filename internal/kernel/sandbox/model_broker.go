@@ -233,6 +233,24 @@ func ModelBrokerContainerName(transactionID, runID string) string {
 	return "gatemole-broker-" + resourceSuffix(transactionID, runID)
 }
 
+// ModelBrokerExecutionEvidenceDirectory isolates one execution's receipt
+// chain. A transaction may retry with the same run ID; sharing the old flat
+// ledger would make a later receipt cumulative and charge earlier model usage
+// twice.
+func ModelBrokerExecutionEvidenceDirectory(
+	transactionRoot,
+	transactionID,
+	runID,
+	executionID string,
+) string {
+	return filepath.Join(
+		transactionRoot,
+		".gatemole-model-evidence",
+		ModelBrokerContainerName(transactionID, runID),
+		shortResourceLabel(executionID),
+	)
+}
+
 func resourceSuffix(transactionID, runID string) string {
 	sum := sha256.Sum256([]byte(transactionID + "\x00" + runID))
 	return hex.EncodeToString(sum[:12])

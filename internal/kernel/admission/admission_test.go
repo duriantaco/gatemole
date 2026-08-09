@@ -223,6 +223,24 @@ func TestResultValidateAgainstCallerRequestIgnoresOnlyAuthenticatedActorClaims(
 	}
 }
 
+func TestResultValidateAgainstRequestAcceptsPreAttemptAdmission(t *testing.T) {
+	t.Parallel()
+	request := validAdmissionRequest()
+	prepared, err := Prepare(
+		"engineering",
+		request,
+		time.Date(2026, 7, 27, 9, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := prepared.Result
+	legacy.Transaction.Transaction.Attempt = 0
+	if err := legacy.ValidateAgainstRequest("engineering", request); err != nil {
+		t.Fatalf("pre-attempt admission replay was rejected: %v", err)
+	}
+}
+
 func TestPreparedValidateRejectsAdmissionMutations(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

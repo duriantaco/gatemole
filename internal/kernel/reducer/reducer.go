@@ -2,6 +2,7 @@ package reducer
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/duriantaco/gatemole/internal/kernel/model"
 )
@@ -9,6 +10,8 @@ import (
 const (
 	EventRunCreated             = "run.created"
 	EventRunStateChanged        = "run.state_changed"
+	EventRunExecutionStarted    = "run.execution_started"
+	EventRunExecutionFinished   = "run.execution_finished"
 	EventCapabilitiesGranted    = "capabilities.granted"
 	EventActionRequested        = "action.requested"
 	EventActionDenied           = "action.denied"
@@ -178,6 +181,9 @@ func Apply(current *Projection, event model.RunEvent) (Projection, error) {
 		if err := ValidateTransition(payload.From, payload.To, payload.Reason); err != nil {
 			return Projection{}, err
 		}
+		if run.ActiveExecutionID != "" && payload.To != model.RunRunning {
+			return Projection{}, transitionError("an active execution must settle before the run can leave running state")
+		}
 		run.State = payload.To
 		run.StateReason = payload.Reason
 		if payload.To.Terminal() {
@@ -185,6 +191,22 @@ func Apply(current *Projection, event model.RunEvent) (Projection, error) {
 			run.CompletedAt = &completedAt
 		} else {
 			run.CompletedAt = nil
+		}
+	case EventRunExecutionStarted:
+		payload, err := model.DecodePayloadStrict[model.RunExecutionStartedPayload](event)
+		if err != nil {
+			return Projection{}, err
+		}
+		if err := applyExecutionStarted(&run, payload); err != nil {
+			return Projection{}, err
+		}
+	case EventRunExecutionFinished:
+		payload, err := model.DecodePayloadStrict[model.RunExecutionFinishedPayload](event)
+		if err != nil {
+			return Projection{}, err
+		}
+		if err := applyExecutionFinished(&run, payload); err != nil {
+			return Projection{}, err
 		}
 	case EventCapabilitiesGranted:
 		payload, err := model.DecodePayloadStrict[model.CapabilitiesGrantedPayload](event)
@@ -275,6 +297,80 @@ func Apply(current *Projection, event model.RunEvent) (Projection, error) {
 		return Projection{}, err
 	}
 	return Projection{Run: run, LastEventDigest: event.Digest}, nil
+}
+
+func applyExecutionStarted(run *model.AgentRun, payload model.RunExecutionStartedPayload) error {
+	if !model.IsIdentifier(payload.TransactionID) ||
+		!model.IsIdentifier(payload.ExecutionID) || payload.Attempt < 1 {
+		return transitionError("run execution start binding is invalid")
+	}
+	if run.ActiveExecutionID != "" {
+		return transitionError("run already has an active execution")
+	}
+	switch run.State {
+	case model.RunAdmitted, model.RunWaitingForAgent, model.RunWaitingForEvent:
+	default:
+		return transitionError(fmt.Sprintf("execution cannot start while run is %q", run.State))
+	}
+	if err := ValidateTransition(run.State, model.RunRunning, ""); err != nil {
+		return err
+	}
+	run.State = model.RunRunning
+	run.StateReason = ""
+	run.ActiveExecutionID = payload.ExecutionID
+	run.CompletedAt = nil
+	return nil
+}
+
+func applyExecutionFinished(run *model.AgentRun, payload model.RunExecutionFinishedPayload) error {
+	if !model.IsIdentifier(payload.TransactionID) ||
+		!model.IsIdentifier(payload.ExecutionID) || payload.Attempt < 1 ||
+		!payload.Status.Terminal() {
+		return transitionError("run execution settlement binding is invalid")
+	}
+	if run.State != model.RunRunning || run.ActiveExecutionID != payload.ExecutionID {
+		return transitionError("run execution settlement does not match the active execution")
+	}
+	usage, err := addBudgetUsage(run.BudgetUsage, payload.Usage)
+	if err != nil {
+		return err
+	}
+	run.BudgetUsage = usage
+	run.ActiveExecutionID = ""
+	run.StateReason = ""
+	if payload.Status == model.AgentExecutionSucceeded {
+		run.State = model.RunWaitingForEvent
+	} else {
+		run.State = model.RunWaitingForAgent
+	}
+	return nil
+}
+
+func addBudgetUsage(current, delta model.BudgetUsage) (model.BudgetUsage, error) {
+	values := []struct {
+		name    string
+		current *int64
+		delta   int64
+	}{
+		{"input_tokens", &current.InputTokens, delta.InputTokens},
+		{"output_tokens", &current.OutputTokens, delta.OutputTokens},
+		{"model_calls", &current.ModelCalls, delta.ModelCalls},
+		{"tool_calls", &current.ToolCalls, delta.ToolCalls},
+		{"cost_micros", &current.CostMicros, delta.CostMicros},
+		{"wall_time_seconds", &current.WallTimeSeconds, delta.WallTimeSeconds},
+	}
+	for _, value := range values {
+		if value.delta < 0 || value.delta > math.MaxInt64-*value.current {
+			return model.BudgetUsage{}, &model.KernelError{
+				Code:      model.ErrorBudgetExceeded,
+				Operation: "reduce",
+				Field:     "budget_usage." + value.name,
+				Message:   "execution budget charge is negative or overflows",
+			}
+		}
+		*value.current += value.delta
+	}
+	return current, nil
 }
 
 func applyCreation(event model.RunEvent) (Projection, error) {

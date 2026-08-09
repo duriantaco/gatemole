@@ -351,6 +351,7 @@ func Prepare(namespace string, request Request, now time.Time) (Prepared, error)
 		Version:      model.AgentTransactionVersion,
 		ID:           request.TransactionID,
 		Namespace:    namespace,
+		Attempt:      1,
 		IntentDigest: task.IntentDigest,
 		Task:         &task,
 		Admission: &model.TransactionAdmissionBinding{
@@ -586,6 +587,13 @@ func (result Result) ValidateAgainstRequest(
 		)
 	}
 	expectedResult := expected.Result
+	expectedTransaction := expectedResult.Transaction.Transaction
+	// Attempt was added as an optional v0-compatible lifecycle field. Results
+	// admitted before that field existed legitimately replay with zero/missing.
+	if result.Transaction.Transaction.Attempt == 0 &&
+		expectedTransaction.Attempt == 1 {
+		expectedTransaction.Attempt = 0
+	}
 	if result.Version != expectedResult.Version ||
 		result.RuntimeID != request.ExpectedRuntimeID ||
 		result.EnforcementProfile !=
@@ -597,7 +605,7 @@ func (result Result) ValidateAgainstRequest(
 		!reflect.DeepEqual(result.Grants, expectedResult.Grants) ||
 		!reflect.DeepEqual(
 			result.Transaction.Transaction,
-			expectedResult.Transaction.Transaction,
+			expectedTransaction,
 		) {
 		return admissionError(
 			model.ErrorEventChain,

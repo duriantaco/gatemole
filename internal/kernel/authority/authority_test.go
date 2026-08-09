@@ -227,6 +227,10 @@ func TestCompileRejectsBrokenLiveBindingsAndLifecycle(t *testing.T) {
 		{"run not admitted", func(input *authority.CompileInput) {
 			input.Run.State = model.RunRunning
 		}, model.ErrorTransitionInvalid},
+		{"run has active execution", func(input *authority.CompileInput) {
+			input.Run.State = model.RunRunning
+			input.Run.ActiveExecutionID = "execution:active"
+		}, model.ErrorTransitionInvalid},
 		{"run already leased", func(input *authority.CompileInput) {
 			input.Run.Runtime = &model.RuntimeBinding{
 				Adapter: "oci", AdapterVersion: "1",
@@ -264,6 +268,46 @@ func TestCompileRejectsBrokenLiveBindingsAndLifecycle(t *testing.T) {
 			_, err := authority.Compile(input)
 			requireKernelCode(t, err, test.code)
 		})
+	}
+}
+
+func TestCompileAllowsRetryAfterTerminalExecutionReceipt(t *testing.T) {
+	input := validInput(
+		t,
+		workspaceResource("filesystem.read", "filesystem.write"),
+		model.BudgetLimits{},
+	)
+	exitCode := 7
+	completedAt := input.Now.Add(-time.Second)
+	input.Executions = []model.AgentExecution{{
+		Version:             model.AgentExecutionVersion,
+		ID:                  "execution:prior",
+		TransactionID:       input.Transaction.ID,
+		Attempt:             input.Transaction.Attempt,
+		RunID:               input.Run.ID,
+		StageBindingID:      input.Transaction.StageBindings[0].ID,
+		Program:             "agent",
+		CommandDigest:       input.Task.AgentProfile.CommandDigest,
+		RuntimeClass:        "oci",
+		RuntimeConfigDigest: testDigest("c"),
+		ImageDigest:         input.Task.AgentProfile.ImageDigest,
+		TaskDigest:          input.Task.Digest,
+		Status:              model.AgentExecutionFailed,
+		ExitCode:            &exitCode,
+		StdoutDigest:        testDigest("d"),
+		StderrDigest:        testDigest("e"),
+		StartedAt:           input.Now.Add(-2 * time.Second),
+		CompletedAt:         &completedAt,
+	}}
+	for _, state := range []model.RunState{
+		model.RunWaitingForAgent,
+		model.RunWaitingForEvent,
+	} {
+		candidate := input
+		candidate.Run.State = state
+		if _, err := authority.Compile(candidate); err != nil {
+			t.Fatalf("terminal execution prevented retry from %s: %v", state, err)
+		}
 	}
 }
 

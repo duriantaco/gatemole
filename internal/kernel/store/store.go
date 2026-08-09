@@ -41,7 +41,28 @@ type AdmissionStore interface {
 	GetTaskAdmission(context.Context, string, string) (admission.Result, string, error)
 	GetExecutionAuthority(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
 	GetExecutionAuthorityForRun(context.Context, string, string) (ExecutionAuthoritySnapshot, error)
-	AppendTransactionEventsIfRunCurrent(context.Context, string, int64, int64, string, []model.TransactionEvent) (transactionreducer.Projection, error)
+}
+
+// ExecutionHeads pins both ledgers at one authority snapshot. A paired append
+// must reject the whole mutation when either head has changed.
+type ExecutionHeads struct {
+	TransactionSequence int64
+	TransactionDigest   string
+	RunSequence         int64
+	RunDigest           string
+}
+
+// ExecutionProjection is the result of one atomically paired execution event.
+type ExecutionProjection struct {
+	Run         reducer.Projection
+	Transaction transactionreducer.Projection
+}
+
+// ExecutionStore owns the cross-ledger execution lifecycle. Implementations
+// must append the run and transaction events and update both projections in
+// one database transaction.
+type ExecutionStore interface {
+	AppendPairedExecutionEvent(context.Context, string, ExecutionHeads, model.TransactionEvent) (ExecutionProjection, error)
 }
 
 // ExecutionAuthoritySnapshot is the consistently read authority envelope used
@@ -63,6 +84,7 @@ type Store interface {
 	EventStore
 	TransactionStore
 	AdmissionStore
+	ExecutionStore
 	Health(context.Context) error
 	Close() error
 }
