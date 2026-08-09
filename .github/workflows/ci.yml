@@ -212,6 +212,9 @@ jobs:
           GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
         run: scripts/gatemoleproductionbench.sh
 
+      - name: Run paired execution recovery demo
+        run: scripts/gatemolepairedexecutiondemo.sh
+
   skylos:
     name: Skylos advisory
     runs-on: ubuntu-latest

@@ -598,10 +598,12 @@ acceptable:
   execution authority. The mediated filesystem API cannot access `.git` or
   `.gatemole` control state.
 - OCI launch revalidates live admission authority and atomically pins the
-  admitted run and transaction heads while recording execution start before
-  any workload. Run and transaction execution events are not yet advanced and
-  settled as one paired lifecycle, and run budget usage is not yet durably
-  charged. That is the remaining OS-3 boundary.
+  admitted run and transaction heads while recording the same execution start
+  in both ledgers before any workload. Settlement and restart recovery finish
+  both sides atomically, clear the run's active binding, and durably charge
+  elapsed wall time plus verified model-call/token usage. Tool/cost accounting,
+  narrower data authority, active workload interruption, and the mediated
+  connector path remain OS-3 boundaries.
 - No claim of universal rollback. The implemented commit primitive is an
   atomic, version-checked Git-ref update.
 

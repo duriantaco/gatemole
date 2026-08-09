@@ -270,6 +270,14 @@ func (run AgentRun) Validate() error {
 			return err
 		}
 	}
+	if run.ActiveExecutionID != "" {
+		if err := validateIdentifier(resource, "active_execution_id", run.ActiveExecutionID); err != nil {
+			return err
+		}
+		if run.State != RunRunning {
+			return invalid(resource, "active_execution_id", "an active execution requires running state")
+		}
+	}
 	if err := validateUniqueIdentifiers(resource, "capability_ids", run.CapabilityIDs); err != nil {
 		return err
 	}

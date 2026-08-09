@@ -227,6 +227,10 @@ func TestCompileRejectsBrokenLiveBindingsAndLifecycle(t *testing.T) {
 		{"run not admitted", func(input *authority.CompileInput) {
 			input.Run.State = model.RunRunning
 		}, model.ErrorTransitionInvalid},
+		{"run has active execution", func(input *authority.CompileInput) {
+			input.Run.State = model.RunRunning
+			input.Run.ActiveExecutionID = "execution:active"
+		}, model.ErrorTransitionInvalid},
 		{"run already leased", func(input *authority.CompileInput) {
 			input.Run.Runtime = &model.RuntimeBinding{
 				Adapter: "oci", AdapterVersion: "1",
@@ -295,8 +299,15 @@ func TestCompileAllowsRetryAfterTerminalExecutionReceipt(t *testing.T) {
 		StartedAt:           input.Now.Add(-2 * time.Second),
 		CompletedAt:         &completedAt,
 	}}
-	if _, err := authority.Compile(input); err != nil {
-		t.Fatalf("terminal execution prevented retry: %v", err)
+	for _, state := range []model.RunState{
+		model.RunWaitingForAgent,
+		model.RunWaitingForEvent,
+	} {
+		candidate := input
+		candidate.Run.State = state
+		if _, err := authority.Compile(candidate); err != nil {
+			t.Fatalf("terminal execution prevented retry from %s: %v", state, err)
+		}
 	}
 }
 

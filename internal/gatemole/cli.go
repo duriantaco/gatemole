@@ -20,9 +20,16 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	if handled, code := renderRequestedHelp(rest, stdout, stderr); handled {
+		return code
+	}
 	if len(rest) == 0 {
 		usage(stderr)
 		return 2
+	}
+	if rest[0] == "version" ||
+		(len(rest) == 1 && (rest[0] == "--version" || rest[0] == "-V")) {
+		return versionCommand(rest[1:], common.json, stdout, stderr)
 	}
 	absRepo, err := filepath.Abs(common.repo)
 	if err != nil {
@@ -52,8 +59,16 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runtimeRunCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "status":
 		return transactionStatusCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "review":
+		return transactionReviewCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "diff":
+		return transactionDiffCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "approve":
 		return transactionApproveCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "apply":
+		return transactionApplyCommand(absRepo, rest[1:], common.json, stdout, stderr)
+	case "reject":
+		return transactionRejectCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "release":
 		return transactionReleaseCommand(absRepo, rest[1:], common.json, stdout, stderr)
 	case "kernel":
@@ -879,15 +894,18 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--manifest FILE] [--json] <command>")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "commands:")
+	fmt.Fprintln(out, "  version")
 	fmt.Fprintln(out, "  daemon [--db FILE] [--socket FILE] [--transaction-root DIR] [--runtime-profile development|production]")
 	fmt.Fprintln(out, "  runtime init [--agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]]")
 	fmt.Fprintln(out, "  doctor [--agent NAME] [--namespace NS] [--require-enforcement-profile development|production] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
 	fmt.Fprintln(out, "  run [--namespace NS] [--require-enforcement-profile development|production] (--intent TEXT | --intent-file FILE) (--agent NAME [-- AGENT_ARG...] | --image IMAGE -- COMMAND [ARG...])")
 	fmt.Fprintln(out, "  status ID [--namespace NS]")
+	fmt.Fprintln(out, "  review|diff ID [--namespace NS]")
 	fmt.Fprintln(out, "  approve ID [--namespace NS] --key FILE --key-id ID --approver ID --class CLASS")
+	fmt.Fprintln(out, "  apply|reject ID [--namespace NS]")
 	fmt.Fprintln(out, "  release ID [--namespace NS]")
 	fmt.Fprintln(out, "  tx create (development-only manual Runtime-bound admission)")
-	fmt.Fprintln(out, "  tx start|worktree|stage|validate|verify|prepare|get|list|effects|events|abort (advanced transaction lifecycle)")
+	fmt.Fprintln(out, "  tx start|worktree|stage|validate|verify|prepare|get|review|diff|list|effects|events|abort (advanced transaction lifecycle)")
 	fmt.Fprintln(out, "  kernel run get|list|events|transition|pause|resume|cancel (low-level run lifecycle)")
 	fmt.Fprintln(out, "  kernel run create|grant (embedded/unbound compatibility only; gatemoled rejects them)")
 	fmt.Fprintln(out, "  contracts <command> (optional release-contract verification module)")

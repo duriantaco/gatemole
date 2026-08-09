@@ -17,9 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/duriantaco/gatemole/internal/kernel/admission"
 	"github.com/duriantaco/gatemole/internal/kernel/approval"
 	"github.com/duriantaco/gatemole/internal/kernel/identity"
 	"github.com/duriantaco/gatemole/internal/kernel/model"
+	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
 	"github.com/duriantaco/gatemole/internal/kernel/store"
@@ -774,6 +776,7 @@ func TestRecoverAgentExecutionsCleansContainerAndPersistsInterruptedReceipt(t *t
 			cleaned = append(cleaned, sandbox.ContainerName(transactionID, runID))
 			return nil
 		},
+		nil,
 		func() time.Time { return recoveredAt },
 	)
 	if err != nil {
@@ -819,6 +822,7 @@ func TestRecoverAgentExecutionsCleansContainerAndPersistsInterruptedReceipt(t *t
 			t.Fatal("terminal execution was cleaned twice")
 			return nil
 		},
+		nil,
 		time.Now,
 	)
 	if err != nil || recovered != 0 {
@@ -838,6 +842,7 @@ func TestRecoverAgentExecutionsFailsClosedBeforeChangingLedger(t *testing.T) {
 		ctx,
 		kernelStore,
 		func(context.Context, string, string) error { return os.ErrPermission },
+		nil,
 		time.Now,
 	)
 	if err == nil {
@@ -853,6 +858,178 @@ func TestRecoverAgentExecutionsFailsClosedBeforeChangingLedger(t *testing.T) {
 	}
 	if restored.Executions[len(restored.Executions)-1].Status != model.AgentExecutionRunning {
 		t.Fatalf("failed cleanup changed the ledger: %#v", restored.Executions)
+	}
+}
+
+func TestRecoverAgentExecutionsSettlesPairedRunAndChargesReceipts(t *testing.T) {
+	ctx := context.Background()
+	kernelStore, err := store.OpenSQLite(filepath.Join(t.TempDir(), "kernel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = kernelStore.Close() })
+	active := createPairedActiveExecution(t, kernelStore, true)
+	execution := active.Transaction.Executions[0]
+	recoveredAt := execution.StartedAt.Add(2500 * time.Millisecond)
+	recovered, err := recoverAgentExecutions(
+		ctx,
+		kernelStore,
+		func(context.Context, string, string) error { return nil },
+		func(
+			context.Context,
+			string,
+			string,
+			string,
+			model.ModelBrokerExecution,
+		) (*model.ModelBrokerExecution, error) {
+			return &model.ModelBrokerExecution{
+				Provider:            "openai",
+				ImageDigest:         testDigest("8"),
+				PolicyDigest:        testDigest("9"),
+				ReceiptLedgerDigest: testDigest("a"),
+				Calls:               2,
+				CompletedCalls:      1,
+				UnknownCalls:        1,
+				InputTokens:         20,
+				OutputTokens:        10,
+			}, nil
+		},
+		func() time.Time { return recoveredAt },
+	)
+	if err != nil || recovered != 1 {
+		t.Fatalf("paired recovery=(%d, %v), want (1, nil)", recovered, err)
+	}
+	run, err := kernelStore.GetRun(
+		ctx,
+		active.Run.Run.Namespace,
+		active.Run.Run.ID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Run.State != model.RunWaitingForAgent ||
+		run.Run.ActiveExecutionID != "" ||
+		run.Run.BudgetUsage.WallTimeSeconds != 3 ||
+		run.Run.BudgetUsage.ModelCalls != 2 ||
+		run.Run.BudgetUsage.InputTokens != 20 ||
+		run.Run.BudgetUsage.OutputTokens != 10 {
+		t.Fatalf("paired recovery did not settle run usage: %#v", run.Run)
+	}
+	transaction, err := kernelStore.GetTransaction(
+		ctx,
+		active.Transaction.Transaction.Namespace,
+		active.Transaction.Transaction.ID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settled := transaction.Executions[len(transaction.Executions)-1]
+	if settled.Status != model.AgentExecutionInterrupted ||
+		settled.ModelBroker == nil || settled.ModelBroker.UnknownCalls != 1 {
+		t.Fatalf("paired recovery did not settle transaction receipt: %#v", settled)
+	}
+	if err := kernelStore.VerifyRun(ctx, run.Run.Namespace, run.Run.ID); err != nil {
+		t.Fatalf("verify recovered run: %v", err)
+	}
+	if err := kernelStore.VerifyTransaction(
+		ctx,
+		transaction.Transaction.Namespace,
+		transaction.Transaction.ID,
+	); err != nil {
+		t.Fatalf("verify recovered transaction: %v", err)
+	}
+}
+
+func TestRecoverModelExecutionFinalizesPendingCallsAsUnknown(t *testing.T) {
+	root := t.TempDir()
+	transactionID := "tx:model-recovery"
+	runID := "run:model-recovery"
+	path := filepath.Join(
+		sandbox.ModelBrokerExecutionEvidenceDirectory(
+			root,
+			transactionID,
+			runID,
+			"execution:model-recovery",
+		),
+		"model-calls.jsonl",
+	)
+	recorder, err := kernelmodelbroker.OpenRecorder(
+		path,
+		transactionID,
+		runID,
+		"openai",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recorder.Start("gpt-test", testDigest("1"), 40, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	recover := recoverModelExecutionFrom(root)
+	receipt, err := recover(
+		context.Background(),
+		transactionID,
+		runID,
+		"execution:model-recovery",
+		model.ModelBrokerExecution{
+			Provider: "openai", ImageDigest: testDigest("2"), PolicyDigest: testDigest("3"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Calls != 1 || receipt.UnknownCalls != 1 ||
+		receipt.CompletedCalls != 0 || receipt.FailedCalls != 0 ||
+		receipt.OutputTokens != 40 ||
+		!model.IsSHA256Digest(receipt.ReceiptLedgerDigest) {
+		t.Fatalf("pending model call was not recovered fail-closed: %#v", receipt)
+	}
+}
+
+func TestRecoverModelExecutionSupportsActiveLegacyReceiptLayout(t *testing.T) {
+	root := t.TempDir()
+	transactionID := "tx:legacy-model-recovery"
+	runID := "run:legacy-model-recovery"
+	path := filepath.Join(
+		root,
+		".gatemole-model-evidence",
+		sandbox.ModelBrokerContainerName(transactionID, runID),
+		"model-calls.jsonl",
+	)
+	recorder, err := kernelmodelbroker.OpenRecorder(
+		path,
+		transactionID,
+		runID,
+		"openai",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := recorder.Start("gpt-test", testDigest("1"), 12, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	receipt, err := recoverModelExecutionFrom(root)(
+		context.Background(),
+		transactionID,
+		runID,
+		"execution:legacy-model-recovery",
+		model.ModelBrokerExecution{
+			Provider: "openai", ImageDigest: testDigest("2"), PolicyDigest: testDigest("3"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Calls != 1 || receipt.UnknownCalls != 1 || receipt.OutputTokens != 12 {
+		t.Fatalf("legacy pending model call was not recovered: %#v", receipt)
 	}
 }
 
@@ -1123,6 +1300,168 @@ func createActiveExecution(t *testing.T, kernelStore *store.SQLiteStore) transac
 		t.Fatal(err)
 	}
 	return projection
+}
+
+func createPairedActiveExecution(
+	t *testing.T,
+	kernelStore *store.SQLiteStore,
+	withModelBroker bool,
+) store.ExecutionProjection {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
+	actor := model.Principal{ID: "operator:paired-recovery", Kind: model.PrincipalOperator}
+	commandDigest, err := transactionreducer.ComputeCommandDigest([]string{"agent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxWall, maxCalls, maxInput, maxOutput := int64(100), int64(10), int64(1000), int64(1000)
+	resources := []model.ContractResource{{
+		ID: "workspace",
+		Selector: model.ResourceSelector{
+			Kind: "filesystem", Pattern: "workspace/**",
+		},
+		Operations: []string{"filesystem.read", "filesystem.write"},
+		Conditions: model.CapabilityConditions{
+			WorkspaceRoot: "workspace",
+		},
+	}}
+	budgets := model.BudgetLimits{MaxWallTimeSeconds: &maxWall}
+	if withModelBroker {
+		resources = append(resources, model.ContractResource{
+			ID: "model-openai",
+			Selector: model.ResourceSelector{
+				Kind: "model", Pattern: "openai/*",
+			},
+			Operations: []string{"model.invoke"},
+		})
+		budgets.MaxModelCalls = &maxCalls
+		budgets.MaxInputTokens = &maxInput
+		budgets.MaxOutputTokens = &maxOutput
+	}
+	prepared, err := admission.Prepare(
+		"team-runtime",
+		admission.Request{
+			Version:        admission.LegacyRequestVersion,
+			IdempotencyKey: "admission:paired-recovery",
+			TransactionID:  "tx:paired-recovery",
+			RunID:          "run:paired-recovery",
+			Intent:         "recover the exact interrupted execution",
+			AgentProfile: model.AgentTaskProfileBinding{
+				ID: "agent:paired-recovery", Digest: testDigest("4"),
+				RuntimeClass: "oci", ImageDigest: testDigest("5"),
+				CommandDigest: commandDigest,
+			},
+			Sponsor: model.Principal{ID: "human:paired-sponsor", Kind: model.PrincipalHuman},
+			Actor:   actor,
+			Contract: admission.ContractSpec{
+				Risk: "high", Resources: resources, Budgets: budgets,
+			},
+		},
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admitted, created, err := kernelStore.AdmitTask(ctx, prepared)
+	if err != nil || !created {
+		t.Fatalf("admit paired recovery fixture: created=%t err=%v", created, err)
+	}
+	started, err := transactionreducer.NextEvent(
+		admitted.Transaction,
+		transactionreducer.EventTransactionStateChanged,
+		actor,
+		now.Add(time.Second),
+		transactionreducer.TransactionStateChangedPayload{
+			From: model.TransactionCreated, To: model.TransactionRunning,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction, err := kernelStore.AppendTransactionEvents(
+		ctx,
+		prepared.Namespace,
+		admitted.Transaction.Transaction.EventSequence,
+		[]model.TransactionEvent{started},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := model.StageBinding{
+		ID: "stage:paired-recovery", Kind: "git_worktree",
+		Resource: model.ResourceSelector{Kind: "git_repository", Pattern: "/tmp/repository"},
+		Location: "/tmp/worktree", BaseRevision: strings.Repeat("a", 40),
+		CreatedAt: now.Add(2 * time.Second),
+	}
+	bound, err := transactionreducer.NextEvent(
+		transaction,
+		transactionreducer.EventStageBindingCreated,
+		actor,
+		binding.CreatedAt,
+		transactionreducer.StageBindingCreatedPayload{Binding: binding},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction, err = kernelStore.AppendTransactionEvents(
+		ctx,
+		prepared.Namespace,
+		transaction.Transaction.EventSequence,
+		[]model.TransactionEvent{bound},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution := model.AgentExecution{
+		Version: model.AgentExecutionVersion,
+		ID: transactionreducer.ExecutionID(
+			transaction.Transaction.ID,
+			transaction.Transaction.EventSequence+1,
+		),
+		TransactionID:       transaction.Transaction.ID,
+		Attempt:             transaction.Transaction.Attempt,
+		RunID:               admitted.Run.Run.ID,
+		StageBindingID:      binding.ID,
+		Program:             "agent",
+		CommandDigest:       commandDigest,
+		RuntimeClass:        "oci",
+		RuntimeConfigDigest: testDigest("6"),
+		ImageDigest:         admitted.Task.AgentProfile.ImageDigest,
+		TaskDigest:          admitted.Task.Digest,
+		Status:              model.AgentExecutionRunning,
+		StartedAt:           now.Add(3 * time.Second),
+	}
+	if withModelBroker {
+		execution.ModelBroker = &model.ModelBrokerExecution{
+			Provider: "openai", ImageDigest: testDigest("8"), PolicyDigest: testDigest("9"),
+		}
+	}
+	executionStarted, err := transactionreducer.NextEvent(
+		transaction,
+		transactionreducer.EventAgentExecutionStarted,
+		actor,
+		execution.StartedAt,
+		transactionreducer.AgentExecutionStartedPayload{Execution: execution},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paired, err := kernelStore.AppendPairedExecutionEvent(
+		ctx,
+		prepared.Namespace,
+		store.ExecutionHeads{
+			TransactionSequence: transaction.Transaction.EventSequence,
+			TransactionDigest:   transaction.LastEventDigest,
+			RunSequence:         admitted.Run.Run.EventSequence,
+			RunDigest:           admitted.Run.LastEventDigest,
+		},
+		executionStarted,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return paired
 }
 
 func testDigest(character string) string {

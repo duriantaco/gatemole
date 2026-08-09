@@ -27,6 +27,7 @@ type transactionClient interface {
 	) (runtimepreflight.Result, error)
 	AdmitTask(context.Context, string, admission.Request) (admission.Result, error)
 	GetTransaction(context.Context, string, string) (transactionreducer.Projection, error)
+	GetTransactionDiff(context.Context, string, string) (kernelclient.TransactionDiffResult, error)
 	ListTransactions(context.Context, string) ([]model.AgentTransaction, error)
 	TransactionEvents(context.Context, string, string, int64) ([]model.TransactionEvent, error)
 	StartTransaction(context.Context, string, string, int64, model.Principal) (transactionreducer.Projection, error)
@@ -59,35 +60,46 @@ func transactionCommand(repo string, args []string, jsonOut bool, stdout, stderr
 }
 
 func transactionStatusCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	factory, err := runtimeBoundTransactionClientFactory(repo)
-	if err != nil {
-		fmt.Fprintf(stderr, "status: %v\n", err)
-		return 1
-	}
-	return transactionAliasCommandWithFactory(
-		"status", repo, args, jsonOut, stdout, stderr, factory,
-	)
+	return transactionTopLevelAliasCommand("status", repo, args, jsonOut, stdout, stderr)
+}
+
+func transactionReviewCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	return transactionTopLevelAliasCommand("review", repo, args, jsonOut, stdout, stderr)
+}
+
+func transactionDiffCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	return transactionTopLevelAliasCommand("diff", repo, args, jsonOut, stdout, stderr)
 }
 
 func transactionApproveCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
-	factory, err := runtimeBoundTransactionClientFactory(repo)
-	if err != nil {
-		fmt.Fprintf(stderr, "approve: %v\n", err)
-		return 1
-	}
-	return transactionAliasCommandWithFactory(
-		"approve", repo, args, jsonOut, stdout, stderr, factory,
-	)
+	return transactionTopLevelAliasCommand("approve", repo, args, jsonOut, stdout, stderr)
+}
+
+func transactionApplyCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	return transactionTopLevelAliasCommand("apply", repo, args, jsonOut, stdout, stderr)
+}
+
+func transactionRejectCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	return transactionTopLevelAliasCommand("reject", repo, args, jsonOut, stdout, stderr)
 }
 
 func transactionReleaseCommand(repo string, args []string, jsonOut bool, stdout, stderr io.Writer) int {
+	return transactionTopLevelAliasCommand("release", repo, args, jsonOut, stdout, stderr)
+}
+
+func transactionTopLevelAliasCommand(
+	alias, repo string,
+	args []string,
+	jsonOut bool,
+	stdout, stderr io.Writer,
+) int {
 	factory, err := runtimeBoundTransactionClientFactory(repo)
 	if err != nil {
-		fmt.Fprintf(stderr, "release: %v\n", err)
+		fmt.Fprintf(stderr, "%s: %v\n", alias, err)
 		return 1
 	}
 	return transactionAliasCommandWithFactory(
-		"release", repo, args, jsonOut, stdout, stderr, factory,
+		alias, repo, args, jsonOut, stdout, stderr, factory,
 	)
 }
 
@@ -125,10 +137,16 @@ func transactionAliasCommandWithFactory(
 	switch alias {
 	case "status":
 		return transactionGet(repo, normalized, jsonOut, stdout, stderr, newClient)
+	case "review":
+		return transactionReview(repo, normalized, jsonOut, stdout, stderr, newClient)
+	case "diff":
+		return transactionDiff(repo, normalized, jsonOut, stdout, stderr, newClient)
 	case "approve":
 		return transactionApprove(repo, normalized, jsonOut, stdout, stderr, newClient)
-	case "release":
+	case "apply", "release":
 		return transactionRelease(repo, normalized, jsonOut, stdout, stderr, newClient)
+	case "reject":
+		return transactionAbort(repo, normalized, jsonOut, stdout, stderr, newClient)
 	default:
 		fmt.Fprintf(stderr, "unknown transaction alias %q\n", alias)
 		return 2
@@ -203,6 +221,10 @@ func transactionCommandWithFactory(
 		return transactionList(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "effects":
 		return transactionEffects(repo, args[1:], jsonOut, stdout, stderr, newClient)
+	case "review":
+		return transactionReview(repo, args[1:], jsonOut, stdout, stderr, newClient)
+	case "diff":
+		return transactionDiff(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "events":
 		return transactionEvents(repo, args[1:], jsonOut, stdout, stderr, newClient)
 	case "abort":
@@ -737,6 +759,6 @@ func transactionUsage(out io.Writer) {
 	fmt.Fprintln(out, "  tx renew --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx approve --namespace NS --id ID --key FILE --key-id ID --approver ID --class CLASS [--decision approve|reject|revise]")
 	fmt.Fprintln(out, "  tx release --namespace NS --id ID")
-	fmt.Fprintln(out, "  tx get|effects|events|abort --namespace NS --id ID")
+	fmt.Fprintln(out, "  tx get|review|diff|effects|events|abort --namespace NS --id ID")
 	fmt.Fprintln(out, "  tx list --namespace NS")
 }

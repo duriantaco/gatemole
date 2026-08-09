@@ -94,10 +94,11 @@ It does not currently push, open or merge pull requests, deploy, coordinate
 database/Kubernetes effects, provide remote multi-tenant service, or provide
 HA. Stable release packaging is pending.
 
-Runtime profile initialization and diagnostics exist. A maintained agent
-adapter, asynchronous supervision, live cancellation, friendly diff/apply and
-stable packaging remain in progress or planned; do not call the current
-low-level integration a self-serve developer preview yet.
+Runtime profile initialization, diagnostics and the exact local
+review/diff/apply/reject shell exist. A maintained agent adapter, asynchronous
+supervision, live cancellation and stable packaging remain in progress or
+planned; do not call the current low-level integration a self-serve developer
+preview yet.
 
 ## Good work
 
@@ -188,14 +189,16 @@ it.
 ## Near-term order
 
 1. Pair the admitted run and transaction lifecycle and durably charge budgets.
-2. Complete the Gatemole Developer Runtime shell: maintained adapter, supervision,
-   watch/cancel, diff and explicit apply/reject.
+2. Complete the Gatemole Developer Runtime shell: maintained adapter,
+   supervision and watch/cancel; preserve the existing exact review and
+   apply/reject path.
 3. Stabilize the authenticated action protocol and connector coordinator.
 4. Deliver one deep remote-Git/GitHub connector and approval experience.
 5. Prove paid design-partner demand for fleet policy, audit and approvals.
-6. Build the Gatemole Control Plane around customer-side Gatemole Runtimes.
-7. Add Kubernetes and PostgreSQL transaction packs only after Git release and
+6. Add Kubernetes and PostgreSQL transaction packs only after Git release and
    reconciliation are deep.
+7. Build the Gatemole Control Plane around customer-side Gatemole Runtimes only
+   after paid pilot evidence and multi-system Runtime proof.
 
 Developer success means a new user repeatedly reaches a controlled local
 outcome without low-level transaction surgery. Enterprise success means

@@ -215,6 +215,7 @@ type AgentRun struct {
 	BudgetUsage            BudgetUsage     `json:"budget_usage"`
 	Workspace              string          `json:"workspace,omitempty"`
 	Runtime                *RuntimeBinding `json:"runtime,omitempty"`
+	ActiveExecutionID      string          `json:"active_execution_id,omitempty"`
 	CapabilityIDs          []string        `json:"capability_ids"`
 	CheckpointID           string          `json:"checkpoint_id,omitempty"`
 	OutstandingApprovalIDs []string        `json:"outstanding_approval_ids"`
@@ -313,6 +314,26 @@ type RunStateChangedPayload struct {
 	From   RunState `json:"from"`
 	To     RunState `json:"to"`
 	Reason string   `json:"reason,omitempty"`
+}
+
+// RunExecutionStartedPayload binds the run ledger to the exact transaction
+// execution that currently owns its supervised workload.
+type RunExecutionStartedPayload struct {
+	TransactionID string `json:"transaction_id"`
+	ExecutionID   string `json:"execution_id"`
+	Attempt       int64  `json:"attempt"`
+}
+
+// RunExecutionFinishedPayload settles one supervised workload and charges the
+// receipt-derived usage against the remaining hard limits. Usage is a bounded
+// delta, not a replacement; the transaction receipt retains the raw counters
+// and timestamps when a charge saturates.
+type RunExecutionFinishedPayload struct {
+	TransactionID string               `json:"transaction_id"`
+	ExecutionID   string               `json:"execution_id"`
+	Attempt       int64                `json:"attempt"`
+	Status        AgentExecutionStatus `json:"status"`
+	Usage         BudgetUsage          `json:"usage"`
 }
 
 type CapabilitiesGrantedPayload struct {

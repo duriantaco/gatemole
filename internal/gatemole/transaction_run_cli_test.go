@@ -21,6 +21,7 @@ import (
 	"github.com/duriantaco/gatemole/internal/kernel/approval"
 	kernelclient "github.com/duriantaco/gatemole/internal/kernel/client"
 	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
@@ -131,6 +132,56 @@ func TestTransactionRunSupervisesStagesAndValidatesAgent(t *testing.T) {
 	}
 	if result.Projection.Transaction.State != model.TransactionValidating {
 		t.Fatalf("state=%q, want validating", result.Projection.Transaction.State)
+	}
+	reviewStdout, reviewStderr, reviewCode := invokeTransactionRunCLI(
+		repo, newClient, false,
+		"review",
+		"--namespace", "payments",
+		"--id", "tx:runtime-success",
+	)
+	if reviewCode != 0 {
+		t.Fatalf("tx review code=%d stderr=%s", reviewCode, reviewStderr)
+	}
+	if !strings.Contains(reviewStdout, "Exact diff: sha256:") ||
+		!strings.Contains(reviewStdout, "func Allowed() bool { return true }") ||
+		!strings.Contains(reviewStdout, result.Projection.Effects[0].ID) {
+		t.Fatalf("review did not bind readable status, effects, and patch:\n%s", reviewStdout)
+	}
+	diffStdout, diffStderr, diffCode := invokeTransactionRunCLI(
+		repo, newClient, false,
+		"diff",
+		"--namespace", "payments",
+		"--id", "tx:runtime-success",
+	)
+	if diffCode != 0 || diffStderr != "" ||
+		!strings.Contains(diffStdout, "func Allowed() bool { return true }") {
+		t.Fatalf("tx diff code=%d stdout=%s stderr=%s", diffCode, diffStdout, diffStderr)
+	}
+	workspace := result.Projection.Transaction.StageBindings[0].Location
+	stagedMiddleware := filepath.Join(workspace, "internal", "auth", "middleware.go")
+	if err := os.WriteFile(
+		stagedMiddleware,
+		[]byte("package auth\n\nfunc Allowed() bool { return false }\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	_, staleDiffStderr, staleDiffCode := invokeTransactionRunCLI(
+		repo, newClient, false,
+		"diff",
+		"--namespace", "payments",
+		"--id", "tx:runtime-success",
+	)
+	if staleDiffCode != 1 ||
+		!strings.Contains(staleDiffStderr, string(model.ErrorTransactionConflict)) {
+		t.Fatalf("changed worktree diff code=%d stderr=%s", staleDiffCode, staleDiffStderr)
+	}
+	if err := os.WriteFile(
+		stagedMiddleware,
+		[]byte("package auth\n\nfunc Allowed() bool { return true }\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
 	}
 	pinnedVerifier := "registry.example.invalid/verifier@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	verifyStdout, verifyStderr, verifyCode := invokeTransactionRunCLI(
@@ -263,11 +314,10 @@ func TestTransactionRunSupervisesStagesAndValidatesAgent(t *testing.T) {
 	if interrupted.Transaction.State != model.TransactionCommitting {
 		t.Fatalf("crash window did not remain recoverable: %s", interrupted.Transaction.State)
 	}
-	releaseStdout, releaseStderr, releaseCode = invokeTransactionRunCLI(
-		repo, newClient, true,
-		"release",
+	releaseStdout, releaseStderr, releaseCode = invokeTransactionAliasCLI(
+		repo, newClient, true, "apply",
+		"tx:runtime-success",
 		"--namespace", "payments",
-		"--id", "tx:runtime-success",
 	)
 	if releaseCode != 0 {
 		t.Fatalf("tx release recovery code=%d stderr=%s stdout=%s", releaseCode, releaseStderr, releaseStdout)
@@ -419,6 +469,22 @@ func TestTransactionRunPersistsFailedAgentWithoutStaging(t *testing.T) {
 		model.Principal{ID: "operator:local", Kind: model.PrincipalOperator},
 	); err == nil {
 		t.Fatal("failed execution was allowed to stage partial workspace state")
+	}
+	rejectStdout, rejectStderr, rejectCode := invokeTransactionAliasCLI(
+		repo, newClient, true, "reject",
+		"tx:runtime-failure",
+		"--namespace", "payments",
+	)
+	if rejectCode != 0 {
+		t.Fatalf("reject code=%d stdout=%s stderr=%s", rejectCode, rejectStdout, rejectStderr)
+	}
+	var rejected kernelclient.TransactionAbortResult
+	if err := json.Unmarshal([]byte(rejectStdout), &rejected); err != nil {
+		t.Fatalf("decode reject output: %v\n%s", err, rejectStdout)
+	}
+	if rejected.Projection.Transaction.State != model.TransactionAborted ||
+		!rejected.WorkspaceRemoved {
+		t.Fatalf("reject did not abort and discard the worktree: %#v", rejected)
 	}
 }
 
@@ -741,8 +807,21 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load admitted run events: %v", err)
 	}
-	if len(runEvents) != 3 {
-		t.Fatalf("admitted run events=%d, want 3", len(runEvents))
+	currentRun, err := kernelStore.GetRun(
+		context.Background(), "payments", "run:task-envelope-oci",
+	)
+	if err != nil {
+		t.Fatalf("load current run projection: %v", err)
+	}
+	if currentRun.Run.State != model.RunWaitingForEvent ||
+		currentRun.Run.ActiveExecutionID != "" ||
+		currentRun.Run.EventSequence != 5 {
+		t.Fatalf("OCI execution did not settle the admitted run: %#v", currentRun.Run)
+	}
+	if len(runEvents) != 5 ||
+		runEvents[3].Type != reducer.EventRunExecutionStarted ||
+		runEvents[4].Type != reducer.EventRunExecutionFinished {
+		t.Fatalf("paired run events=%#v", runEvents)
 	}
 }
 
@@ -1328,6 +1407,21 @@ func invokeTransactionRunCLI(
 	var stderr bytes.Buffer
 	code := transactionCommandWithFactory(
 		repo, args, jsonOut, &stdout, &stderr, newClient,
+	)
+	return stdout.String(), stderr.String(), code
+}
+
+func invokeTransactionAliasCLI(
+	repo string,
+	newClient transactionClientFactory,
+	jsonOut bool,
+	alias string,
+	args ...string,
+) (string, string, int) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := transactionAliasCommandWithFactory(
+		alias, repo, args, jsonOut, &stdout, &stderr, newClient,
 	)
 	return stdout.String(), stderr.String(), code
 }

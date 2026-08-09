@@ -190,15 +190,15 @@ The repository proves meaningful ingredients:
 - credential-isolated model access;
 - compare-and-swap local Git publication.
 
-It does not yet prove the intended Runtime enforcement boundary:
+It does not yet prove the complete intended Runtime enforcement boundary:
 
 - atomic admission binds the retained task, a content-digest
   `ExecutionContract`, a durable `AgentRun`, initial capability grants and the
-  transaction; production OCI launch now reloads that authority and atomically
-  pins the run and transaction heads, but it does not yet advance the run
-  lifecycle or durably charge budget usage;
-- lineage, durable budgets, narrower data boundaries and release scope are not
-  yet enforced as one synchronized execution lifecycle;
+  transaction; production OCI launch, settlement and restart recovery now pair
+  the run and transaction lifecycle and durably charge supported wall/model
+  usage;
+- lineage, tool/cost budgets, narrower data boundaries and release scope are
+  not yet enforced across the complete action lifecycle;
 - lifecycle controls do not yet interrupt a running production OCI workload;
 - there is no connector driver interface or external production connector;
 - sequence policy does not span transactions, sessions or identity lineage;

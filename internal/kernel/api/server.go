@@ -265,6 +265,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions", s.listTransactions)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions/{transactionID}", s.getTransaction)
 	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions/{transactionID}/events", s.listTransactionEvents)
+	mux.HandleFunc("GET /v0/namespaces/{namespace}/transactions/{transactionID}/diff", s.getTransactionDiff)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/start", s.startTransaction)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/git-worktree", s.createTransactionWorktree)
 	mux.HandleFunc("POST /v0/namespaces/{namespace}/transactions/{transactionID}/executions/start", s.startAgentExecution)
