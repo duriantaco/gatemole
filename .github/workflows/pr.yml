@@ -113,6 +113,10 @@ jobs:
           GATEMOLE_PRODUCTION_IMAGE: ${{ steps.fixture.outputs.image }}
         run: scripts/gatemoleproductionbench.sh
 
+      - name: Run paired execution recovery demo
+        if: steps.plan.outputs.production == 'true'
+        run: scripts/gatemolepairedexecutiondemo.sh
+
       - name: Summarize validation plan
         if: always()
         env:

@@ -66,6 +66,11 @@ assert_output "$schema_plan" "docs=true"
 assert_output "$schema_plan" "gatemolebench=true"
 assert_output "$schema_plan" "production=true"
 
+paired_demo_plan="$(run_plan paired-demo scripts/gatemolepairedexecutiondemo.sh)"
+assert_output "$paired_demo_plan" "production=true"
+assert_output "$paired_demo_plan" "gatemolebench=false"
+assert_output "$paired_demo_plan" "kernelbench=false"
+
 critical_paths=(
   internal/kernel/sandbox/oci.go
   internal/kernel/identity/oidc.go
