@@ -189,6 +189,80 @@ func (s *Server) getTransaction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projection)
 }
 
+// getTransactionDiff returns the exact frozen Git patch as a bounded raw body.
+// Binding metadata travels in a base64url-encoded JSON header so the patch is
+// not corrupted by JSON string or base64 transformations.
+func (s *Server) getTransactionDiff(w http.ResponseWriter, r *http.Request) {
+	if s.gitStage == nil {
+		writeError(w, transactionRuntimeUnavailable())
+		return
+	}
+	namespace := r.PathValue("namespace")
+	transactionID := r.PathValue("transactionID")
+	lock := s.runLock(namespace, "transaction:"+transactionID)
+	lock.Lock()
+	defer lock.Unlock()
+	projection, err := s.store.GetTransaction(r.Context(), namespace, transactionID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(projection.Effects) == 0 ||
+		projection.Transaction.StagedStateDigest == "" ||
+		projection.Transaction.EffectSetDigest == "" {
+		writeError(w, transactionTransitionError("transaction has no frozen Git effects to review"))
+		return
+	}
+	workspace, err := s.transactionWorkspace(r, projection)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	snapshot, err := s.gitStage.Inspect(r.Context(), workspace, s.now().UTC())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !matchesFrozenStage(snapshot, projection) {
+		writeError(w, &model.KernelError{
+			Code:      model.ErrorTransactionConflict,
+			Operation: "review_transaction_diff",
+			Resource:  transactionID,
+			Message:   "transaction worktree changed after effects were frozen",
+		})
+		return
+	}
+	patch, err := s.gitStage.CapturePatch(r.Context(), snapshot)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	metadata := gitstage.DiffMetadata{
+		Version:           gitstage.DiffMetadataVersion,
+		Namespace:         namespace,
+		TransactionID:     transactionID,
+		Attempt:           projection.Transaction.Attempt,
+		EventSequence:     projection.Transaction.EventSequence,
+		StagedStateDigest: projection.Transaction.StagedStateDigest,
+		EffectSetDigest:   projection.Transaction.EffectSetDigest,
+		PatchDigest:       snapshot.PatchDigest,
+		BaseRevision:      snapshot.Workspace.BaseRevision,
+		TreeRevision:      snapshot.TreeRevision,
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set(
+		gitstage.DiffMetadataHeader,
+		base64.RawURLEncoding.EncodeToString(encoded),
+	)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(patch)
+}
+
 func (s *Server) listTransactionEvents(w http.ResponseWriter, r *http.Request) {
 	after := int64(0)
 	if raw := r.URL.Query().Get("after"); raw != "" {

@@ -3,6 +3,9 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +29,8 @@ import (
 )
 
 const maxResponseBytes = 4 << 20
+
+const maxTransactionDiffBytes = 128 << 20
 
 // Client talks to gatemoled over a local Unix socket. New verifies that each
 // connection's peer owns the stable, private socket path before HTTP can send
@@ -285,6 +290,70 @@ func (c *Client) TransactionEvents(ctx context.Context, namespace, transactionID
 	path := transactionPath(namespace, transactionID) + "/events?after=" + strconv.FormatInt(after, 10)
 	err := c.do(ctx, http.MethodGet, path, nil, &events)
 	return events, err
+}
+
+type TransactionDiffResult struct {
+	Metadata gitstage.DiffMetadata `json:"metadata"`
+	Patch    []byte                `json:"patch_base64"`
+}
+
+func (c *Client) GetTransactionDiff(
+	ctx context.Context,
+	namespace, transactionID string,
+) (TransactionDiffResult, error) {
+	request, err := c.newRequest(
+		ctx,
+		http.MethodGet,
+		transactionPath(namespace, transactionID)+"/diff",
+		nil,
+	)
+	if err != nil {
+		return TransactionDiffResult{}, err
+	}
+	response, err := c.http.Do(request)
+	if err != nil {
+		return TransactionDiffResult{}, fmt.Errorf("connect to gatemoled: %w", err)
+	}
+	defer response.Body.Close()
+	limited := io.LimitReader(response.Body, maxTransactionDiffBytes+1)
+	patch, err := io.ReadAll(limited)
+	if err != nil {
+		return TransactionDiffResult{}, fmt.Errorf("read kernel response: %w", err)
+	}
+	if len(patch) > maxTransactionDiffBytes {
+		return TransactionDiffResult{}, errors.New("transaction diff exceeds 128 MiB")
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return TransactionDiffResult{}, kernelResponseError(response, patch)
+	}
+	rawMetadata, err := base64.RawURLEncoding.DecodeString(
+		response.Header.Get(gitstage.DiffMetadataHeader),
+	)
+	if err != nil {
+		return TransactionDiffResult{}, fmt.Errorf("decode transaction diff metadata: %w", err)
+	}
+	var metadata gitstage.DiffMetadata
+	decoder := json.NewDecoder(bytes.NewReader(rawMetadata))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&metadata); err != nil {
+		return TransactionDiffResult{}, fmt.Errorf("decode transaction diff metadata: %w", err)
+	}
+	if metadata.Version != gitstage.DiffMetadataVersion ||
+		metadata.Namespace != namespace ||
+		metadata.TransactionID != transactionID ||
+		metadata.Attempt < 1 || metadata.EventSequence < 1 ||
+		!model.IsSHA256Digest(metadata.StagedStateDigest) ||
+		!model.IsSHA256Digest(metadata.EffectSetDigest) ||
+		!model.IsSHA256Digest(metadata.PatchDigest) ||
+		!validGitObjectID(metadata.BaseRevision) ||
+		!validGitObjectID(metadata.TreeRevision) {
+		return TransactionDiffResult{}, errors.New("transaction diff metadata is invalid or does not match the request")
+	}
+	sum := sha256.Sum256(patch)
+	if metadata.PatchDigest != "sha256:"+hex.EncodeToString(sum[:]) {
+		return TransactionDiffResult{}, errors.New("transaction diff body does not match its patch digest")
+	}
+	return TransactionDiffResult{Metadata: metadata, Patch: patch}, nil
 }
 
 type TransactionWorktreeResult struct {
@@ -684,35 +753,9 @@ func (c *Client) transactionMutation(
 }
 
 func (c *Client) do(ctx context.Context, method, path string, input, output any) error {
-	if c.expectedRuntimeID != "" &&
-		!runtimeidentity.IsRuntimeID(c.expectedRuntimeID) {
-		return errors.New(
-			"build kernel request: expected Runtime identity is invalid",
-		)
-	}
-	var body io.Reader
-	if input != nil {
-		data, err := json.Marshal(input)
-		if err != nil {
-			return fmt.Errorf("encode kernel request: %w", err)
-		}
-		body = bytes.NewReader(data)
-	}
-	request, err := http.NewRequestWithContext(ctx, method, "http://gatemoled"+path, body)
+	request, err := c.newRequest(ctx, method, path, input)
 	if err != nil {
-		return fmt.Errorf("build kernel request: %w", err)
-	}
-	if input != nil {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	if c.bearerToken != "" {
-		request.Header.Set("Authorization", "Bearer "+c.bearerToken)
-	}
-	if c.expectedRuntimeID != "" {
-		request.Header.Set(
-			runtimeidentity.HTTPHeader,
-			c.expectedRuntimeID,
-		)
+		return err
 	}
 	response, err := c.http.Do(request)
 	if err != nil {
@@ -728,11 +771,7 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 		return errors.New("kernel response exceeds 4 MiB")
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		var kernelErr model.KernelError
-		if err := json.Unmarshal(data, &kernelErr); err == nil && kernelErr.Code != "" {
-			return &kernelErr
-		}
-		return fmt.Errorf("gatemoled returned %s", response.Status)
+		return kernelResponseError(response, data)
 	}
 	if output == nil {
 		return nil
@@ -745,10 +784,64 @@ func (c *Client) do(ctx context.Context, method, path string, input, output any)
 	return nil
 }
 
+func (c *Client) newRequest(
+	ctx context.Context,
+	method, path string,
+	input any,
+) (*http.Request, error) {
+	if c.expectedRuntimeID != "" &&
+		!runtimeidentity.IsRuntimeID(c.expectedRuntimeID) {
+		return nil, errors.New(
+			"build kernel request: expected Runtime identity is invalid",
+		)
+	}
+	var body io.Reader
+	if input != nil {
+		data, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("encode kernel request: %w", err)
+		}
+		body = bytes.NewReader(data)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, "http://gatemoled"+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("build kernel request: %w", err)
+	}
+	if input != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if c.bearerToken != "" {
+		request.Header.Set("Authorization", "Bearer "+c.bearerToken)
+	}
+	if c.expectedRuntimeID != "" {
+		request.Header.Set(
+			runtimeidentity.HTTPHeader,
+			c.expectedRuntimeID,
+		)
+	}
+	return request, nil
+}
+
+func kernelResponseError(response *http.Response, data []byte) error {
+	var kernelErr model.KernelError
+	if err := json.Unmarshal(data, &kernelErr); err == nil && kernelErr.Code != "" {
+		return &kernelErr
+	}
+	return fmt.Errorf("gatemoled returned %s", response.Status)
+}
+
 func runPath(namespace, runID string) string {
 	return "/v0/namespaces/" + url.PathEscape(namespace) + "/runs/" + url.PathEscape(runID)
 }
 
 func transactionPath(namespace, transactionID string) string {
 	return "/v0/namespaces/" + url.PathEscape(namespace) + "/transactions/" + url.PathEscape(transactionID)
+}
+
+func validGitObjectID(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }

@@ -111,6 +111,19 @@ func TestWorktreeStagesExactEffectsWithoutMutatingSource(t *testing.T) {
 	if symlink.StageRef.Digest == digestBytes([]byte("must-not-be-read")) {
 		t.Fatal("stage inspection leaked the external symlink target content")
 	}
+	patch, err := manager.CapturePatch(context.Background(), snapshot)
+	if err != nil {
+		t.Fatalf("capture frozen patch: %v", err)
+	}
+	if !bytes.Contains(patch, []byte("func Allowed() bool { return true }")) ||
+		!bytes.Contains(patch, []byte("new staged data")) {
+		t.Fatalf("frozen patch does not contain staged changes:\n%s", patch)
+	}
+	tamperedSnapshot := snapshot
+	tamperedSnapshot.PatchDigest = digestBytes([]byte("different patch"))
+	if _, err := manager.CapturePatch(context.Background(), tamperedSnapshot); err == nil {
+		t.Fatal("capture accepted a patch digest that did not bind the frozen tree")
+	}
 
 	if err := manager.Verify(context.Background(), snapshot, now.Add(2*time.Minute)); err != nil {
 		t.Fatalf("unchanged snapshot failed verification: %v", err)

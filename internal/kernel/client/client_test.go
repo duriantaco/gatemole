@@ -2,6 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +17,7 @@ import (
 	"github.com/duriantaco/gatemole/internal/kernel/model"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimepreflight"
+	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -49,6 +53,95 @@ func TestClientSendsExplicitBearerToken(t *testing.T) {
 	}
 	if runtimeHeader != runtimeID {
 		t.Fatalf("Runtime header=%q, want %q", runtimeHeader, runtimeID)
+	}
+}
+
+func TestClientGetTransactionDiffValidatesExactBodyAndBinding(t *testing.T) {
+	t.Parallel()
+	patch := []byte("diff --git a/a.txt b/a.txt\n+reviewed\n")
+	sum := sha256.Sum256(patch)
+	metadata := gitstage.DiffMetadata{
+		Version:           gitstage.DiffMetadataVersion,
+		Namespace:         "team/platform",
+		TransactionID:     "tx:review",
+		Attempt:           2,
+		EventSequence:     14,
+		StagedStateDigest: "sha256:" + strings.Repeat("a", 64),
+		EffectSetDigest:   "sha256:" + strings.Repeat("b", 64),
+		PatchDigest:       "sha256:" + hex.EncodeToString(sum[:]),
+		BaseRevision:      strings.Repeat("c", 40),
+		TreeRevision:      strings.Repeat("d", 40),
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.EscapedPath() !=
+			"/v0/namespaces/team%2Fplatform/transactions/tx:review/diff" {
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL.EscapedPath())
+		}
+		header := make(http.Header)
+		header.Set(
+			gitstage.DiffMetadataHeader,
+			base64.RawURLEncoding.EncodeToString(metadataJSON),
+		)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     header,
+			Body:       io.NopCloser(strings.NewReader(string(patch))),
+			Request:    request,
+		}, nil
+	})
+	result, err := NewWithTransport(transport).GetTransactionDiff(
+		context.Background(), "team/platform", "tx:review",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Patch) != string(patch) || !reflect.DeepEqual(result.Metadata, metadata) {
+		t.Fatalf("diff result=%#v", result)
+	}
+}
+
+func TestClientGetTransactionDiffRejectsBodyOutsideDigest(t *testing.T) {
+	t.Parallel()
+	metadata := gitstage.DiffMetadata{
+		Version:           gitstage.DiffMetadataVersion,
+		Namespace:         "local",
+		TransactionID:     "tx:review",
+		Attempt:           1,
+		EventSequence:     2,
+		StagedStateDigest: "sha256:" + strings.Repeat("a", 64),
+		EffectSetDigest:   "sha256:" + strings.Repeat("b", 64),
+		PatchDigest:       "sha256:" + strings.Repeat("c", 64),
+		BaseRevision:      strings.Repeat("d", 40),
+		TreeRevision:      strings.Repeat("e", 40),
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		header := make(http.Header)
+		header.Set(
+			gitstage.DiffMetadataHeader,
+			base64.RawURLEncoding.EncodeToString(metadataJSON),
+		)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     header,
+			Body:       io.NopCloser(strings.NewReader("tampered")),
+			Request:    request,
+		}, nil
+	})
+	_, err = NewWithTransport(transport).GetTransactionDiff(
+		context.Background(), "local", "tx:review",
+	)
+	if err == nil || !strings.Contains(err.Error(), "patch digest") {
+		t.Fatalf("tampered diff body was accepted: %v", err)
 	}
 }
 

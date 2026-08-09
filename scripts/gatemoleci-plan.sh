@@ -123,7 +123,7 @@ while IFS= read -r path || [[ -n "$path" ]]; do
       kernelbench=true
       production=true
       ;;
-    internal/gatemole/transaction_cli.go)
+    internal/gatemole/transaction_cli.go|internal/gatemole/transaction_review_cli*.go)
       transactionbench=true
       production=true
       ;;
