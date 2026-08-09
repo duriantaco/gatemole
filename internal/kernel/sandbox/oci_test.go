@@ -94,6 +94,38 @@ func TestOCIInvocationOverridesImageEntrypointForBoundProfile(t *testing.T) {
 	}
 }
 
+func TestModelBrokerEvidenceDirectoryIsExecutionScoped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	first := ModelBrokerExecutionEvidenceDirectory(
+		root,
+		"tx:retry",
+		"run:retry",
+		"execution:first",
+	)
+	repeated := ModelBrokerExecutionEvidenceDirectory(
+		root,
+		"tx:retry",
+		"run:retry",
+		"execution:first",
+	)
+	second := ModelBrokerExecutionEvidenceDirectory(
+		root,
+		"tx:retry",
+		"run:retry",
+		"execution:second",
+	)
+	if first != repeated || first == second {
+		t.Fatalf("model evidence paths are not stable and execution-scoped: %q %q %q", first, repeated, second)
+	}
+	for _, path := range []string{first, second} {
+		relative, err := filepath.Rel(root, path)
+		if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			t.Fatalf("model evidence path escaped root: path=%q relative=%q err=%v", path, relative, err)
+		}
+	}
+}
+
 func TestOCIRejectsMutableImagesRootAndWeakLimits(t *testing.T) {
 	tests := []struct {
 		name   string

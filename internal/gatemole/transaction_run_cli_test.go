@@ -21,6 +21,7 @@ import (
 	"github.com/duriantaco/gatemole/internal/kernel/approval"
 	kernelclient "github.com/duriantaco/gatemole/internal/kernel/client"
 	"github.com/duriantaco/gatemole/internal/kernel/model"
+	"github.com/duriantaco/gatemole/internal/kernel/reducer"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
@@ -741,8 +742,21 @@ func TestTransactionRunDaemonOCIProvidesPersistedTaskEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load admitted run events: %v", err)
 	}
-	if len(runEvents) != 3 {
-		t.Fatalf("admitted run events=%d, want 3", len(runEvents))
+	currentRun, err := kernelStore.GetRun(
+		context.Background(), "payments", "run:task-envelope-oci",
+	)
+	if err != nil {
+		t.Fatalf("load current run projection: %v", err)
+	}
+	if currentRun.Run.State != model.RunWaitingForEvent ||
+		currentRun.Run.ActiveExecutionID != "" ||
+		currentRun.Run.EventSequence != 5 {
+		t.Fatalf("OCI execution did not settle the admitted run: %#v", currentRun.Run)
+	}
+	if len(runEvents) != 5 ||
+		runEvents[3].Type != reducer.EventRunExecutionStarted ||
+		runEvents[4].Type != reducer.EventRunExecutionFinished {
+		t.Fatalf("paired run events=%#v", runEvents)
 	}
 }
 

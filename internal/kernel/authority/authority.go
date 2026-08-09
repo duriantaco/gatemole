@@ -200,10 +200,11 @@ func validateBindings(input CompileInput) error {
 	if task.AgentProfile.RuntimeClass != "oci" {
 		return deny(model.ErrorCapabilityDenied, task.ID, "only OCI execution is authoritative", nil)
 	}
-	if run.State != model.RunAdmitted || run.Runtime != nil ||
+	if !executionLaunchableRunState(run.State) ||
+		run.ActiveExecutionID != "" || run.Runtime != nil ||
 		run.ParentRunID != "" ||
 		run.CheckpointID != "" || len(run.OutstandingApprovalIDs) != 0 {
-		return deny(model.ErrorTransitionInvalid, run.ID, "run is not launchable from admitted state", nil)
+		return deny(model.ErrorTransitionInvalid, run.ID, "run is not launchable for a supervised execution", nil)
 	}
 	if transaction.State != model.TransactionRunning ||
 		len(transaction.StageBindings) != 1 ||
@@ -240,6 +241,15 @@ func validateBindings(input CompileInput) error {
 		return deny(model.ErrorCapabilityDenied, contract.ID, "contract contains unsupported execution controls", nil)
 	}
 	return nil
+}
+
+func executionLaunchableRunState(state model.RunState) bool {
+	switch state {
+	case model.RunAdmitted, model.RunWaitingForAgent, model.RunWaitingForEvent:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateCeilings(ceilings DaemonCeilings) error {

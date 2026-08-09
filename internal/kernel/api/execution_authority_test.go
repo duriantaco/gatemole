@@ -14,6 +14,7 @@ import (
 
 	"github.com/duriantaco/gatemole/internal/kernel/admission"
 	"github.com/duriantaco/gatemole/internal/kernel/model"
+	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
 	"github.com/duriantaco/gatemole/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
@@ -84,6 +85,104 @@ func TestRunAgentExecutionRejectsLegacyTransactionBeforeWorkload(t *testing.T) {
 		fixture,
 		model.ErrorCapabilityDenied,
 	)
+}
+
+func TestRunAgentExecutionAdvancesAndSettlesPairedRun(t *testing.T) {
+	t.Parallel()
+	base := time.Now().UTC().Add(5 * time.Minute).Truncate(time.Second)
+	fixture := newExecutionAuthorityAPIFixture(
+		t,
+		"paired-lifecycle",
+		base,
+		model.ContractResource{
+			ID: "workspace",
+			Selector: model.ResourceSelector{
+				Kind: "filesystem", Pattern: "workspace/**",
+			},
+			Operations: []string{"filesystem.read", "filesystem.write"},
+			Conditions: model.CapabilityConditions{
+				WorkspaceRoot: "workspace",
+			},
+		},
+	)
+	response := requestJSONWithRuntimeHeader(
+		t,
+		fixture.handler,
+		http.MethodPost,
+		fmt.Sprintf(
+			"/v0/namespaces/%s/transactions/%s/executions/run",
+			fixture.namespace,
+			fixture.transactionID,
+		),
+		runAgentExecutionRequest{
+			ExpectedSequence: fixture.transactionHead,
+			Actor:            fixture.actor,
+			Image:            fixture.image,
+			Command:          append([]string(nil), fixture.command...),
+			TimeoutSeconds:   1,
+		},
+		fixture.runtimeID,
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("run agent status=%d body=%s", response.Code, response.Body.String())
+	}
+	var result runAgentExecutionResponse
+	decodeResponse(t, response, &result)
+	if result.Execution.Status != model.AgentExecutionSucceeded ||
+		result.Projection.Transaction.EventSequence != fixture.transactionHead+2 {
+		t.Fatalf("unexpected paired execution response: %#v", result)
+	}
+	run, err := fixture.kernelStore.GetRun(
+		context.Background(),
+		fixture.namespace,
+		fixture.runID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Run.State != model.RunWaitingForEvent ||
+		run.Run.ActiveExecutionID != "" ||
+		run.Run.EventSequence != fixture.runHead+2 {
+		t.Fatalf("daemon execution did not settle paired run: %#v", run.Run)
+	}
+	events, err := fixture.kernelStore.Events(
+		context.Background(),
+		fixture.namespace,
+		fixture.runID,
+		fixture.runHead,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Type != "run.execution_started" ||
+		events[1].Type != "run.execution_finished" {
+		t.Fatalf("paired run events=%#v", events)
+	}
+	if _, err := os.Stat(fixture.engineMarker); err != nil {
+		t.Fatalf("OCI engine was not invoked: %v", err)
+	}
+}
+
+func TestSettledModelBrokerExecutionBindsEmptyStartFailureLedger(t *testing.T) {
+	t.Parallel()
+	binding := model.ModelBrokerExecution{
+		Provider: "openai", ImageDigest: strings.Repeat("a", 64),
+		PolicyDigest: strings.Repeat("b", 64),
+	}
+	binding.ImageDigest = "sha256:" + binding.ImageDigest
+	binding.PolicyDigest = "sha256:" + binding.PolicyDigest
+	settled := settledModelBrokerExecution(
+		binding,
+		kernelmodelbroker.LedgerSummary{
+			Digest: "sha256:" + strings.Repeat("c", 64),
+		},
+	)
+	if settled.Provider != binding.Provider ||
+		settled.ImageDigest != binding.ImageDigest ||
+		settled.PolicyDigest != binding.PolicyDigest ||
+		settled.ReceiptLedgerDigest == "" || settled.Calls != 0 {
+		t.Fatalf("empty failed-start ledger was not bound: %#v", settled)
+	}
 }
 
 type executionAuthorityAPIFixture struct {
@@ -313,7 +412,7 @@ func newExecutionAuthorityServerFixtureWithOptions(
 	marker := filepath.Join(t.TempDir(), "oci-invoked")
 	engine := filepath.Join(t.TempDir(), "fake-oci-engine")
 	engineScript := fmt.Sprintf(
-		"#!/bin/sh\nprintf 'invoked\\n' >> %q\nexit 97\n",
+		"#!/bin/sh\nprintf 'invoked\\n' >> %q\nexit 0\n",
 		marker,
 	)
 	if err := os.WriteFile(engine, []byte(engineScript), 0o700); err != nil {

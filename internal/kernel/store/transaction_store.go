@@ -83,59 +83,7 @@ func (s *SQLiteStore) AppendTransactionEvents(
 		expectedSequence,
 		events,
 		"append_transaction_events",
-		nil,
 	)
-}
-
-// AppendTransactionEventsIfRunCurrent atomically claims launch in the
-// transaction ledger only while the run admitted with that transaction still
-// has the exact event head verified by the caller's authority snapshot.
-func (s *SQLiteStore) AppendTransactionEventsIfRunCurrent(
-	ctx context.Context,
-	namespace string,
-	expectedTransactionSequence int64,
-	expectedRunSequence int64,
-	expectedRunDigest string,
-	events []model.TransactionEvent,
-) (transactionreducer.Projection, error) {
-	const operation = "append_transaction_events_if_run_current"
-	if expectedTransactionSequence < 1 ||
-		expectedRunSequence < 1 ||
-		!digestPattern.MatchString(expectedRunDigest) {
-		return transactionreducer.Projection{}, storeError(
-			model.ErrorSchemaInvalid,
-			operation,
-			"",
-			"expected transaction and run heads are invalid",
-			nil,
-		)
-	}
-	if len(events) != 1 ||
-		events[0].Type != transactionreducer.EventAgentExecutionStarted {
-		return transactionreducer.Projection{}, storeError(
-			model.ErrorSchemaInvalid,
-			operation,
-			"",
-			"guarded run-head append requires one agent execution start event",
-			nil,
-		)
-	}
-	return s.appendTransactionEvents(
-		ctx,
-		namespace,
-		expectedTransactionSequence,
-		events,
-		operation,
-		&expectedRunHead{
-			sequence: expectedRunSequence,
-			digest:   expectedRunDigest,
-		},
-	)
-}
-
-type expectedRunHead struct {
-	sequence int64
-	digest   string
 }
 
 func (s *SQLiteStore) appendTransactionEvents(
@@ -144,7 +92,6 @@ func (s *SQLiteStore) appendTransactionEvents(
 	expectedSequence int64,
 	events []model.TransactionEvent,
 	operation string,
-	runHead *expectedRunHead,
 ) (transactionreducer.Projection, error) {
 	if err := validateNamespace(namespace); err != nil {
 		return transactionreducer.Projection{}, err
@@ -173,18 +120,6 @@ func (s *SQLiteStore) appendTransactionEvents(
 			fmt.Sprintf("expected transaction sequence %d, current sequence is %d", expectedSequence, current.Transaction.EventSequence),
 			nil,
 		)
-	}
-	if runHead != nil {
-		if err := verifyAdmittedRunHead(
-			ctx,
-			tx,
-			namespace,
-			current,
-			*runHead,
-			operation,
-		); err != nil {
-			return transactionreducer.Projection{}, err
-		}
 	}
 	next := current
 	eventJSON := make([][]byte, len(events))
@@ -241,70 +176,6 @@ func (s *SQLiteStore) appendTransactionEvents(
 		return transactionreducer.Projection{}, classifyWriteError(operation, current.Transaction.ID, err)
 	}
 	return next, nil
-}
-
-func verifyAdmittedRunHead(
-	ctx context.Context,
-	tx *sql.Tx,
-	namespace string,
-	transaction transactionreducer.Projection,
-	expected expectedRunHead,
-	operation string,
-) error {
-	transactionID := transaction.Transaction.ID
-	var runID, lastDigest string
-	var sequence int64
-	err := tx.QueryRowContext(
-		ctx,
-		`SELECT a.run_id, r.event_sequence, r.last_event_digest
-		 FROM task_admissions AS a
-		 JOIN runs AS r
-		   ON r.namespace = a.namespace AND r.run_id = a.run_id
-		 WHERE a.namespace = ? AND a.transaction_id = ?`,
-		namespace,
-		transactionID,
-	).Scan(&runID, &sequence, &lastDigest)
-	if errors.Is(err, sql.ErrNoRows) {
-		return storeError(
-			model.ErrorNotFound,
-			operation,
-			transactionID,
-			"transaction has no admitted run in namespace",
-			err,
-		)
-	}
-	if err != nil {
-		return storeError(
-			model.ErrorInternal,
-			operation,
-			transactionID,
-			"query admitted run head",
-			err,
-		)
-	}
-	binding := transaction.Transaction.Admission
-	if binding == nil ||
-		binding.RunID != runID ||
-		!identifierPattern.MatchString(runID) ||
-		sequence < 1 ||
-		!digestPattern.MatchString(lastDigest) {
-		return storeError(
-			model.ErrorEventChain,
-			operation,
-			transactionID,
-			"admitted run binding or event head is invalid",
-			nil,
-		)
-	}
-	if sequence != expected.sequence || lastDigest != expected.digest {
-		return conflict(
-			operation,
-			runID,
-			"admitted run changed after execution authority was loaded",
-			nil,
-		)
-	}
-	return nil
 }
 
 func (s *SQLiteStore) GetTransaction(ctx context.Context, namespace, transactionID string) (transactionreducer.Projection, error) {

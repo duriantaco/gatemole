@@ -20,8 +20,9 @@ import (
 const sqliteSchemaVersion = 3
 
 type SQLiteStore struct {
-	db             *sql.DB
-	admissionFault func(string) error
+	db                   *sql.DB
+	admissionFault       func(string) error
+	pairedExecutionFault func(string) error
 }
 
 // Health performs a bounded, constant-work database readiness check. It does

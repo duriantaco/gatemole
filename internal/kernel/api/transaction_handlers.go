@@ -22,6 +22,7 @@ import (
 	kernelmodelbroker "github.com/duriantaco/gatemole/internal/kernel/modelbroker"
 	"github.com/duriantaco/gatemole/internal/kernel/runtimeidentity"
 	"github.com/duriantaco/gatemole/internal/kernel/sandbox"
+	"github.com/duriantaco/gatemole/internal/kernel/store"
 	transactionreducer "github.com/duriantaco/gatemole/internal/kernel/transaction"
 	"github.com/duriantaco/gatemole/internal/kernel/transaction/gitstage"
 	"github.com/duriantaco/gatemole/internal/kernel/verification"
@@ -401,8 +402,8 @@ func (s *Server) startAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	next, err := s.store.AppendTransactionEvents(
-		r.Context(), namespace, request.ExpectedSequence, []model.TransactionEvent{event},
+	next, err := s.appendExternalExecutionEvent(
+		r.Context(), namespace, projection, event,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -451,8 +452,8 @@ func (s *Server) finishAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	next, err := s.store.AppendTransactionEvents(
-		r.Context(), namespace, request.ExpectedSequence, []model.TransactionEvent{event},
+	next, err := s.appendExternalExecutionEvent(
+		r.Context(), namespace, projection, event,
 	)
 	if err != nil {
 		writeError(w, err)
@@ -598,6 +599,10 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	var brokerSession *sandbox.ModelBrokerSession
 	var brokerExecution *model.ModelBrokerExecution
 	var brokerConfig *sandbox.ModelBrokerConfig
+	executionID := transactionreducer.ExecutionID(
+		transactionID,
+		request.ExpectedSequence+1,
+	)
 	if executionPlan.ModelBroker != nil {
 		brokerPolicy := s.executionPolicy.ModelBroker
 		if brokerPolicy == nil {
@@ -618,14 +623,20 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		receiptDirectory := filepath.Join(
+		receiptDirectory := sandbox.ModelBrokerExecutionEvidenceDirectory(
 			s.transactionStaging,
-			".gatemole-model-evidence",
-			sandbox.ModelBrokerContainerName(
-				transactionID,
-				executionPlan.RunID,
-			),
+			transactionID,
+			executionPlan.RunID,
+			executionID,
 		)
+		if err := os.MkdirAll(receiptDirectory, 0o700); err != nil {
+			writeError(w, &model.KernelError{
+				Code: model.ErrorDriverUnavailable, Operation: "prepare_model_receipts",
+				Resource: executionID, Message: "create execution-scoped model receipt directory",
+				Cause: err,
+			})
+			return
+		}
 		brokerConfig = &sandbox.ModelBrokerConfig{
 			EnginePath:          s.executionPolicy.EnginePath,
 			Image:               brokerPolicy.Image,
@@ -687,7 +698,7 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	now := s.now().UTC()
 	execution := model.AgentExecution{
 		Version:             model.AgentExecutionVersion,
-		ID:                  transactionreducer.ExecutionID(transactionID, request.ExpectedSequence+1),
+		ID:                  executionID,
 		TransactionID:       transactionID,
 		Attempt:             projection.Transaction.Attempt,
 		RunID:               executionPlan.RunID,
@@ -711,18 +722,23 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	projection, err = s.store.AppendTransactionEventsIfRunCurrent(
+	pairedExecution, err := s.store.AppendPairedExecutionEvent(
 		authorityContext,
 		namespace,
-		request.ExpectedSequence,
-		liveAuthority.RunSequence,
-		liveAuthority.RunLastEventDigest,
-		[]model.TransactionEvent{started},
+		store.ExecutionHeads{
+			TransactionSequence: request.ExpectedSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         liveAuthority.RunSequence,
+			RunDigest:           liveAuthority.RunLastEventDigest,
+		},
+		started,
 	)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	projection = pairedExecution.Transaction
+	runProjection := pairedExecution.Run
 	var outcome verification.Outcome
 	var runErr error
 	runOperation := "run_agent_execution"
@@ -796,18 +812,33 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		brokerExecution = &model.ModelBrokerExecution{
-			Provider:            s.executionPolicy.ModelBroker.Policy.Provider,
-			ImageDigest:         brokerSession.ImageDigest,
-			PolicyDigest:        brokerSession.PolicyDigest,
-			ReceiptLedgerDigest: summary.Digest,
-			Calls:               summary.Calls,
-			CompletedCalls:      summary.Completed,
-			FailedCalls:         summary.Failed,
-			UnknownCalls:        summary.Unknown,
-			InputTokens:         summary.InputTokens,
-			OutputTokens:        summary.OutputTokens,
+		brokerExecution = settledModelBrokerExecution(
+			model.ModelBrokerExecution{
+				Provider: brokerExecution.Provider, ImageDigest: brokerSession.ImageDigest,
+				PolicyDigest: brokerSession.PolicyDigest,
+			},
+			summary,
+		)
+	} else if brokerConfig != nil {
+		// A broker that could not start still needs a terminal, digest-bound
+		// empty ledger. Otherwise the start-failed process cannot settle and
+		// would remain active until a daemon restart.
+		summary, summaryErr := kernelmodelbroker.FinalizeLedger(
+			filepath.Join(brokerConfig.ReceiptDirectory, "model-calls.jsonl"),
+			transactionID,
+			executionPlan.RunID,
+			brokerExecution.Provider,
+		)
+		if summaryErr != nil {
+			writeError(w, &model.KernelError{
+				Code: model.ErrorEventChain, Operation: "finalize_model_receipts",
+				Resource: transactionID,
+				Message:  "failed broker start has no verifiable receipt ledger; execution remains active",
+				Cause:    summaryErr,
+			})
+			return
 		}
+		brokerExecution = settledModelBrokerExecution(*brokerExecution, summary)
 	}
 	if verification.IsCleanupError(runErr) {
 		writeError(w, &model.KernelError{
@@ -850,14 +881,22 @@ func (s *Server) runAgentExecution(w http.ResponseWriter, r *http.Request) {
 	}
 	finishContext, stopFinish := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stopFinish()
-	projection, finishErr = s.store.AppendTransactionEvents(
-		finishContext, namespace, projection.Transaction.EventSequence,
-		[]model.TransactionEvent{finished},
+	pairedExecution, finishErr = s.store.AppendPairedExecutionEvent(
+		finishContext,
+		namespace,
+		store.ExecutionHeads{
+			TransactionSequence: projection.Transaction.EventSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         runProjection.Run.EventSequence,
+			RunDigest:           runProjection.LastEventDigest,
+		},
+		finished,
 	)
 	if finishErr != nil {
 		writeError(w, finishErr)
 		return
 	}
+	projection = pairedExecution.Transaction
 	execution = projection.Executions[len(projection.Executions)-1]
 	if runErr != nil {
 		var kernelErr *model.KernelError
@@ -897,6 +936,55 @@ func taskAuthorizesExecution(
 		Resource:  task.TransactionID,
 		Message:   "persisted task does not authorize the requested run or agent profile",
 	}
+}
+
+func settledModelBrokerExecution(
+	binding model.ModelBrokerExecution,
+	summary kernelmodelbroker.LedgerSummary,
+) *model.ModelBrokerExecution {
+	return &model.ModelBrokerExecution{
+		Provider: binding.Provider, ImageDigest: binding.ImageDigest,
+		PolicyDigest: binding.PolicyDigest, ReceiptLedgerDigest: summary.Digest,
+		Calls: summary.Calls, CompletedCalls: summary.Completed,
+		FailedCalls: summary.Failed, UnknownCalls: summary.Unknown,
+		InputTokens: summary.InputTokens, OutputTokens: summary.OutputTokens,
+	}
+}
+
+func (s *Server) appendExternalExecutionEvent(
+	ctx context.Context,
+	namespace string,
+	projection transactionreducer.Projection,
+	event model.TransactionEvent,
+) (transactionreducer.Projection, error) {
+	binding := projection.Transaction.Admission
+	if binding == nil {
+		return s.store.AppendTransactionEvents(
+			ctx,
+			namespace,
+			projection.Transaction.EventSequence,
+			[]model.TransactionEvent{event},
+		)
+	}
+	run, err := s.store.GetRun(ctx, namespace, binding.RunID)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	paired, err := s.store.AppendPairedExecutionEvent(
+		ctx,
+		namespace,
+		store.ExecutionHeads{
+			TransactionSequence: projection.Transaction.EventSequence,
+			TransactionDigest:   projection.LastEventDigest,
+			RunSequence:         run.Run.EventSequence,
+			RunDigest:           run.LastEventDigest,
+		},
+		event,
+	)
+	if err != nil {
+		return transactionreducer.Projection{}, err
+	}
+	return paired.Transaction, nil
 }
 
 func materializeAgentTask(
