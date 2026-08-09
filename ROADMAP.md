@@ -14,7 +14,7 @@ One kernel supports two product experiences:
 
 | Experience | User promise | Current truth |
 | --- | --- | --- |
-| **Gatemole Developer Runtime** | Run an existing agent locally with bounded authority, isolated effects, review and recovery. | A manually operated local-Git path plus profile initialization and diagnostics exists. Packaging, maintained adapters, live supervision and review UX need product work. |
+| **Gatemole Developer Runtime** | Run an existing agent locally with bounded authority, isolated effects, review and recovery. | A manually operated local-Git path plus profile initialization, diagnostics and an exact review/apply/reject shell exists. Packaging, maintained adapters and live supervision need product work. |
 | **Gatemole Agent OS** | Govern consequential agent actions across customer systems and a fleet of Runtimes. | Enterprise experience and full target architecture only. The action protocol, remote connectors, cross-run policy and Control Plane are planned. |
 
 The experiences are different packaging and operations around the same
@@ -85,15 +85,19 @@ read/write and explicitly granted provider-scoped model brokering are
 currently supported. Expired, terminal, narrowed or otherwise unsupported
 authority starts no workload.
 
-Before any broker or agent workload starts, `gatemoled` now atomically verifies
-that both snapshot heads are still current and records execution start in the
-transaction ledger. A concurrent run or transaction change therefore starts
-no workload. Execution is not yet one paired lifecycle: the OCI workload
-advances the transaction without advancing the admitted run, and usage is not
-yet durably charged to run budgets. OS-3 must next pair execution start,
-settlement and recovery across both ledgers before remote connectors are
-added. The older brokered `ActionRequest` endpoints remain disabled by the
-production profile.
+Before any broker or agent workload starts, `gatemoled` atomically verifies
+that both snapshot heads are still current and records the exact execution in
+the run and transaction ledgers. Settlement and restart recovery finish that
+same execution on both sides, clear the run's active binding, and cumulatively
+charge elapsed wall time plus verified model-call/token usage. A concurrent run
+or transaction change therefore starts no workload, and a partial paired
+mutation cannot commit.
+
+The remaining OS-3 work is narrower data authority, mediated tool/connector
+execution, and durable tool/cost accounting. Live lifecycle controls must also
+interrupt an active OCI workload rather than only changing metadata. The older
+brokered `ActionRequest` endpoints remain disabled by the production profile
+until that path is joined to current admission and execution authority.
 
 ## Execution principles
 
@@ -126,9 +130,9 @@ validation.
 | **OS-1: focused validation lanes** | Complete | At most three required PR lanes: Go checks, affected acceptance and documentation when changed. Run the full race, vulnerability and benchmark collections on `main`, nightly and release. Retain production OCI acceptance for security-critical Runtime changes. | Normal PR gate completes in a bounded target such as 12 minutes. Path rules cannot skip production acceptance when kernel, sandbox, identity, approval, release or connector code changes. |
 | **OS-2: atomic task admission** | Complete | One daemon-owned, idempotent endpoint persists the exact task, `ExecutionContract`, real `AgentRun`, initial capability grants and `AgentTransaction` in one database transaction. The server authors authoritative events and digests. | Fault injection after every persistence step creates no orphan resources. Identical idempotency retry returns the same admission; a changed retry conflicts. Every transaction references a digest-matching run and contract. |
 | **OS-3: bind execution authority and data boundaries** | In progress | OCI execution transitions the admitted `AgentRun`. Identity, sponsor and parent lineage, contract, capabilities, deadline, allowed resources, data classes, model egress and budgets become authoritative. Task limits may narrow daemon ceilings but never widen them. | Run and transaction state cannot diverge after success, failure or injected crash. Expired authority prevents start. Time, model, tool and cost limits fail closed and are durably charged across restart. Denied mounts, connector reads, resource classes and model-egress destinations are inaccessible rather than merely recorded. |
-| **OS-4: durable supervisor and circuit breaker** | Planned | Asynchronous workload start, durable desired state and execution lease; functional `watch`, `cancel`, kill and revocation. “Pause” means stop at a declared safe boundary, not arbitrary process snapshotting. | Repeated start creates one workload. Cancel terminates the agent and broker within a bounded interval and prevents release. No new effect executes after revocation. Restart produces one reconciled outcome. |
+| **OS-4: durable supervisor and circuit breaker** | Planned; design accepted | Asynchronous workload start, durable desired state and execution lease; functional `watch`, `cancel`, kill and revocation, following [ADR-003](docs/architecture/ADR-003-durable-execution-supervisor.md). “Pause” means stop at a declared safe boundary, not arbitrary process snapshotting. | Repeated start creates one workload. Cancel terminates the agent and broker within a bounded interval and prevents release. No new effect executes after revocation. Restart produces one reconciled outcome. |
 | **DX-1: Developer Runtime onboarding** | In progress | Runtime-aware project setup and diagnostics, a versioned CLI release, one maintained coding-agent profile and local daemon setup. Keep generated configuration explicit and repository-owned. | On a clean supported machine, a developer can install Gatemole, initialize a repository, diagnose prerequisites and start one maintained agent without hand-authoring kernel configuration. |
-| **DX-2: Developer review shell** | Planned | Readable status and diff plus explicit apply/reject, preserving the exact underlying transaction and evidence IDs. Reuse OS-4 for `watch` and real cancellation. | A developer can inspect the exact diff and evidence, then apply or reject it without low-level `tx` commands or database access. |
+| **DX-2: Developer review shell** | Complete | Readable status and daemon-rendered, digest-checked exact diff plus explicit apply/reject, preserving the underlying transaction, effect, evidence and approval IDs. `apply` and `reject` are thin aliases over release and abort; they do not bypass authority. Reuse OS-4 for `watch` and real cancellation. | Integration tests inspect the exact frozen patch and evidence, reject a changed worktree, apply only through prepared release authority, and reject by aborting and removing the isolated worktree. |
 | **OS-5: connector interface and transaction coordinator** | Planned | Introduce `Plan → Stage/Hold → Inspect → Verify → Commit → Reconcile → Compensate`; add a connector registry plus a durable dependency-ordered coordinator. Each connector persists preparation state, commit state and receipts. Unknown results stop dependent work; restart performs reconciliation before retry or compensation. Move local Git behind the interface only after the generic harness passes. | Two fake connectors prove dependency-ordered prepare/commit, stop-on-unknown, restart recovery, reverse compensation and manual-recovery escalation. Faults are injected before dispatch, during dispatch and after an external effect but before its receipt. Connectors cannot mint authority. Existing local-Git production acceptance remains behaviorally unchanged. |
 | **OS-6: versioned Runtime action protocol and broker** | Planned | Replace or converge the legacy broker behind a supported `ActionRequest → decision/approval → receipt` protocol. A transaction-scoped workload credential binds sandbox transport, task, run, transaction, delegated identity, capability, deadline and idempotency key. Publish stable status/event cursors, error semantics and one maintained Go client. Direct private-worktree mutation remains an explicitly contained, stageable boundary. | Local transport rejects forged, cross-run, expired and replayed credentials. Approval resumes only the exact immutable request after restart. A fake connector proves allow, deny, approval, expiry and revocation without exposing its credential. N/N-1 protocol and adapter-conformance fixtures pass; every attempted external effect is attributable. |
 | **OS-7: lineage-aware temporal policy** | Planned | Persist immutable identity, delegation, action and effect facts across runs and transactions. Evaluate bounded temporal and separation-of-duties rules across sessions, systems, child agents and a shared sponsor lineage. Ordinary stateless decisions may use an ACS/Cedar/OPA adapter, but Gatemole remains authoritative for history and commit. | An AP-style fixture spanning separate sessions and delegated identities is denied for the composed sequence while individually valid actions remain allowed. Restart yields the same decision. Retention and query bounds are explicit, and the policy adapter cannot authorize or commit an effect outside the Runtime transaction. |

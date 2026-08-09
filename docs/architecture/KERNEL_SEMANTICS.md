@@ -135,9 +135,11 @@ conditions and unimplemented budgets fail before workload creation.
 
 After preflight and non-workload preparation, launch is claimed in one SQLite
 transaction: the admitted run head and transaction head must still match the
-snapshot while `agent_execution.started` is appended. The authority deadline
-also bounds model-broker startup. A stale or expired plan therefore starts no
-broker or agent container.
+snapshot while `agent_execution.started` and `run.execution_started` bind the
+same execution ID and attempt. The run becomes `running` with that active
+execution before any workload starts. The authority deadline also bounds
+model-broker startup. A stale or expired plan therefore starts no broker or
+agent container.
 
 A transaction may retain multiple immutable execution receipts. Another launch
 is allowed only while the transaction is running and no execution is active.
@@ -146,8 +148,13 @@ eligible to freeze only after the latest execution in the active transaction
 attempt succeeds. Revision starts a new numbered attempt and archives the old
 mutable work rather than rewriting it.
 
-The claim does not yet advance and settle both lifecycle ledgers. That paired
-run/transaction mutation and durable usage charging are the next OS-3 step.
+Settlement is also one SQLite transaction. It appends the immutable transaction
+receipt and matching `run.execution_finished`, clears the active binding, and
+adds that execution's wall time plus verified model usage to cumulative run
+usage. Success moves the run to `waiting_for_event`; failed, interrupted and
+start-failed execution moves it to `waiting_for_agent`. Startup recovery uses
+the same paired primitive and finalizes unfinished model calls as `unknown`
+before applying their conservative charge.
 
 ## Action lifecycle
 

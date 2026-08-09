@@ -10,11 +10,13 @@ runs an OCI agent. It then stages immutable local Git effects, validates their
 sequence, runs daemon-owned verification, binds signed approvals and publishes
 to an allowed local ref.
 
-The OCI workload does not yet advance that admitted run or consume its
-capabilities through the lower-level brokered action path. The roadmap's OS-3
-through OS-7 work closes that execution, supervision, connector and temporal
-policy gap before this document becomes an executable end-to-end acceptance
-test.
+The OCI workload now advances and settles the admitted run together with its
+transaction and charges supported wall/model usage, including restart
+recovery. It does not yet consume capabilities through the lower-level
+brokered action path, and lifecycle metadata does not interrupt an active OCI
+workload. The roadmap's remaining OS-3 through OS-7 work closes those
+supervision, connector and temporal-policy gaps before this document becomes
+an executable end-to-end acceptance test.
 
 ## Target claim
 

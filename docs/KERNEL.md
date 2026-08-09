@@ -35,6 +35,10 @@ their existing CLI behavior.
   lower-level run record; they do not control a running production OCI
   workload. Raw run creation and grant installation remain embedded/unbound
   compatibility operations and configured `gatemoled` rejects them.
+- Paired execution start, settlement and startup recovery across the admitted
+  run and transaction ledgers. The run binds the exact active execution, then
+  cumulatively charges elapsed wall time and verified model usage when that
+  execution finishes or is recovered.
 - Execution-contract compilation into stable, expiring capability grants.
 - Typed filesystem read/write actions with output limits and workspace
   containment.
