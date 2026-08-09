@@ -20,9 +20,16 @@ func Main(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	if handled, code := renderRequestedHelp(rest, stdout, stderr); handled {
+		return code
+	}
 	if len(rest) == 0 {
 		usage(stderr)
 		return 2
+	}
+	if rest[0] == "version" ||
+		(len(rest) == 1 && (rest[0] == "--version" || rest[0] == "-V")) {
+		return versionCommand(rest[1:], common.json, stdout, stderr)
 	}
 	absRepo, err := filepath.Abs(common.repo)
 	if err != nil {
@@ -887,6 +894,7 @@ func usage(out io.Writer) {
 	fmt.Fprintln(out, "usage: gatemole [--repo DIR] [--manifest FILE] [--json] <command>")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "commands:")
+	fmt.Fprintln(out, "  version")
 	fmt.Fprintln(out, "  daemon [--db FILE] [--socket FILE] [--transaction-root DIR] [--runtime-profile development|production]")
 	fmt.Fprintln(out, "  runtime init [--agent NAME --image IMAGE@sha256:DIGEST --source-digest sha256:DIGEST -- COMMAND [ARG...]]")
 	fmt.Fprintln(out, "  doctor [--agent NAME] [--namespace NS] [--require-enforcement-profile development|production] [--runtime-engine ENGINE] [--agent-profiles FILE] [--socket FILE]")
