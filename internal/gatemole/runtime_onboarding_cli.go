@@ -257,7 +257,19 @@ func runtimeInitCommand(
 	} else {
 		fmt.Fprintf(stdout, "Runtime state ignore is complete: %s\n", result.IgnorePath)
 	}
-	fmt.Fprintf(stdout, "Next: gatemole --repo %s doctor\n", result.Repository)
+	if result.Agent == "" {
+		fmt.Fprintln(
+			stdout,
+			"Next: register a digest-pinned agent profile with `gatemole runtime init --agent ...`.",
+		)
+	} else {
+		fmt.Fprintf(
+			stdout,
+			"Next: `gatemole --repo %s run --intent \"Describe the change\" --agent %s`\n",
+			result.Repository,
+			result.Agent,
+		)
+	}
 	return 0
 }
 
@@ -296,12 +308,15 @@ func writeRuntimeInitialization(
 
 	profilesPath := filepath.Join(repo, defaultAgentProfiles)
 	profileCreated := false
+	profileFileCreated := false
+	profileUpdated := false
+	var profileMutationInfo os.FileInfo
+	var originalProfiles []byte
 	if document != nil {
-		data, err := json.MarshalIndent(*document, "", "  ")
+		data, err := encodeAgentProfileDocument(*document)
 		if err != nil {
-			return runtimeInitResult{}, fmt.Errorf("encode agent profiles: %w", err)
+			return runtimeInitResult{}, err
 		}
-		data = append(data, '\n')
 		if info, err := os.Lstat(profilesPath); err == nil {
 			if !info.Mode().IsRegular() ||
 				info.Mode()&os.ModeSymlink != 0 {
@@ -315,12 +330,41 @@ func writeRuntimeInitialization(
 				return runtimeInitResult{}, err
 			}
 			existing, err := decodeAgentProfileDocument(existingData)
-			if err != nil ||
-				!reflect.DeepEqual(existing, *document) {
+			if err != nil {
+				return runtimeInitResult{}, err
+			}
+			merged, changed, err := mergeAgentProfileDocument(
+				existing,
+				*document,
+			)
+			if err != nil {
 				return runtimeInitResult{}, fmt.Errorf(
-					"%s already exists with different content; refusing to overwrite it",
+					"%s %w",
 					defaultAgentProfiles,
+					err,
 				)
+			}
+			if changed {
+				data, err = encodeAgentProfileDocument(merged)
+				if err != nil {
+					return runtimeInitResult{}, err
+				}
+				profileMutationInfo, err = replaceExistingRegularFile(
+					profilesPath,
+					info,
+					data,
+					0o600,
+				)
+				if err != nil {
+					return runtimeInitResult{}, fmt.Errorf(
+						"update %s: %w",
+						defaultAgentProfiles,
+						err,
+					)
+				}
+				originalProfiles = append([]byte(nil), existingData...)
+				profileCreated = true
+				profileUpdated = true
 			}
 		} else if os.IsNotExist(err) {
 			if err := writeExclusiveRegularFile(
@@ -335,11 +379,37 @@ func writeRuntimeInitialization(
 				)
 			}
 			profileCreated = true
+			profileFileCreated = true
+			profileMutationInfo, err = os.Lstat(profilesPath)
+			if err != nil {
+				_ = os.Remove(profilesPath)
+				return runtimeInitResult{}, fmt.Errorf(
+					"inspect created %s: %w",
+					defaultAgentProfiles,
+					err,
+				)
+			}
 		} else {
 			return runtimeInitResult{}, fmt.Errorf(
 				"inspect %s: %w",
 				defaultAgentProfiles,
 				err,
+			)
+		}
+	}
+	rollbackProfile := func() {
+		switch {
+		case profileFileCreated:
+			_ = removeRegularFileIfSame(
+				profilesPath,
+				profileMutationInfo,
+			)
+		case profileUpdated:
+			_, _ = replaceExistingRegularFile(
+				profilesPath,
+				profileMutationInfo,
+				originalProfiles,
+				0o600,
 			)
 		}
 	}
@@ -350,9 +420,7 @@ func writeRuntimeInitialization(
 	var originalIgnore []byte
 	if info, err := os.Lstat(ignorePath); err == nil {
 		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			if profileCreated {
-				_ = os.Remove(profilesPath)
-			}
+			rollbackProfile()
 			return runtimeInitResult{}, fmt.Errorf(
 				"%s exists but is not a regular file",
 				runtimeIgnoreFile,
@@ -360,9 +428,7 @@ func writeRuntimeInitialization(
 		}
 		existing, err := os.ReadFile(ignorePath)
 		if err != nil {
-			if profileCreated {
-				_ = os.Remove(profilesPath)
-			}
+			rollbackProfile()
 			return runtimeInitResult{}, fmt.Errorf("read %s: %w", runtimeIgnoreFile, err)
 		}
 		originalIgnore = append([]byte(nil), existing...)
@@ -374,25 +440,19 @@ func writeRuntimeInitialization(
 				existing,
 				missing,
 			); err != nil {
-				if profileCreated {
-					_ = os.Remove(profilesPath)
-				}
+				rollbackProfile()
 				return runtimeInitResult{}, fmt.Errorf("update %s: %w", runtimeIgnoreFile, err)
 			}
 			ignoreUpdated = true
 		}
 	} else if os.IsNotExist(err) {
 		if err := writeExclusiveRegularFile(ignorePath, runtimeStateIgnore, 0o600); err != nil {
-			if profileCreated {
-				_ = os.Remove(profilesPath)
-			}
+			rollbackProfile()
 			return runtimeInitResult{}, fmt.Errorf("create %s: %w", runtimeIgnoreFile, err)
 		}
 		ignoreCreated = true
 	} else {
-		if profileCreated {
-			_ = os.Remove(profilesPath)
-		}
+		rollbackProfile()
 		return runtimeInitResult{}, fmt.Errorf("inspect %s: %w", runtimeIgnoreFile, err)
 	}
 
@@ -401,9 +461,7 @@ func writeRuntimeInitialization(
 		repo,
 	)
 	if err != nil {
-		if profileCreated {
-			_ = os.Remove(profilesPath)
-		}
+		rollbackProfile()
 		switch {
 		case ignoreCreated:
 			_ = os.Remove(ignorePath)
@@ -431,6 +489,48 @@ func writeRuntimeInitialization(
 		IgnoreCreated:          ignoreCreated,
 		IgnoreUpdated:          ignoreUpdated,
 	}, nil
+}
+
+func encodeAgentProfileDocument(
+	document agentProfileDocument,
+) ([]byte, error) {
+	data, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode agent profiles: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+func mergeAgentProfileDocument(
+	existing agentProfileDocument,
+	candidate agentProfileDocument,
+) (agentProfileDocument, bool, error) {
+	if len(candidate.Profiles) != 1 {
+		return agentProfileDocument{}, false, errors.New(
+			"profile registration must contain exactly one profile",
+		)
+	}
+	requested := candidate.Profiles[0]
+	for _, current := range existing.Profiles {
+		if current.Name != requested.Name {
+			continue
+		}
+		if reflect.DeepEqual(current, requested) {
+			return existing, false, nil
+		}
+		return agentProfileDocument{}, false, fmt.Errorf(
+			"already contains profile %q with different content; refusing to overwrite it",
+			requested.Name,
+		)
+	}
+	existing.Profiles = append(existing.Profiles, requested)
+	if err := validateAgentProfileDocument(existing); err != nil {
+		return agentProfileDocument{}, false, fmt.Errorf(
+			"merged profile document is invalid: %w",
+			err,
+		)
+	}
+	return existing, true, nil
 }
 
 func missingRuntimeIgnoreEntries(data []byte) []string {
@@ -508,6 +608,72 @@ func appendRuntimeIgnoreEntries(
 		return err
 	}
 	return file.Sync()
+}
+
+func replaceExistingRegularFile(
+	path string,
+	expected os.FileInfo,
+	data []byte,
+	mode os.FileMode,
+) (os.FileInfo, error) {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, ".gatemole-profile-*")
+	if err != nil {
+		return nil, err
+	}
+	temporaryPath := temporary.Name()
+	removeTemporary := true
+	defer func() {
+		_ = temporary.Close()
+		if removeTemporary {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(mode); err != nil {
+		return nil, err
+	}
+	if _, err := temporary.Write(data); err != nil {
+		return nil, err
+	}
+	if err := temporary.Sync(); err != nil {
+		return nil, err
+	}
+	replacement, err := temporary.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := temporary.Close(); err != nil {
+		return nil, err
+	}
+	current, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if expected == nil ||
+		!current.Mode().IsRegular() ||
+		current.Mode()&os.ModeSymlink != 0 ||
+		!os.SameFile(expected, current) {
+		return nil, errors.New("agent profile document changed before it could be updated")
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return nil, err
+	}
+	removeTemporary = false
+	return replacement, nil
+}
+
+func removeRegularFileIfSame(path string, expected os.FileInfo) error {
+	current, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if expected == nil ||
+		!current.Mode().IsRegular() ||
+		current.Mode()&os.ModeSymlink != 0 ||
+		!os.SameFile(expected, current) {
+		return errors.New("agent profile document changed before rollback")
+	}
+	return os.Remove(path)
 }
 
 func writeExclusiveRegularFile(path string, data []byte, mode os.FileMode) error {
@@ -793,7 +959,7 @@ func runRuntimeDoctor(
 	case os.IsNotExist(socketErr):
 		socketStatus = "warn"
 		socketMessage =
-			"not running; start it with `gatemole daemon` when you are ready to execute"
+			"not running; local product commands start a temporary development Runtime automatically; use `gatemole daemon` for persistent or configured operation"
 	case socketErr != nil:
 		socketStatus = "fail"
 		socketMessage = "inspect daemon socket: " + socketErr.Error()

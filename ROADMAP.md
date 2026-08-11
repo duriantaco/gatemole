@@ -67,9 +67,11 @@ The repository contains a substantial foundation:
 
 The supported profile remains one node, one security tenant and publication to
 an allowed local Git ref. It does not yet control a remote enterprise system.
-Its developer integration is also low-level: the user must operate the daemon,
-provide a digest-pinned OCI image and use transaction-oriented inspection
-commands.
+Its developer integration is also low-level: product-facing local commands can
+host a command-scoped development daemon, but the user must still provide a
+digest-pinned OCI image and use transaction-oriented inspection commands.
+Configured model access, production operation and edge deployment still require
+a separately supervised daemon.
 
 ### Next architecture gap
 

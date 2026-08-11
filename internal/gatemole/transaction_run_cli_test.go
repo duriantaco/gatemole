@@ -1188,7 +1188,11 @@ func TestVerificationUsesReadOnlySnapshotAndRecordsMutationAttempt(t *testing.T)
 
 func transactionRunRepository(t *testing.T) string {
 	t.Helper()
-	repo := t.TempDir()
+	return transactionRunRepositoryAt(t, t.TempDir())
+}
+
+func transactionRunRepositoryAt(t *testing.T, repo string) string {
+	t.Helper()
 	auth := filepath.Join(repo, "internal", "auth")
 	if err := os.MkdirAll(auth, 0o750); err != nil {
 		t.Fatal(err)

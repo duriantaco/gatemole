@@ -100,11 +100,13 @@ gatemole --repo /path/to/service runtime init \
   --image registry.example/coding-agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   --source-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
   -- /usr/local/bin/agent
-
-gatemole --repo /path/to/service daemon
 ```
 
-In another terminal:
+The primary commands automatically host the default local development Runtime
+for each invocation. Start `gatemole daemon` separately only for persistent,
+custom-socket, model-broker, production, or edge operation.
+
+Run and review the agent:
 
 ```sh
 gatemole --repo /path/to/service doctor --agent coding-agent
@@ -120,7 +122,8 @@ gatemole --repo /path/to/service diff <transaction-id>
 ```
 
 This development command creates the isolated worktree, runs the agent, freezes
-its Git effects and performs sequence validation. Production verification,
+its Git effects and performs sequence validation. It prints the transaction ID
+and next review command. Production verification,
 approval and local-ref release require the hardened runtime configuration.
 Runtime initialization creates a strict repository-owned agent profile and an
 ignored local identity at `.gatemole/runtime.json`. Commit the agent profile and
