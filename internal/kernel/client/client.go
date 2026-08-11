@@ -79,6 +79,22 @@ func (c *Client) WithExpectedRuntimeID(runtimeID string) *Client {
 	return &cloned
 }
 
+// Health confirms that the local HTTP server is accepting authenticated Unix
+// connections. It deliberately does not run OCI-engine readiness checks; task
+// preflight remains the authoritative check for a selected agent image.
+func (c *Client) Health(ctx context.Context) error {
+	var result struct {
+		Status string `json:"status"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/healthz", nil, &result); err != nil {
+		return err
+	}
+	if result.Status != "ok" {
+		return errors.New("gatemoled health response is invalid")
+	}
+	return nil
+}
+
 func (c *Client) CreateRun(ctx context.Context, event model.RunEvent) (reducer.Projection, error) {
 	var projection reducer.Projection
 	err := c.do(ctx, http.MethodPost, "/v0/runs", event, &projection)

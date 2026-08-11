@@ -76,14 +76,25 @@ func runtimeRunCommand(repo string, args []string, jsonOut bool, stdout, stderr 
 		fmt.Fprintf(stderr, "run: %v\n", err)
 		return 1
 	}
-	return runtimeRunCommandWithFactories(
+	operation := func() int {
+		return runtimeRunCommandWithFactories(
+			repo,
+			args,
+			jsonOut,
+			stdout,
+			stderr,
+			transactionFactory,
+			kernelFactory,
+		)
+	}
+	if isLegacyRunSubcommand(args[0]) {
+		return operation()
+	}
+	return withAutomaticLocalRuntime(
 		repo,
-		args,
-		jsonOut,
-		stdout,
+		automaticLocalRuntimeForRun(repo, args),
 		stderr,
-		transactionFactory,
-		kernelFactory,
+		operation,
 	)
 }
 
@@ -605,6 +616,8 @@ func runtimeRunUsage(out io.Writer) {
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --image IMAGE -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "  run (--intent TEXT | --intent-file FILE) --runtime host --unsafe-host -- COMMAND [ARG...]")
 	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "the default local development Runtime is hosted automatically for this command")
+	fmt.Fprintln(out, "custom sockets, model brokers, and production enforcement require a configured daemon")
 	fmt.Fprintln(out, "production callers should pass --require-enforcement-profile production")
 	fmt.Fprintln(out, "advanced lifecycle: gatemole tx <command>")
 	fmt.Fprintln(out, "low-level run records: gatemole kernel run <command>")
@@ -812,7 +825,9 @@ func renderTransactionRunResult(
 	}
 	fmt.Fprintf(
 		stdout,
-		"Agent execution: %s\nTransaction state: %s\nAttempt: %d\nEffects: %d\n",
+		"Transaction: %s\nNamespace: %s\nAgent execution: %s\nTransaction state: %s\nAttempt: %d\nEffects: %d\n",
+		result.Projection.Transaction.ID,
+		result.Projection.Transaction.Namespace,
 		result.Execution.Status,
 		result.Projection.Transaction.State,
 		result.Projection.Transaction.Attempt,
@@ -823,6 +838,20 @@ func renderTransactionRunResult(
 		for _, finding := range result.Decision.Findings {
 			fmt.Fprintf(stdout, "- %s: %s\n", finding.RuleID, finding.Summary)
 		}
+	}
+	if result.Projection.Transaction.State == model.TransactionCompletedNoEffect {
+		fmt.Fprintln(stdout, "Next: no effects were produced; nothing needs review or application.")
+	} else {
+		namespaceArgument := ""
+		if result.Projection.Transaction.Namespace != "local" {
+			namespaceArgument = " --namespace " + result.Projection.Transaction.Namespace
+		}
+		fmt.Fprintf(
+			stdout,
+			"Next: `gatemole review %s%s`\n",
+			result.Projection.Transaction.ID,
+			namespaceArgument,
+		)
 	}
 	return 0
 }

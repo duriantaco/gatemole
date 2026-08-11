@@ -276,16 +276,22 @@ those Runtimes.
 
 ## Developer Runtime: current local-Git integration
 
-The current runtime requires Git, an OCI engine such as Docker, a running
-`gatemoled`, and a digest-pinned agent image.
+The current runtime requires Git, an OCI engine such as Docker, and a
+digest-pinned agent image. On the default repository-local socket, the primary
+local commands host a temporary development `gatemoled` automatically and stop
+it when the command finishes. A separately managed daemon is still required for
+production enforcement, a custom socket, model brokering, or a long-lived edge
+installation.
 
-This is a low-level developer integration, not yet a self-serve desktop agent
+This remains a developer integration rather than a packaged desktop agent
 environment. `gatemole runtime init` creates a strict repository-owned profile
-and a local Runtime identity. `gatemole doctor` diagnoses Git, OCI, profile,
-local-image and daemon readiness. `gatemole review` shows the daemon-bound
-status, exact effects, evidence IDs and frozen patch; `diff`, `apply` and
-`reject` expose the corresponding task-oriented operations. Packaged adapters,
-daemon supervision, `watch` and live cancellation remain roadmap work.
+and a local Runtime identity; repeating it with a new agent name adds that
+profile without replacing existing agents. `gatemole doctor` diagnoses Git,
+OCI, profile, local-image and daemon readiness. `gatemole review` shows the
+daemon-bound status, exact effects, evidence IDs and frozen patch; `diff`,
+`apply` and `reject` expose the corresponding task-oriented operations.
+Packaged adapters, operating-system service installation, `watch` and live
+cancellation remain roadmap work.
 
 Build the CLI from source:
 
@@ -319,7 +325,14 @@ rehashes old configuration, ledgers, evidence, or signatures automatically.
 Archive or remove the legacy directory deliberately, then initialize
 `.gatemole`.
 
-Start the repository-local development daemon in one terminal:
+For normal local development, no daemon terminal is needed. `run`, `status`,
+`review`, `diff`, `approve`, `apply`, `release`, and `reject` start the default
+development Runtime for the duration of that command when no listener already
+exists. The SQLite ledger and transaction worktrees remain durable between
+invocations.
+
+Start a persistent daemon when an agent needs configured model brokering, when
+using a custom socket, or when a supervisor should keep the Runtime alive:
 
 ```sh
 gatemole --repo /path/to/service daemon
@@ -330,7 +343,7 @@ directory beneath the current user's validated runtime or cache directory,
 not in a shared predictable `/tmp/gatemole-transactions` path. A custom
 `--transaction-root` is validated before the ledger opens.
 
-In another terminal, diagnose the selected integration and run it:
+Diagnose the selected integration and run it:
 
 ```sh
 gatemole --repo /path/to/service doctor --agent coding-agent
@@ -340,9 +353,9 @@ gatemole --repo /path/to/service run \
   --agent coding-agent
 ```
 
-Doctor warnings, such as an intentionally stopped daemon or omitting
-`--agent`, do not make the command fail. A selected missing image, invalid
-profile, unavailable OCI engine or unready existing daemon does.
+Doctor warnings, such as no persistent daemon or omitting `--agent`, do not make
+the command fail. A selected missing image, invalid profile, unavailable OCI
+engine or unready existing daemon does.
 When the socket exists, doctor uses the daemon's authoritative Runtime
 preflight instead of treating a separate CLI-side OCI probe as proof.
 
@@ -351,8 +364,9 @@ For a developer, the integration contract is deliberately small:
 1. Package the existing agent as a digest-pinned OCI image.
 2. Make its command read the retained task at `$GATEMOLE_TASK_PATH`.
 3. Let it edit only `/workspace` and return a normal process exit code.
-4. Start it with `gatemole run`; do not give the container the daemon socket,
-   repository credentials or downstream production credentials.
+4. Start it with `gatemole run`; the local development Runtime is automatic.
+   Do not give the container the daemon socket, repository credentials or
+   downstream production credentials.
 5. Inspect the transaction and its hash-chained events before verification,
    approval and release.
 
@@ -419,6 +433,57 @@ gatemole --repo /path/to/service run \
   --model-provider openai
 ```
 
+### Using the included Codex adapter
+
+[`examples/codex-agent`](examples/codex-agent) turns Codex into the same worker
+contract: it reads the admitted intent, edits `/workspace`, and can reach the
+model only through Gatemole's transaction broker. Publish that image to a
+registry, pin the resulting manifest digest, and register it without replacing
+other repository agents:
+
+```sh
+gatemole --repo /path/to/service runtime init \
+  --agent codex \
+  --image registry.example/codex-agent@sha256:<64-hex-manifest-digest> \
+  --source-digest sha256:<64-hex-source-digest> \
+  -- --model gpt-5.6
+```
+
+Because Codex needs model access, run a configured persistent daemon with a
+digest-pinned `gatemole-model-broker` image and policy, then admit only the
+provider needed by this task:
+
+```sh
+export OPENAI_API_KEY='provider-secret-visible-only-to-gatemoled'
+gatemole --repo /path/to/service daemon \
+  --model-broker-image registry.example/gatemole-model-broker@sha256:<64-hex-manifest-digest> \
+  --model-broker-policy /path/to/model-policy.json
+
+# In another terminal:
+gatemole --repo /path/to/service run \
+  --intent "Fix the failing authentication test" \
+  --agent codex \
+  --model-provider openai
+```
+
+The automatic development Runtime deliberately does not invent broker policy or
+inherit model authority. If `--model-provider` is requested and no daemon is
+running, the CLI tells the operator to start the configured Runtime first.
+
+### Repository and edge usage
+
+On a developer repository, use the automatic command-scoped Runtime: initialize
+once, then call `run`, `review`, and `reject` or the later approval/application
+steps. On an edge device or shared runner, keep `gatemole daemon` under the
+device's service supervisor, preload every digest-pinned image, and invoke the
+same CLI against its local Unix socket. The agent container never receives that
+socket.
+
+Gatemole does not yet expose a remote daemon API or fleet control plane. An edge
+installation is therefore one trusted node and one security tenant; remote job
+routing, device enrollment, updates, and cross-device world state remain future
+product layers.
+
 At launch, the kernel derives the run identity, image, command, workspace
 access, broker access and deadline from live admitted state. A stale run, an
 expired grant, a changed image or command, a narrower unsupported workspace
@@ -431,8 +496,9 @@ That guide separately labels its runnable deterministic fixtures as acceptance
 proofs rather than presenting them as the normal user experience.
 
 `gatemole run` then creates the isolated worktree, runs the agent, freezes its Git
-effects, and performs deterministic sequence validation. Inspect the result
-with:
+effects, and performs deterministic sequence validation. Its output includes
+the durable transaction ID and the exact next `gatemole review` command. Inspect
+the result with:
 
 ```sh
 gatemole --repo /path/to/service review <transaction-id> \

@@ -98,8 +98,15 @@ func transactionTopLevelAliasCommand(
 		fmt.Fprintf(stderr, "%s: %v\n", alias, err)
 		return 1
 	}
-	return transactionAliasCommandWithFactory(
-		alias, repo, args, jsonOut, stdout, stderr, factory,
+	return withAutomaticLocalRuntime(
+		repo,
+		automaticLocalRuntimeForAlias(repo, alias, args),
+		stderr,
+		func() int {
+			return transactionAliasCommandWithFactory(
+				alias, repo, args, jsonOut, stdout, stderr, factory,
+			)
+		},
 	)
 }
 
