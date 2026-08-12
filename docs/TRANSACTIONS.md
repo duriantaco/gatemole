@@ -61,8 +61,11 @@ adds ignore rules for the identity, SQLite/WAL state, locks and socket. Commit
 `.gatemole/agent-profiles.json` and `.gatemole/.gitignore`; do not commit
 `.gatemole/runtime.json`.
 
-Start the local daemon. The convenience command keeps its transaction root
-outside the repository:
+For the default local development socket, the product commands start a
+temporary daemon when needed and stop it after each invocation. The durable
+ledger and isolated worktrees survive between commands. To keep the Runtime
+alive, configure model brokering, or use a custom socket, start the daemon
+explicitly; its transaction root remains outside the repository:
 
 ```sh
 gatemole --repo /path/to/service daemon
@@ -73,8 +76,8 @@ private per-user runtime or cache directory. If `--transaction-root` is
 provided, the CLI resolves it and the daemon validates the complete path,
 ownership and permissions before opening the ledger.
 
-In another terminal, diagnose the selected profile and run a task through the
-primary Runtime surface:
+Diagnose the selected profile and run a task through the primary Runtime
+surface:
 
 ```sh
 gatemole --repo /path/to/service doctor --agent coding-agent

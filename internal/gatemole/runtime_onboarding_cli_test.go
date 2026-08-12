@@ -160,6 +160,128 @@ func TestRuntimeInitCreatesStrictProfileAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestRuntimeInitAddsAProfileWithoutReplacingExistingProfiles(t *testing.T) {
+	repo := runtimeGitRepoForTest(t)
+	firstArgs := runtimeInitArgsForTest(repo, "/opt/agent", "run")
+	var stdout, stderr bytes.Buffer
+	if code := Main(firstArgs, &stdout, &stderr); code != 0 {
+		t.Fatalf("first runtime init code=%d stderr=%s", code, stderr.String())
+	}
+
+	secondImage := "registry.example.invalid/review-agent@" +
+		"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	secondSource :=
+		"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	secondArgs := []string{
+		"--repo", repo,
+		"runtime", "init",
+		"--agent", "review-agent",
+		"--image", secondImage,
+		"--source-digest", secondSource,
+		"--",
+		"/opt/review-agent", "run",
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Main(secondArgs, &stdout, &stderr); code != 0 {
+		t.Fatalf("second runtime init code=%d stderr=%s", code, stderr.String())
+	}
+
+	profilesPath := filepath.Join(repo, defaultAgentProfiles)
+	data, err := readAgentProfilesFile(profilesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := decodeAgentProfileDocument(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Profiles) != 2 ||
+		document.Profiles[0].Name != "coding-agent" ||
+		document.Profiles[1].Name != "review-agent" ||
+		document.Profiles[1].OCIImage != secondImage {
+		t.Fatalf("profiles were not merged additively: %#v", document.Profiles)
+	}
+	original := append([]byte(nil), data...)
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Main(secondArgs, &stdout, &stderr); code != 0 ||
+		!strings.Contains(stdout.String(), "already initialized") {
+		t.Fatalf(
+			"second profile retry was not idempotent: code=%d stderr=%s",
+			code,
+			stderr.String(),
+		)
+	}
+	after, err := os.ReadFile(profilesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(original, after) {
+		t.Fatal("identical second profile registration rewrote the document")
+	}
+}
+
+func TestRuntimeInitRollsBackAddedProfileWhenLaterInitializationFails(t *testing.T) {
+	repo := runtimeGitRepoForTest(t)
+	var stdout, stderr bytes.Buffer
+	if code := Main(
+		runtimeInitArgsForTest(repo, "/opt/agent"),
+		&stdout,
+		&stderr,
+	); code != 0 {
+		t.Fatalf("first runtime init code=%d stderr=%s", code, stderr.String())
+	}
+	profilesPath := filepath.Join(repo, defaultAgentProfiles)
+	originalProfiles, err := os.ReadFile(profilesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(repo, ".gitignore"),
+		[]byte("/.gatemole/runtime.json\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	ignorePath := filepath.Join(repo, runtimeIgnoreFile)
+	if err := os.Remove(ignorePath); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "ignore-target")
+	if err := os.WriteFile(target, []byte("unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, ignorePath); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code := Main([]string{
+		"--repo", repo,
+		"runtime", "init",
+		"--agent", "review-agent",
+		"--image", "registry.example.invalid/review-agent@" +
+			"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		"--source-digest",
+		"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		"--", "/opt/review-agent",
+	}, &stdout, &stderr)
+	if code != 1 || !strings.Contains(stderr.String(), "not a regular file") {
+		t.Fatalf("unsafe ignore code=%d stderr=%s", code, stderr.String())
+	}
+	afterProfiles, err := os.ReadFile(profilesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(originalProfiles, afterProfiles) {
+		t.Fatal("failed initialization did not restore the original profiles")
+	}
+}
+
 func TestRuntimeInitIdentityOnlyPreservesExistingProfiles(t *testing.T) {
 	repo := runtimeGitRepoForTest(t)
 	if err := os.Mkdir(filepath.Join(repo, ".gatemole"), 0o700); err != nil {
@@ -432,6 +554,42 @@ func TestAppendRuntimeIgnoreEntriesRejectsPathReplacement(t *testing.T) {
 	}
 	if !bytes.Equal(after, targetData) {
 		t.Fatalf("replacement target was modified: %q", after)
+	}
+}
+
+func TestReplaceAgentProfilesRejectsPathReplacement(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "agent-profiles.json")
+	if err := os.WriteFile(path, []byte("original\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path, path+".moved"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := []byte("concurrent update\n")
+	if err := os.WriteFile(path, replacement, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = replaceExistingRegularFile(
+		path,
+		expected,
+		[]byte("must not overwrite\n"),
+		0o600,
+	)
+	if err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("replaced profile path was accepted: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, replacement) {
+		t.Fatalf("concurrent profile update was overwritten: %q", after)
 	}
 }
 
